@@ -17,7 +17,9 @@ backend, directory = sys.argv[1:3]
 evidence = Path(directory)
 client = (evidence / "client-console.log").read_text(errors="replace")
 server = (evidence / "server-console.log").read_text(errors="replace")
-failure = r"AssertionError|MixinApplyError|InvalidMixinException|MixinTransformerError|Exception in thread|Could not execute entrypoint|This crash report has been saved"
+failure = (r"AssertionError|MixinApplyError|InvalidMixinException|MixinTransformerError|"
+           r"Exception in thread|Could not execute entrypoint|This crash report has been saved|"
+           r"Failed to handle packet|Network Protocol Error|Error executing task on Client")
 for name, log in (("client", client), ("server", server)):
     if re.search(failure, log):
         raise AssertionError(f"The native interaction {name} reported a failure.")

@@ -11,7 +11,9 @@ if os.environ.get("GITHUB_ACTIONS") != "true":
 backend, directory, prefix = sys.argv[1:4]
 evidence = Path(directory)
 server = (evidence / f"{prefix}server-console.log").read_text(errors="replace")
-failure = r"AssertionError|MixinApplyError|InvalidMixinException|MixinTransformerError|Exception in thread|Could not execute entrypoint|This crash report has been saved"
+failure = (r"AssertionError|MixinApplyError|InvalidMixinException|MixinTransformerError|"
+           r"Exception in thread|Could not execute entrypoint|This crash report has been saved|"
+           r"Failed to handle packet|Network Protocol Error|Error executing task on Client")
 if re.search(failure, server):
     raise AssertionError("The two-player fixture server reported a runtime failure.")
 reloaded = bool(prefix)

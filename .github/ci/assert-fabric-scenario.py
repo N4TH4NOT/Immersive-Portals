@@ -36,7 +36,8 @@ require(
 for stream_name, stream in (("client", client), ("server", server)):
     if re.search(
         r"AssertionError|MixinApplyError|InvalidMixinException|MixinTransformerError|"
-        r"Could not execute entrypoint|Exception in thread|This crash report has been saved",
+        r"Could not execute entrypoint|Exception in thread|This crash report has been saved|"
+        r"Failed to handle packet|Network Protocol Error|Error executing task on Client",
         stream,
     ):
         raise AssertionError(f"Runtime failure reported by the {stream_name}; inspect its logs.")
