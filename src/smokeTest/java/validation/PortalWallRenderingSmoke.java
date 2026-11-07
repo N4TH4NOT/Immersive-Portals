@@ -1,6 +1,5 @@
 package validation;
 
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.core.BlockPos;
@@ -59,7 +58,9 @@ final class PortalWallRenderingSmoke {
     private static void initialize() {
         if (initialized) return;
         initialized = true;
-        LevelRenderEvents.END_MAIN.register(context -> {
+        // Read the completed previous frame before the next update clears its target.
+        // END_MAIN is too early for Iris: its final composite has not run at that point.
+        IPGlobal.PRE_GAME_RENDER_EVENT.register(() -> {
             if (!capturing || WorldRenderInfo.isRendering()) return;
             var client = Minecraft.getInstance();
             int frame = RenderStates.frameIndex;

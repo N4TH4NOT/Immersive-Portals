@@ -10,6 +10,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
 import qouteall.imm_ptl.core.ducks.IEEntity;
+import qouteall.imm_ptl.core.ducks.IEWorld;
+import qouteall.imm_ptl.core.mixin.common.mc_util.IELevelEntityGetterAdapter;
 import qouteall.imm_ptl.core.portal.Portal;
 import qouteall.imm_ptl.peripheral.wand.PortalWandInteraction;
 import qouteall.imm_ptl.peripheral.wand.ProtoPortal;
@@ -51,9 +53,8 @@ final class PortalCollisionSmoke {
         requirePlayerWall(source);
         for (var world : new ServerLevel[] {source, (ServerLevel) player.level()}) {
             int faces = 0;
-            for (var entity : world.getAllEntities())
-                if (entity instanceof Portal portal
-                        && portal.getOriginPos().distanceTo(new Vec3(0, 72, 0)) < .01
+            for (var portal : portals(world))
+                if (portal.getOriginPos().distanceTo(new Vec3(0, 72, 0)) < .01
                         && portal.getDestDim() == (world == source
                                 ? Level.NETHER : Level.OVERWORLD)) faces++;
             require(faces == 2, "The player did not traverse an intact four-face wand cluster");
@@ -84,11 +85,24 @@ final class PortalCollisionSmoke {
                         (solid ? Blocks.STONE : Blocks.AIR).defaultBlockState(), 3);
     }
 
+    private static java.util.List<Portal> portals(ServerLevel world) {
+        // getAllEntities() only exposes visible chunks. The isolated probe chunks have no
+        // player tickets, but their newly spawned wand faces already exist in these sections.
+        var storage = ((IELevelEntityGetterAdapter) ((IEWorld) world).portal_getEntityLookup())
+                .getCache();
+        var result = new java.util.ArrayList<Portal>();
+        for (long chunk : storage.getAllChunksWithExistingSections())
+            storage.getExistingSectionsInChunk(chunk).flatMap(section -> section.getEntities())
+                    .forEach(entity -> {
+                        if (entity instanceof Portal portal) result.add(portal);
+                    });
+        return result;
+    }
+
     private static java.util.Set<java.util.UUID> portalIds(ServerLevel... worlds) {
         var result = new java.util.HashSet<java.util.UUID>();
         for (var world : worlds)
-            for (var entity : world.getAllEntities())
-                if (entity instanceof Portal) result.add(entity.getUUID());
+            for (var portal : portals(world)) result.add(portal.getUUID());
         return result;
     }
 
@@ -110,10 +124,10 @@ final class PortalCollisionSmoke {
         PortalWandInteraction.RemoteCallables.finishPortalCreation(player, proto);
         var created = new java.util.ArrayList<Portal>();
         for (var world : new ServerLevel[] {source, destination})
-            for (var entity : world.getAllEntities())
-                if (entity instanceof Portal portal && !previous.contains(portal.getUUID()))
-                    created.add(portal);
-        require(created.size() == 4, "Creative wand did not create its four portal faces");
+            for (var portal : portals(world))
+                if (!previous.contains(portal.getUUID())) created.add(portal);
+        require(created.size() == 4,
+                "Creative wand did not create its four portal faces: found " + created.size());
         return created;
     }
 
@@ -122,9 +136,8 @@ final class PortalCollisionSmoke {
         var center = new Vec3(0, 72, 0);
         var old = new java.util.ArrayList<Portal>();
         for (var world : new ServerLevel[] {source, destination})
-            for (var entity : world.getAllEntities())
-                if (entity instanceof Portal portal
-                        && portal.getOriginPos().distanceTo(center) < .01
+            for (var portal : portals(world))
+                if (portal.getOriginPos().distanceTo(center) < .01
                         && portal.getDestDim() == (world == source
                                 ? destination.dimension() : source.dimension()))
                     old.add(portal);
