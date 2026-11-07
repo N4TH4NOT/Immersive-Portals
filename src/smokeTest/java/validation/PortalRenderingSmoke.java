@@ -172,6 +172,7 @@ final class PortalRenderingSmoke {
             MyGameRenderer.enablePortalCaveCulling = false;
             IPGlobal.alwaysOverrideTerrainSetup = true;
         }
+        if (ticks == 125) FabricExtractionSmoke.validateViews(client, center(client));
         if (ticks == 135) {
             capture(client, "portal-no-caves");
             IPCGlobal.doUseAdvancedFrustumCulling = false;
@@ -229,8 +230,10 @@ final class PortalRenderingSmoke {
                 IPCGlobal.debugEnableStencilWithIris = false;
                 IrisInterface.invoker.reloadPipelines();
             } else NativeWorldRenderer.reload();
+            FabricExtractionSmoke.afterReload();
         }
         if (ticks == 290) {
+            FabricExtractionSmoke.validateViews(client, center(client));
             capture(client, "portal-after-reload");
             captureTransformedSources(client);
             require(

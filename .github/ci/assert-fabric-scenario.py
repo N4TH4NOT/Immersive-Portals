@@ -65,6 +65,8 @@ if scenario == "multiplayer":
         ]
 if scenario == "rendering":
     client_markers += [
+        "PORTAL_RENDER_FABRIC_CONTEXT_OK",
+        "PORTAL_RENDER_FABRIC_CONTEXT_RELOAD_OK",
         "PORTAL_RENDER_ENVIRONMENT_OK",
         "PORTAL_RENDER_PLAYER_VISIBILITY_OK",
         "PORTAL_RENDER_OCCLUDED_OK",

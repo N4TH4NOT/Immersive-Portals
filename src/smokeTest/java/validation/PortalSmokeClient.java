@@ -50,6 +50,7 @@ public final class PortalSmokeClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        FabricExtractionSmoke.initialize();
         if (interactions) PortalInteractionSmoke.init();
         IPConfig.getConfig().initialScreenShown = true;
         ClientTickEvents.END_CLIENT_TICK.register(
