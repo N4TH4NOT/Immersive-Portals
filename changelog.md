@@ -8,8 +8,10 @@
 - Clip player bodies independently from portal views, preserve legitimate remote self views, and trace third-person camera corners through openings.
 - Restore native block/entity targeting, remote selection outlines and mining-world continuity with server path validation; add automatic remote pickup with vanilla collection rules.
 - Scope the whole server mining tick to its recorded world; preserve normal bucket reach, persistent remote trading, synchronized mounting and physical-world reflected damage/death/drop handling.
+- Sample native fluid contact on the physical source and projected destination body parts without moving the entity; add six water/lava cases including a scaled and a rotated opening.
+- Split native arrow, throwable and hurting-projectile motion at portal boundaries while retaining destination impacts and a single velocity integration. Keep fishing hooks, fireworks, llama spit and shulker bullets on their inherited server path; their special behavior is not covered by the new segment checks.
 - Preserve folded sound distance and native attenuation; isolate atmospheric rain-fog interpolation per renderer and world.
-- Expand GitHub-only scenarios with pitched optics, real dark-room comparisons, clipped bodies, 18 native-interaction phases, seven pose/held-use traversals, environment observations, two real players and save/rejoin checks. The bow and food traversals keep use active across dimensions.
+- Expand GitHub-only scenarios with pitched optics, real dark-room comparisons, clipped bodies, 18 native-interaction phases, seven pose/held-use traversals, six fluid-contact cases, seven entity witnesses, environment observations, two real players and save/rejoin checks. The bow and food traversals keep use active across dimensions.
 
 The [seamless portal follow-up](docs/seamless-26.2.md) distinguishes implementation from pending acceptance evidence and records remaining coverage limits.
 

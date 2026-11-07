@@ -278,7 +278,9 @@ final class PortalNativeInteractionFixture {
                 offers.add(new net.minecraft.world.item.trading.MerchantOffer(
                         new net.minecraft.world.item.trading.ItemCost(Items.EMERALD, 1),
                         new ItemStack(Items.APPLE), 10, 1, .05f));
-                trader.overrideOffers(offers);
+                trader.setVillagerDataFinalized(true);
+                trader.setOffers(offers);
+                require(!trader.getOffers().isEmpty(), "The native trade fixture has no real server offers");
                 destination.addFreshEntity(trader);
             }
             case "bucket", "bucket_far" -> {
