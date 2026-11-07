@@ -184,12 +184,12 @@ final class PortalWallRenderingSmoke {
         require(destination.getBlockState(new BlockPos(0, 72, -4)).is(Blocks.EMERALD_BLOCK),
                 "The wall probe's visible destination witness has not arrived");
         boolean occluded = phase == 4;
-        require(client.level.getBlockState(new BlockPos(0, 72, 2)).is(Blocks.STONE) == occluded,
+        require(client.level.getBlockState(new BlockPos(0, 72, 2)).is(Blocks.CONCRETE.blue()) == occluded,
                 "The wall probe's foreground occluder is stale");
         if (occluded)
             require(client.level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,
                             new BlockPos(0, 72, 3)) >= 5,
-                    "The foreground stone witness has no real source illumination");
+                    "The opaque foreground witness has no real source illumination");
         if (occluded)
             require(!PortalRenderInfo.get(front(client)).wasRenderedLastFrame(),
                     "The foreground wall did not occlude the coplanar portal");

@@ -253,11 +253,14 @@ if scenario == "rendering":
                         for r, g, b in pixels) / len(pixels)
             gray = sum(max(pixel) - min(pixel) < 25 and max(pixel) > 12
                        for pixel in pixels) / len(pixels)
+            blue = sum(b > r * 1.25 + 6 and b > g * 1.15 + 4 and b >= 15
+                       for r, g, b in pixels) / len(pixels)
             measurement = {"sample": sample, "frame": indices[sample], "box": box,
-                           "green_fraction": green, "gray_fraction": gray}
+                           "green_fraction": green, "gray_fraction": gray,
+                           "blue_fraction": blue}
             measurements.append(measurement)
             if phase == "occluded":
-                if green > .05 or gray < .75:
+                if green > .05 or blue < .75:
                     wall_failures.append(f"The foreground wall exposed portal content: {measurement}")
             elif green < .8:
                 wall_failures.append(f"The {phase} portal flashed its backing wall: {measurement}")

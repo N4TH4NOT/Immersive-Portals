@@ -69,7 +69,8 @@ public final class PortalSmoke implements ModInitializer {
                                                                                                     2),
                                                                                             (closed
                                                                                                             ? Blocks
-                                                                                                                    .STONE
+                                                                                                                    .CONCRETE
+                                                                                                                    .blue()
                                                                                                             : Blocks
                                                                                                                     .AIR)
                                                                                                     .defaultBlockState(),
