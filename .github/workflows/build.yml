@@ -85,6 +85,9 @@ jobs:
             scenario: optics
             modset: sodium
           - backend: opengl
+            scenario: rendering
+            modset: sodium
+          - backend: opengl
             scenario: optics
             modset: iris
           - backend: vulkan
@@ -99,9 +102,6 @@ jobs:
           - backend: opengl
             scenario: rendering
             modset: vanilla
-          - backend: opengl
-            scenario: rendering
-            modset: sodium
           - backend: opengl
             scenario: rendering
             modset: iris
