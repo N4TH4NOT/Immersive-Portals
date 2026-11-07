@@ -52,7 +52,9 @@ public abstract class NativeLevelExtractorMixin {
             double y,
             double z,
             CallbackInfoReturnable<Boolean> cir) {
-        if (((IEEntity) entity).ip_getCollidingPortal() != null) cir.setReturnValue(false);
+        if (qouteall.imm_ptl.core.IPGlobal.correctCrossPortalEntityRendering
+                && ((IEEntity) entity).ip_getCollidingPortal() != null)
+            cir.setReturnValue(false);
     }
 
     @Inject(method = "setSectionDirty(IIIZ)V", at = @At("HEAD"))

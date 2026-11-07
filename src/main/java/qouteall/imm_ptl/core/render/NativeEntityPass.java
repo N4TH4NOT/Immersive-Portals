@@ -88,7 +88,8 @@ public final class NativeEntityPass {
     public static void extract(LevelRenderState output, Camera camera, float partial) {
         List<Body> bodies = new ArrayList<>();
         BODIES.put(output, bodies);
-        if (!ClientWorldLoader.getIsInitialized()) return;
+        if (!IPGlobal.correctCrossPortalEntityRendering
+                || !ClientWorldLoader.getIsInitialized()) return;
         for (var world : ClientWorldLoader.getClientWorlds())
             for (Entity entity : world.entitiesForRendering()) {
                 if (entity instanceof Portal || entity.isRemoved()) continue;
