@@ -108,9 +108,10 @@ public final class NativePortalCompositor {
             Matrix4fc view,
             Matrix4fc projection,
             Plane parentClip) {
+        Vec3 terrainCamera = NativePortalDepth.renderCamera(portal, camera);
         ArrayList<Float> vertices = new ArrayList<>();
         portal.renderViewAreaMesh(
-                portal.getOriginPos().subtract(camera),
+                portal.getOriginPos().subtract(terrainCamera),
                 (ax, ay, az, bx, by, bz, cx, cy, cz) -> {
                     for (double v : new double[] {ax, ay, az, bx, by, bz, cx, cy, cz})
                         vertices.add((float) v);
@@ -136,7 +137,7 @@ public final class NativePortalCompositor {
                                 portal.isFuseView(),
                                 projection,
                                 null,
-                                NativePortalClipping.equation(parentClip, camera),
+                                NativePortalClipping.equation(parentClip, terrainCamera),
                                 NativePortalDepth.equation(portal,
                                         new Matrix4f(projection).mul(view), vertices,
                                         target.width, target.height)));

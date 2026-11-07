@@ -228,11 +228,12 @@ public final class NativePortalOcclusion {
         mask.inUse = true;
         mask.lastUsed = RenderStates.frameIndex;
         try {
-            float[] vertices = mesh(portal, camera);
+            Vec3 terrainCamera = NativePortalDepth.renderCamera(portal, camera);
+            float[] vertices = mesh(portal, terrainCamera);
             Matrix4f transform = new Matrix4f(projection).mul(view);
             var history = PortalRenderInfo.get(portal).visibility();
             Vector4f clip =
-                    NativePortalClipping.equation(NativePortalClipping.activePlane(), camera);
+                    NativePortalClipping.equation(NativePortalClipping.activePlane(), terrainCamera);
             long signature =
                     signature(transform, vertices, clip) * 31
                             + parent.width * 31L

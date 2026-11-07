@@ -2,6 +2,8 @@ package qouteall.imm_ptl.core.render;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import net.minecraft.world.phys.Vec3;
+
 import org.joml.Matrix4d;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
@@ -81,6 +83,32 @@ class NativePortalDepthTest {
                             vertices, point, zeroToOne);
                 }
             }
+    }
+
+    @Test
+    void apertureDepthMatchesTheSodiumEncodedCameraBasis() {
+        // Sodium's CameraTransform encodes .04 against a 128-block float basis as
+        // this exact value. A block face at world Z=0 uses its negation in the shader.
+        float terrainCameraZ = .0399932861328125f;
+        for (boolean zeroToOne : new boolean[] {false, true}) {
+            var vertices = triangle(new Matrix4f().translation(0, 0, -terrainCameraZ));
+            var transform = projection(zeroToOne).rotateY((float) Math.toRadians(45));
+            matchesProjectedPoint(transform, vertices,
+                    new Vector3d(terrainCameraZ, 0, -terrainCameraZ), zeroToOne);
+        }
+    }
+
+    @Test
+    void cameraRoundingCannotCollapseAnApertureInFrontOfTheEye() {
+        var actual = new Vec3(0, 0, .000001);
+        var normal = new Vec3(0, 0, 1);
+        assertSame(actual, NativePortalDepth.keepCameraInFront(
+                actual, Vec3.ZERO, Vec3.ZERO, normal));
+        assertSame(actual, NativePortalDepth.keepCameraInFront(
+                actual, new Vec3(0, 0, -.000001), Vec3.ZERO, normal));
+        var rounded = new Vec3(0, 0, .0399932861328125);
+        assertSame(rounded, NativePortalDepth.keepCameraInFront(
+                new Vec3(0, 0, .04), rounded, Vec3.ZERO, normal));
     }
 
     @Test
