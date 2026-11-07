@@ -83,7 +83,7 @@ final class PortalQualitySmoke {
         }
     }
 
-    private record Tracked(String name, UUID id, Class<?> type, Vec3 position, Vec3 velocity) {}
+    private record Tracked(String name, UUID id, Class<?> type, Vec3 position, Vec3 velocity, int age) {}
     private static final Map<String, UUID> players = new HashMap<>();
     private static final Set<UUID> ready = new HashSet<>();
     private static final Set<UUID> checkpoints = new HashSet<>();
@@ -213,6 +213,7 @@ final class PortalQualitySmoke {
         if (first == null || second == null) return;
         if (phase == WAIT) {
             if (!ready.contains(first.getUUID()) || !ready.contains(second.getUUID())) return;
+            if (!reloaded && !entityTargetTicking(server.getLevel(Level.NETHER))) return;
             requireGeometry(server.overworld());
             if (reloaded) {
                 // Validate again after both actual clients have ticked at the saved plane.
@@ -364,7 +365,8 @@ final class PortalQualitySmoke {
         entity.snapTo(position, 0, 0);
         entity.setDeltaMovement(velocity);
         require(world.addFreshEntity(entity), "The quality entity could not be spawned: " + name);
-        entities.put(entity.getUUID(), new Tracked(name, entity.getUUID(), entity.getClass(), position, velocity));
+        entities.put(entity.getUUID(), new Tracked(name, entity.getUUID(), entity.getClass(),
+                position, velocity, entity.tickCount));
         originalEntities.put(entity.getUUID(), entity);
     }
 
@@ -406,7 +408,12 @@ final class PortalQualitySmoke {
                         .scale(fireball.accelerationPower)).scale((double) .95f);
                 require(velocity.distanceTo(expectedMovement) < 1e-6
                                 && horizontal(position.subtract(previous.position()).subtract(expectedMovement)) < .02,
-                        "Fireball traversal changed native acceleration, drag, or its tick endpoint");
+                        "Fireball traversal changed native acceleration, drag, or its tick endpoint: previous="
+                                + previous + " current=" + position + " velocity=" + velocity
+                                + " expected=" + expectedMovement + " age=" + entity.tickCount
+                                + " ticking=" + ((ServerLevel) entity.level())
+                                        .areEntitiesActuallyLoadedAndTicking(entity.chunkPosition())
+                                + " block=" + entity.level().getBlockState(entity.blockPosition()));
             }
             require(step <= horizontal(expectedMovement) + .12,
                     "Portal traversal added entity displacement: " + previous.name()
@@ -460,7 +467,7 @@ final class PortalQualitySmoke {
                         + " position=" + entity.position() + " velocity=" + velocity);
             }
             entities.put(previous.id(), new Tracked(previous.name(), previous.id(), previous.type(),
-                    position, velocity));
+                    position, velocity, entity.tickCount));
         }
         return crossedEntities.size() == 7 && blockedProjectiles.size() == 2
                 && resolvedHurtingProjectiles.size() == 1;
@@ -469,11 +476,7 @@ final class PortalQualitySmoke {
     private static void prepareCrossWorldEntity(ServerLevel source) {
         var target = source.getServer().getLevel(Level.NETHER);
         require(target != null, "The entity-copy witness has no destination dimension");
-        for (int x : new int[] {11, 12}) {
-            target.setChunkForced(x, 2, true);
-            target.getChunk(x, 2);
-            target.waitForEntities(new ChunkPos(x, 2), 0);
-        }
+        require(entityTargetTicking(target), "The destination entity chunks are not ticking");
         for (int x = 188; x <= 196; x++)
             for (int z = 35; z <= 45; z++)
                 for (int y = 69; y <= 77; y++)
@@ -529,6 +532,9 @@ final class PortalQualitySmoke {
     private static void prepare(ServerPlayer creator, Set<UUID> scenePortals) {
         var world = creator.level().getServer().overworld();
         loadChunks(world);
+        var entityTarget = world.getServer().getLevel(Level.NETHER);
+        require(entityTarget != null, "The quality entity target is missing");
+        loadEntityTarget(entityTarget);
         for (int center : new int[] {0, 64}) {
             for (int x = center - 5; x <= center + 5; x++)
                 for (int z = 18; z <= 46; z++)
@@ -576,6 +582,21 @@ final class PortalQualitySmoke {
         fixtureReady = true;
         requireGeometry(world);
         System.out.println("PORTAL_QUALITY_FIXTURE_READY faces=" + faceIds);
+    }
+
+    private static boolean entityTargetTicking(ServerLevel world) {
+        return world != null && world.areEntitiesActuallyLoadedAndTicking(new ChunkPos(11, 2))
+                && world.areEntitiesActuallyLoadedAndTicking(new ChunkPos(12, 2));
+    }
+
+    private static void loadEntityTarget(ServerLevel world) {
+        // Chunk FULL and entity loading precede the ENTITY_TICKING transition. Pin
+        // these rooms during initial setup, before the two clients start moving.
+        for (int x : new int[] {11, 12}) {
+            world.setChunkForced(x, 2, true);
+            world.getChunk(x, 2);
+            world.waitForEntities(new ChunkPos(x, 2), 0);
+        }
     }
 
     private static void loadChunks(ServerLevel world) {

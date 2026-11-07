@@ -134,11 +134,18 @@ final class PortalEnvironmentSmoke {
         if (client.level.dimension() != Level.OVERWORLD
                 || client.player.position().distanceTo(new Vec3(256, 80, 380)) > .05
                 || client.level.getRainLevel(1) < .75) return false;
+        // Packet handling can update the player before the next completed frame.
+        // Sound routing uses the actual main camera as its listener.
+        var camera = client.gameRenderer.mainCamera();
+        if (!camera.isInitialized()
+                || camera.position().distanceTo(client.player.getEyePosition()) > .02
+                || Math.abs(camera.yRot()) > .01 || Math.abs(camera.xRot()) > .01)
+            return false;
         var remote = ClientWorldLoader.getWorld(Level.NETHER);
         if (!remote.getBlockState(new BlockPos(128, 79, 384)).is(Blocks.GOLD_BLOCK)
                 || !client.level.getBlockState(new BlockPos(256, 79, 384)).is(Blocks.EMERALD_BLOCK))
             return false;
-        boolean remoteOpening = false, shortcutOpening = false;
+        boolean remoteOpening = false, shortcutOpening = false, shortcutEntry = false;
         for (var entity : client.level.entitiesForRendering())
             if (entity instanceof Portal portal) {
                 if (portal.getDestDim() == Level.NETHER
@@ -147,8 +154,18 @@ final class PortalEnvironmentSmoke {
                 if (portal.getDestDim() == Level.OVERWORLD
                         && portal.getOriginPos().distanceTo(PortalEnvironmentFixture.SHORTCUT_EXIT) < .01)
                     shortcutOpening = true;
+                if (portal.getDestDim() == Level.OVERWORLD
+                        && portal.getOriginPos().distanceTo(PortalEnvironmentFixture.SHORTCUT_ENTRY) < .01)
+                    shortcutEntry = true;
             }
-        return remoteOpening && shortcutOpening;
+        // A ready exit and its chunk packets do not imply that the remote entry
+        // entity has arrived. The native acoustic search starts at that entry.
+        boolean remoteEntry = false;
+        for (var entity : remote.entitiesForRendering())
+            if (entity instanceof Portal portal && portal.getDestDim() == Level.OVERWORLD
+                    && portal.getOriginPos().distanceTo(PortalEnvironmentFixture.REMOTE_ENTRY) < .01)
+                remoteEntry = true;
+        return remoteOpening && remoteEntry && shortcutOpening && shortcutEntry;
     }
 
     private static void validateSound(Minecraft client, Heard heard) {
