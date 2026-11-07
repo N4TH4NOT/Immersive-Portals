@@ -10,6 +10,8 @@ Utiliser Minecraft Java **26.2**, Java **25**, Fabric Loader et Fabric API. Les 
 
 Télécharger le JAR du mod pour une révision réussie depuis [GitHub Actions](https://github.com/N4TH4NOT/Immersive-Portals/actions), puis le placer dans le dossier `mods` du client et du serveur Fabric avec Fabric API. Cloth Config et l’adaptateur/API de gravité sont embarqués. La gravité directionnelle du joueur nécessite aussi [Gravity Changer](https://github.com/N4TH4NOT/gravity-changer/blob/main/README.fr.md#installation-et-utilisation-fabric). Les artefacts de développement ne sont pas des versions stables.
 
+Installer la même compilation du mod sur le client et le serveur Fabric. Le paquet de franchissement contient la position des pieds et la posture du joueur au départ ; les anciennes compilations alpha utilisent donc un contenu de paquet différent.
+
 Sélectionner Vulkan avec l’option Minecraft `--graphicsBackend vulkan`. Iris utilise l’adaptateur OpenGL ; la compatibilité avec chaque shaderpack ou GPU demande une vérification distincte.
 
 ## Développement et état

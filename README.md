@@ -10,6 +10,8 @@ Use Minecraft Java **26.2**, Java **25**, Fabric Loader and Fabric API. Exact de
 
 Download a successful revision's mod JAR from [GitHub Actions](https://github.com/N4TH4NOT/Immersive-Portals/actions), then place it in the client's and Fabric server's `mods` directory with Fabric API. Cloth Config and the gravity adapter/API are bundled. Directional player gravity additionally requires [Gravity Changer](https://github.com/N4TH4NOT/gravity-changer#fabric-installation-and-use). Development artifacts are not stable releases.
 
+Install the same mod build on the client and Fabric server. The portal-crossing packet includes the player's source feet and pose, so earlier alpha builds have a different crossing payload.
+
 Select Vulkan through Minecraft's `--graphicsBackend vulkan` option. Iris uses the OpenGL adapter; compatibility with an arbitrary shaderpack or GPU requires separate verification.
 
 ## Development and status
