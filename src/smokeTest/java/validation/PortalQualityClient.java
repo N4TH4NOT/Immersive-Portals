@@ -41,6 +41,7 @@ final class PortalQualityClient {
     private static boolean ready;
     private static boolean acknowledged;
     private static boolean complete;
+    private static boolean peerTracked;
     private static boolean first;
     private static UUID peer;
     private static Vec3 settled;
@@ -64,6 +65,7 @@ final class PortalQualityClient {
             if (client.player == null) return;
             var other = peer == null ? null : client.level.getPlayerByUUID(peer);
             if (other != null) {
+                peerTracked = true;
                 for (var entity : context.levelState().entityRenderStates)
                     if (entity instanceof AvatarRenderState avatar && avatar.id == other.getId())
                         peerRenderStates++;
@@ -211,7 +213,7 @@ final class PortalQualityClient {
                                 && frames >= (state.reloaded() ? 8 : 30)
                                 && nearFrames >= (state.reloaded() ? 8 : 24),
                         "The quality camera did not observe the complete natural movement sequence");
-                require(client.level.getPlayerByUUID(peer) != null
+                require(peerTracked
                                 && (state.reloaded() || peerRenderStates > 0),
                         "The other actual player was never tracked and extracted for rendering");
                 if (first && !state.reloaded()) {
