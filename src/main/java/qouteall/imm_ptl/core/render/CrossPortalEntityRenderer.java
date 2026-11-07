@@ -58,6 +58,13 @@ public final class CrossPortalEntityRenderer {
             box = Helper.transformBox(box, projection::transformPoint);
             scale *= projection.getScale();
         }
+        if (client.getCameraEntity() == player && RenderStates.originalCamera != null) {
+            // Compare the actual smoothed eye in the same coordinate space as this
+            // body copy. A genuinely distant portal camera still sees the player.
+            Vec3 attachedEye = RenderStates.originalCamera.position();
+            if (projection != null) attachedEye = projection.transformPoint(attachedEye);
+            return NativePlayerVisibility.canShowBody(box, camera.position(), .05 * scale, attachedEye);
+        }
         return NativePlayerVisibility.canShowBody(box, camera.position(), .05 * scale);
     }
     

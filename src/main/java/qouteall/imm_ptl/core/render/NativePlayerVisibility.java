@@ -10,4 +10,11 @@ final class NativePlayerVisibility {
     static boolean canShowBody(AABB renderedBox, Vec3 camera, double nearDistance) {
         return !renderedBox.inflate(nearDistance).contains(camera);
     }
+
+    static boolean canShowBody(AABB renderedBox, Vec3 camera, double nearDistance, Vec3 attachedEye) {
+        // The collision pose changes immediately, while the attached camera's eye
+        // height interpolates. Its old eye may temporarily lie above the new box.
+        return camera.distanceToSqr(attachedEye) > nearDistance * nearDistance
+            && canShowBody(renderedBox, camera, nearDistance);
+    }
 }

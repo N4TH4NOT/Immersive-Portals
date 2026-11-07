@@ -34,4 +34,18 @@ class NativePlayerVisibilityTest {
                 new Vec3(0, 1.62 * scale, -4 * scale), .05 * scale));
         }
     }
+
+    @Test
+    void aSmoothedAttachedEyeCannotRevealTheHeadAfterAnImmediatePoseChange() {
+        for (double height : new double[] {1.5, .6}) {
+            AABB body = new AABB(-.3, 0, -.3, .3, height, .3);
+            Vec3 eye = new Vec3(0, 1.62, 0);
+            assertTrue(NativePlayerVisibility.canShowBody(body, eye, .05));
+            assertFalse(NativePlayerVisibility.canShowBody(body, eye, .05, eye));
+            assertFalse(NativePlayerVisibility.canShowBody(body.move(64, 0, 0),
+                eye.add(64, 0, 0), .05, eye.add(64, 0, 0)));
+            assertTrue(NativePlayerVisibility.canShowBody(body,
+                eye.add(0, 0, -4), .05, eye));
+        }
+    }
 }
