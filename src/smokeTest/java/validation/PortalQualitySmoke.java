@@ -23,6 +23,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.entity.projectile.Projectile;
@@ -346,7 +347,9 @@ final class PortalQualitySmoke {
                 world.setBlock(new BlockPos(x, y, 29), Blocks.STONE.defaultBlockState(), 3);
         var chicken = EntityTypes.CHICKEN.create(world, EntitySpawnReason.COMMAND);
         require(chicken != null, "The quality chicken could not be created");
-        chicken.setNoAi(true);
+        // NoAI also disables native travel. Remove autonomous input while retaining physics.
+        chicken.removeFreeWill();
+        chicken.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0);
         chicken.setPersistenceRequired();
         spawn(world, "mob", chicken, new Vec3(0, 70, 32.2), new Vec3(0, 0, -.35));
         var arrow = EntityTypes.ARROW.create(world, EntitySpawnReason.COMMAND);
@@ -505,7 +508,8 @@ final class PortalQualitySmoke {
         }
         var chicken = EntityTypes.CHICKEN.create(source, EntitySpawnReason.COMMAND);
         require(chicken != null, "Could not create the entity UUID witness");
-        chicken.setNoAi(true);
+        chicken.removeFreeWill();
+        chicken.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0);
         chicken.setPersistenceRequired();
         chicken.setCustomName(Component.literal("Quality UUID witness"));
         spawn(source, "cross_world_mob", chicken, new Vec3(2.5, 70, 40.2), new Vec3(0, 0, -.35));
