@@ -153,7 +153,7 @@ public final class DynamicDimensionsImpl {
     /** Preserve surviving values, registration metadata and tags in a fresh frozen registry. */
     private static Registry<LevelStem> replacementRegistry(MinecraftServer server, Identifier id, LevelStem added) {
         Registry<LevelStem> original = DimensionImpl.getDimensionRegistry(server);
-        var replacement = new MappedRegistry<LevelStem>(Registries.LEVEL_STEM, Lifecycle.stable());
+        var replacement = new MappedRegistry<LevelStem>(Registries.LEVEL_STEM, original.registryLifecycle());
         original.listElements().forEach(holder -> {
             if (!holder.key().identifier().equals(id)) replacement.register(holder.key(), holder.value(),
                 original.registrationInfo(holder.key()).orElse(RegistrationInfo.BUILT_IN));
