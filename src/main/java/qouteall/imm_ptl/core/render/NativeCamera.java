@@ -59,6 +59,9 @@ public final class NativeCamera extends Camera {
         setLevel(world);
         setEntity(parent.entity());
         setPosition(position);
+        // These cameras are recreated for offscreen views and never receive vanilla
+        // Camera.tick(). Seed their biome/environment probe before sky and fog extraction.
+        attributeProbe().tick(world, position);
         Vector3f forward =
                 this.view
                         .invert(new Matrix4f())

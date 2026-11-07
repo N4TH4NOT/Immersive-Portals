@@ -99,6 +99,11 @@ final class PortalRenderingSmoke {
                         .getDeviceInfo().isZZeroToOne());
         require(camera.leftVector().dot(parent.leftVector()) > .999f,
                 "Native camera reversed the vanilla left axis");
+        var sky = camera.attributeProbe().getValue(
+                net.minecraft.world.attribute.EnvironmentAttributes.SKY_COLOR, 1);
+        require(!sky.equals(net.minecraft.world.attribute.EnvironmentAttributes.SKY_COLOR.defaultValue()),
+                "The native Overworld camera kept the default sky environment");
+        System.out.println("PORTAL_RENDER_ENVIRONMENT_OK sky=" + Integer.toHexString(sky));
         qouteall.imm_ptl.core.render.context_management.WorldRenderInfo.pushRenderInfo(info);
         try {
             client.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);
