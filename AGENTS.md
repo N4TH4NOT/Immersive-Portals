@@ -1,11 +1,10 @@
-# Contribution conventions
+# Consignes de contribution
 
-[English](AGENTS.md) · [Français](AGENTS.fr.md)
+Ces consignes s'appliquent à tout le dépôt.
 
-These rules apply to assistant contributions in this repository.
-
-- Use `Codex (GPT-6.1 Sol) <codex@openai.com>` as Git author and committer for assistant work. Use Git to preserve both identities; never substitute the connected user's name or account.
-- Write commit subjects and bodies in English. Keep commits coherent and auditable, separated by API/protocol, Fabric, Minestom, tests, build/CI or documentation. Avoid a single bulk commit or artificial follow-up fixes.
-- Continue the Minecraft 26.2 migration and gravity extraction on the existing `port-26.2` branch in the portal repository; create no additional branch or PR.
-- Preserve public Java APIs and wire compatibility when extracting gravity.
-- Write concise documentation for experienced Minecraft/Minestom developers. Use English by default with paired French `<name>.fr.md` files (`README.fr.md` for `README.md`) and reciprocal language links. Maintain both languages together; link to source/root configuration instead of duplicating obvious details.
+- Écrire le code, les commentaires, les messages de commit, les descriptions de PR et les autres contributions en anglais.
+- Respecter le format de commit `action(scope) : description`, avec une description en anglais.
+- Rédiger les documents en anglais et maintenir leur traduction française dans un fichier `<nom>.fr.md`, avec des liens réciproques. Conserver ce fichier `AGENTS.md` en français.
+- Exécuter les compilations, les tests, les validations automatisées et les scénarios de jeu exclusivement sur GitHub Actions. Ne pas les lancer dans l'environnement local.
+- Préserver les licences, les attributions et l'historique des sources réutilisées. Ne pas présenter une compilation réussie comme une preuve de fonctionnement en jeu.
+- Cibler Minecraft Java 26.2 et Fabric. Préserver les fonctionnalités du mod amont et documenter précisément toute limitation restante.
