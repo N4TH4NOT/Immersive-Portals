@@ -26,11 +26,13 @@
   "environment": "*",
   "entrypoints": {
     "main": [
+      "qouteall.dimlib.DimLibEntry",
       "qouteall.imm_ptl.peripheral.platform_specific.PeripheralModEntry",
       "qouteall.imm_ptl.core.platform_specific.IPModEntry",
       "qouteall.q_misc_util.MiscUtilModEntry"
     ],
     "client": [
+      "qouteall.dimlib.DimLibEntryClient",
       "qouteall.imm_ptl.peripheral.platform_specific.PeripheralModEntryClient",
       "qouteall.imm_ptl.core.platform_specific.IPModEntryClient",
       "qouteall.q_misc_util.MiscUtilModEntryClient"
@@ -47,7 +49,8 @@
     "imm_ptl.mixins.json",
     "imm_ptl_fabric.mixins.json",
     "imm_ptl_compat.mixins.json",
-    "q_misc_util.mixins.json"
+    "q_misc_util.mixins.json",
+    "dimlib.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.20.1",

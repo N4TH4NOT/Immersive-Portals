@@ -1,0 +1,14 @@
+package qouteall.dimlib.mixin;
+
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.gen.Accessor;
+
+import java.util.Set;
+
+@Mixin(ClientPacketListener.class)
+public interface DimensionClientAccess {
+    @Accessor("levels") void dimlib_levels(Set<ResourceKey<Level>> levels);
+}
