@@ -22,6 +22,16 @@ public class MixinPlayerManager_MA {
     ) {
         ImmPtlChunkTracking.removePlayerFromChunkTrackersAndEntityTrackers(oldPlayer);
     }
+
+    @Inject(method = "respawn", at = @At("RETURN"))
+    private void ip_resyncRespawnedPlayer(
+        ServerPlayer oldPlayer, boolean keepEverything, Entity.RemovalReason removalReason,
+        CallbackInfoReturnable<ServerPlayer> cir
+    ) {
+        // Also rebuild remote views when death creates a fresh player in the same
+        // dimension. The old player's pairings were cleared at method entry.
+        ImmPtlChunkTracking.immediatelyUpdateForPlayer(cir.getReturnValue());
+    }
     
     @Inject(
         method = "remove",
