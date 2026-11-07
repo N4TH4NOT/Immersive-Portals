@@ -110,7 +110,7 @@ final class PortalOpticsSmoke {
             return false;
         boolean dark = view.mode().contains("dark");
         if (!destination.getBlockState(new BlockPos(128, 133, 128))
-                .is(dark ? Blocks.BLACK_CONCRETE : Blocks.SEA_LANTERN)) return false;
+                .is(dark ? Blocks.CONCRETE.black() : Blocks.SEA_LANTERN)) return false;
         int blockLight = destination.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,
                 new BlockPos(128, 126, 124));
         if ((dark && blockLight != 0) || (!dark && blockLight < 5)) return false;

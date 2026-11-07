@@ -46,7 +46,7 @@ final class PortalOpticsFixture {
                                     // Red sentinels become visible if floor faces incorrectly
                                     // disappear. They are never the geometrically nearest face.
                                     world.setBlock(new BlockPos(x, 123, z),
-                                            Blocks.RED_CONCRETE.defaultBlockState(), 3);
+                                            Blocks.CONCRETE.red().defaultBlockState(), 3);
                                     world.setBlock(new BlockPos(x, 125, z),
                                             (world == from ? Blocks.STONE : Blocks.EMERALD_BLOCK)
                                                     .defaultBlockState(), 3);
@@ -60,7 +60,7 @@ final class PortalOpticsFixture {
                                 from.setBlock(new BlockPos(x, y, 127),
                                         Blocks.STONE.defaultBlockState(), 3);
                                 from.setBlock(new BlockPos(x, y, 126),
-                                        Blocks.RED_CONCRETE.defaultBlockState(), 3);
+                                        Blocks.CONCRETE.red().defaultBlockState(), 3);
                             }
                         for (int x = 116; x <= 140; x++)
                             for (int z = 116; z <= 140; z++)
@@ -120,7 +120,7 @@ final class PortalOpticsFixture {
         for (int x = 120; x <= 136; x += 4)
             for (int z = 120; z <= 136; z += 4)
                 world.setBlock(new BlockPos(x, 133, z),
-                        (enabled ? Blocks.SEA_LANTERN : Blocks.BLACK_CONCRETE).defaultBlockState(), 3);
+                        (enabled ? Blocks.SEA_LANTERN : Blocks.CONCRETE.black()).defaultBlockState(), 3);
         lit = enabled;
     }
 

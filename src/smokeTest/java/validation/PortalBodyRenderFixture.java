@@ -57,7 +57,7 @@ final class PortalBodyRenderFixture {
                                         for (int x = centerX - 7; x <= centerX + 7; x++)
                                             for (int z = -9; z <= 18; z++) {
                                                 world.setBlock(new BlockPos(x, FLOOR_Y, z),
-                                                        Blocks.WHITE_CONCRETE.defaultBlockState(), 3);
+                                                        Blocks.CONCRETE.white().defaultBlockState(), 3);
                                                 for (int y = FLOOR_Y + 1; y <= FLOOR_Y + 9; y++)
                                                     world.setBlock(new BlockPos(x, y, z),
                                                             Blocks.AIR.defaultBlockState(), 3);
@@ -92,6 +92,10 @@ final class PortalBodyRenderFixture {
                                                 world.setBlock(new BlockPos(SOURCE_X + x, y, -1),
                                                         Blocks.STONE.defaultBlockState(), 3);
                                                 world.setBlock(new BlockPos(DESTINATION_X + x, y, 0),
+                                                        Blocks.STONE.defaultBlockState(), 3);
+                                                // A real exit-room obstacle must still shorten
+                                                // the front third-person camera after the portal.
+                                                world.setBlock(new BlockPos(DESTINATION_X + x, y, -3),
                                                         Blocks.STONE.defaultBlockState(), 3);
                                             }
                                     equip(player, EquipmentSlot.HEAD, Items.LEATHER_HELMET, MAGENTA);

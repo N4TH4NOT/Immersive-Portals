@@ -105,6 +105,12 @@ final class PortalBodyRenderingSmoke {
                     }
                 }
             if (WorldRenderInfo.isRendering()) return;
+            if (phase == Phase.F5_FRONT && phaseFrames >= 4) {
+                require(context.camera().position().z > -2.2
+                                && context.camera().position().z < -1.5,
+                        "The front camera did not pass its aperture and stop at the real exit wall: "
+                                + context.camera().position());
+            }
             Vec3 head = client.player.getEyePosition(
                     context.deltaTracker().getGameTimeDeltaPartialTick(true)).add(0, -.12, 0);
             // This real same-world view looks through the source aperture at the player
@@ -310,6 +316,9 @@ final class PortalBodyRenderingSmoke {
                                 PortalBodyRenderFixture.SOURCE_X + x, y, -1)).is(Blocks.STONE)
                                 && client.level.getBlockState(new BlockPos(
                                         PortalBodyRenderFixture.DESTINATION_X + x, y, 0))
+                                        .is(Blocks.STONE)
+                                && client.level.getBlockState(new BlockPos(
+                                        PortalBodyRenderFixture.DESTINATION_X + x, y, -3))
                                         .is(Blocks.STONE),
                         "The player body probe removed a backing wall");
     }

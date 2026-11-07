@@ -21,6 +21,19 @@ public abstract class MixinCamera implements IECamera {
     @Override public float ip_getLastCameraY() { return eyeHeightOld; }
     @Override public void ip_setCameraY(float height, float old) { eyeHeight = height; eyeHeightOld = old; }
     @Override public void portal_setFocusedEntity(Entity value) { entity = value; }
+    @com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation(
+        method="getMaxZoom",
+        at=@org.spongepowered.asm.mixin.injection.At(value="INVOKE",
+            target="Lnet/minecraft/world/level/Level;clip(Lnet/minecraft/world/level/ClipContext;)Lnet/minecraft/world/phys/BlockHitResult;"))
+    private net.minecraft.world.phys.BlockHitResult ip_cameraPortalCollision(
+        Level world, net.minecraft.world.level.ClipContext context,
+        com.llamalad7.mixinextras.injector.wrapoperation.Operation<net.minecraft.world.phys.BlockHitResult> original
+    ) {
+        if (entity == null || !qouteall.imm_ptl.core.ClientWorldLoader.getIsInitialized())
+            return original.call(world, context);
+        return qouteall.imm_ptl.core.render.PortalCameraCollision.clip(
+            world, ((Camera) (Object) this).position(), context, entity);
+    }
     @org.spongepowered.asm.mixin.injection.Inject(method="getViewRotationMatrix", at=@org.spongepowered.asm.mixin.injection.At("HEAD"), cancellable=true)
     private void ip_view(org.joml.Matrix4f out, org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<org.joml.Matrix4f> cir) {
         Camera camera=(Camera)(Object)this;

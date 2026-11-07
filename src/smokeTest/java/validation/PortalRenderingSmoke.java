@@ -112,10 +112,10 @@ final class PortalRenderingSmoke {
             require(!camera.isDetached(), "Disabled first-person player policy was ignored");
             IPGlobal.renderYourselfInPortal = true;
             require(!camera.isDetached(), "The first-person camera exposed its own head interior");
-            ((qouteall.imm_ptl.core.ducks.IECamera) camera)
+            ((qouteall.imm_ptl.core.ducks.IECamera) (Object) camera)
                     .portal_setPos(parent.position().add(0, 0, 4));
             require(camera.isDetached(), "A separate portal camera hid the visible player body");
-            ((qouteall.imm_ptl.core.ducks.IECamera) camera).portal_setPos(parent.position());
+            ((qouteall.imm_ptl.core.ducks.IECamera) (Object) camera).portal_setPos(parent.position());
             client.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK);
             IPGlobal.renderYourselfInPortal = false;
             require(camera.isDetached(), "Third-person portal player was hidden");
