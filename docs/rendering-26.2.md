@@ -37,7 +37,7 @@ The update hooks forward `setBlocksDirty`, `setBlockDirty` and `setSectionDirtyW
 
 ## Settings and validation
 
-Alpha.6 adds scoped lightmap ticks, independently clipped player bodies, portal-aware third-person camera collision and per-world atmospheric rain-fog state. Their expanded runtime validation is pending. See the [seamless portal follow-up](seamless-26.2.md) for their mechanisms, pitched/dark-room/body fixtures and evidence limits; these changes must not be inferred from the earlier terrain-update or wall-depth checks alone.
+Alpha.6 adds scoped lightmap ticks, native remote-world updates that publish pending light-engine sections, independently clipped player bodies, portal-aware third-person camera collision and per-world atmospheric rain-fog state. The dark-room fixture exposed server light `8` while the remote client still reported `0`, so lightmap ticks alone are insufficient. Expanded runtime validation is pending. See the [seamless portal follow-up](seamless-26.2.md) for the mechanisms, pitched/dark-room/body fixtures, seven pose/held-use traversals and evidence limits; these changes must not be inferred from the earlier terrain-update or wall-depth checks alone.
 
 Current settings are defined in [`IPConfig`](../src/main/java/qouteall/imm_ptl/core/platform_specific/IPConfig.java); diagnostics in [`PortalDebugCommands`](../src/main/java/qouteall/imm_ptl/core/commands/PortalDebugCommands.java). Obsolete OpenGL buffer/cache options were removed instead of exposing ineffective controls. Legacy JSON keys are ignored.
 

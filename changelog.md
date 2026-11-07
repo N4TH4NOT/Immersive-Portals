@@ -4,11 +4,12 @@
 
 ## 7.0.0-alpha.6 — validation pending
 
-- Update offscreen lightmaps on the client tick clock and tick remote particles once.
+- Update offscreen lightmaps on the client tick clock, publish pending remote light-engine sections with native world updates, and tick remote particles once.
 - Clip player bodies independently from portal views, preserve legitimate remote self views, and trace third-person camera corners through openings.
 - Restore native block/entity targeting, remote selection outlines and mining-world continuity with server path validation; add automatic remote pickup with vanilla collection rules.
+- Scope the whole server mining tick to its recorded world; preserve normal bucket reach, persistent remote trading, synchronized mounting and physical-world reflected damage/death/drop handling.
 - Preserve folded sound distance and native attenuation; isolate atmospheric rain-fog interpolation per renderer and world.
-- Expand GitHub-only scenarios with pitched optics, real dark-room comparisons, clipped bodies, native input, environment observations, two real players and save/rejoin checks.
+- Expand GitHub-only scenarios with pitched optics, real dark-room comparisons, clipped bodies, 18 native-interaction phases, seven pose/held-use traversals, environment observations, two real players and save/rejoin checks. The bow and food traversals keep use active across dimensions.
 
 The [seamless portal follow-up](docs/seamless-26.2.md) distinguishes implementation from pending acceptance evidence and records remaining coverage limits.
 
