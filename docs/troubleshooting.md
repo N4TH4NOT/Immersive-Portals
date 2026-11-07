@@ -20,6 +20,14 @@ Development artifacts can share a version string while containing different comm
 
 For a reproducible report, include the Immersive Portals JAR filename, version and SHA-256, the GitHub build commit when available, the Sodium and BlockLab versions, smooth-lighting settings, whether Iris or a shaderpack is active, and a screenshot or short recording showing the block changes. See the [terrain-update design](rendering-26.2.md#terrain-updates-with-sodium) and [GitHub validation guide](port-26.2.md).
 
+## A dark destination appears bright, or the player's head appears during crossing
+
+The alpha.6 follow-up separately addresses offscreen lightmap updates, clipping of player bodies and third-person camera collision. Stale terrain meshes and an uninitialized remote lightmap are different failures; neither is established by a successful compilation. Expanded dark-room, pitched-camera and body-image checks are pending on GitHub Actions. See the [implementation and acceptance scope](seamless-26.2.md) before treating an older successful artifact as evidence for these changes.
+
+## Blocks, entities or selection outlines do not work through a portal
+
+The alpha.6 native interaction path traces blocks and entities through accessible openings, checks ordinary reach and obstacles on the server, and extracts the block outline only in the matching remote view. Remote pickup uses its own automatic collection path and vanilla ownership/delay/inventory rules. These behaviors have separate native-input, pixel and pickup checks in the expanded GitHub scenarios; their validation is pending. A render-only pass does not establish interaction or collection success. Include the exact artifact commit and whether the target is a block, an entire entity, a projected body half or a dropped item when reporting a remaining failure.
+
 ## Wall-mounted portal blocks movement
 
 Version `7.0.0-alpha.4` fixes a collision boundary at the origin side of a portal placed exactly on a solid wall face. A backing block whose face touches the portal plane must be excluded within the opening so that the player's camera can cross the plane. The earlier strict comparison retained that block as a solid obstacle.

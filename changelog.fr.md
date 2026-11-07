@@ -2,6 +2,16 @@
 
 [English](changelog.md) · [Français](changelog.fr.md)
 
+## 7.0.0-alpha.6 — validation en attente
+
+- Met à jour les lightmaps hors écran au rythme des ticks client et fait avancer les particules distantes une seule fois.
+- Découpe les corps des joueurs indépendamment des vues de portail, préserve les vues légitimes du joueur au loin et suit les coins de caméra à la troisième personne à travers les ouvertures.
+- Rétablit le ciblage natif des blocs/entités, les contours de sélection distants et la continuité du monde miné avec validation du chemin serveur ; ajoute le ramassage distant automatique selon les règles vanilla.
+- Conserve la distance sonore dépliée et l’atténuation native ; isole l’interpolation de pluie du brouillard atmosphérique par moteur de rendu et monde.
+- Étend les scénarios exclusivement sur GitHub avec l’optique inclinée, les comparaisons de pièces réellement sombres, les corps découpés, les commandes natives, l’observation de l’environnement, deux véritables joueurs et les contrôles de sauvegarde/reconnexion.
+
+Le [suivi de la continuité des portails](docs/seamless-26.2.fr.md) distingue l’implémentation des preuves d’acceptation en attente et indique les limites de couverture restantes.
+
 ## 7.0.0-alpha.4
 
 - Corrige la traversée des portails placés exactement sur la face d'un mur solide, en conservant les collisions hors de l'ouverture et à destination.

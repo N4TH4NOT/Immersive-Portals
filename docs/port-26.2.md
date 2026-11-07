@@ -12,11 +12,24 @@ The imported baseline has a [successful source-repository CI run](https://github
 
 ## Runtime evidence
 
-The `fabric-runtime` matrix runs actual Minecraft clients against OpenGL and Vulkan under Xvfb, using Mesa software drivers. Its multiplayer, scaled-portal, rendering and singleplayer scenarios exercise dedicated/integrated servers, portal traversal, resources and rendering. Eight vanilla cases cover both backends; additional OpenGL cases exercise rendering with the pinned Sodium/Iris integrations and multiplayer movement with Sodium. The requested backend must be confirmed by the game log; a Vulkan fallback to OpenGL must fail the Vulkan check.
+The `fabric-runtime` matrix runs actual Minecraft clients against OpenGL and Vulkan under Xvfb, using Mesa software drivers. Its 20 configured runtime cases cover multiplayer, scaled portals, rendering, optics, native interaction, two-client quality and singleplayer. Vanilla scenarios cover both backends except the two-client quality case, which currently runs on OpenGL. Pinned Sodium cases cover rendering, optics, interaction, multiplayer and quality; pinned Iris cases cover rendering and optics on OpenGL. The requested backend must be confirmed by the game log; a Vulkan fallback to OpenGL must fail the Vulkan check. The expanded alpha.6 cases are pending validation; a configured job is not a passing result.
 
-Success requires each scenario's completion marker, including `PORTAL_SMOKE_COMPLETE` or `PORTAL_RENDER_COMPLETE`, its specific server/resource markers, and the final `FABRIC_RUNTIME_VERIFIED` assertion. Dimension checks cover world seeds, codec round-trips and persistence after restarting with automatic defaults disabled. Rendering checks include screenshot pixel content, rather than treating a nonempty capture as proof that portals render correctly. A process merely starting is insufficient. Console logs, game logs, crash reports and captures are retained as workflow artifacts, including on failures.
+Success requires each scenario's completion marker, including `PORTAL_SMOKE_COMPLETE` or `PORTAL_RENDER_COMPLETE`, its specific server/resource markers, and its final CI assertion. Older scenarios report `FABRIC_RUNTIME_VERIFIED`; the new independent scenarios have the assertions described below. Dimension checks cover world seeds, codec round-trips and persistence after restarting with automatic defaults disabled. Rendering checks include screenshot pixel content, rather than treating a nonempty capture as proof that portals render correctly. A process merely starting is insufficient. Console logs, game logs, crash reports and captures are retained as workflow artifacts, including on failures.
 
 Check both jobs for the same commit. A build alone cannot validate mixin application, world creation, dimensions, remote interaction or the rendered result. Inspect logs and screenshots before interpreting a runtime pass; automated scenes do not cover every feature, GPU or shaderpack. The pinned Sodium/Iris cases cover their fixed rendering fixtures; other versions, shaderpacks and external mods require separate compatibility evidence.
+
+## Expanded visual and gameplay acceptance
+
+The [seamless portal follow-up](seamless-26.2.md) records the alpha.6 implementation and remaining acceptance scope. Its independent scenarios supplement the earlier wall and movement checks:
+
+| Scenario | Required evidence |
+| --- | --- |
+| `optics` | Consecutive pitched close views; source/destination occlusion and hidden-terrain sentinels; dark/lit/dark-again portal images compared with native destination views and real block-light values. |
+| `rendering` | Existing depth/terrain/reload checks, followed by geometrically clipped body and third-person camera scenes; actual redirected audio routes, remote particle tick counts and destination environment observations. |
+| `interaction` | Real native input followed by authoritative block/entity outcomes; visible selection-outline on/off pixel differences; aperture, obstacle and reach rejection; mining across a crossing. |
+| `quality` | Two simultaneous distinct clients; opposite crossings and stopped cameras; remote pickup rules and animation; natural entity/projectile motion and cross-dimension identity; saved-world and two-client restart; bounded Mesa frame/tick times. |
+
+The quality scenario saves its own state in `portal-smoke-quality.json` and restarts the server and both clients. Its final assertion is `FABRIC_QUALITY_RESTART_VERIFIED`; the interaction and optics scenarios use their own completion assertions. Check those scripts and the scenario-specific markers rather than requiring only the generic marker used by older scenarios. Artifacts retain both client logs for quality, the snapshot, per-scenario summaries and captures on failure.
 
 ## Wall portals and slow movement
 

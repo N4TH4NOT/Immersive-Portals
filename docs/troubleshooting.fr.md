@@ -20,6 +20,14 @@ Des artefacts de développement peuvent partager un numéro de version tout en c
 
 Pour un signalement reproductible, joindre le nom du JAR d’Immersive Portals, sa version et son SHA-256, le commit de compilation GitHub lorsqu’il est connu, les versions de Sodium et BlockLab, les réglages d’éclairage adouci, la présence d’Iris ou d’un shaderpack actif, ainsi qu’une capture ou une courte vidéo des modifications de blocs. Voir l’[architecture des mises à jour de terrain](rendering-26.2.fr.md#mises-à-jour-du-terrain-avec-sodium) et le [guide de validation GitHub](port-26.2.fr.md).
 
+## Une destination sombre paraît éclairée, ou la tête du joueur apparaît pendant la traversée
+
+Le suivi alpha.6 traite séparément les mises à jour de lightmap hors écran, le découpage des corps des joueurs et les collisions de caméra à la troisième personne. Des maillages de terrain obsolètes et une lightmap distante non initialisée sont des défauts différents ; une compilation réussie ne permet de conclure sur aucun des deux. Les contrôles étendus de pièce sombre, de caméra inclinée et d’image du corps sont en attente sur GitHub Actions. Consulter le [périmètre de l’implémentation et de l’acceptation](seamless-26.2.fr.md) avant de considérer un ancien artefact réussi comme une preuve de ces modifications.
+
+## Les blocs, entités ou contours de sélection ne fonctionnent pas à travers un portail
+
+Le chemin d’interaction native alpha.6 trace les blocs et entités à travers les ouvertures accessibles, contrôle la portée ordinaire et les obstacles sur le serveur et extrait le contour du bloc uniquement dans la vue distante correspondante. Le ramassage distant dispose d’un chemin de collecte automatique distinct et applique les règles vanilla de propriété, de délai et d’inventaire. Ces comportements font l’objet de contrôles séparés d’entrée native, de pixels et de ramassage dans les scénarios GitHub étendus ; leur validation est en attente. Un passage de rendu seul ne démontre pas la réussite de l’interaction ou du ramassage. Pour signaler un défaut restant, indiquer le commit exact de l’artefact et préciser si la cible est un bloc, une entité entière, une moitié de corps projetée ou un objet au sol.
+
 ## Un portail posé sur un mur bloque le passage
 
 La version `7.0.0-alpha.4` corrige une limite de collision du côté origine d'un portail placé exactement sur la face d'un mur solide. Le bloc de support dont la face touche le plan du portail doit être exclu dans l'ouverture pour permettre à la caméra du joueur de franchir le plan. L'ancienne comparaison stricte conservait ce bloc comme obstacle solide.

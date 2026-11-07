@@ -18,6 +18,7 @@ Toutes les compilations, les tests automatisés et les scénarios en jeu s’ex�
 
 - [Provenance et périmètre](docs/provenance.fr.md), [revue amont](docs/upstream-1.21-review.fr.md) et [constats de migration](docs/migration-audit-26.2.fr.md).
 - [Architecture du rendu](docs/rendering-26.2.fr.md), [compatibilité réseau](docs/network-audit-26.2.fr.md) et [intégration de la gravité](docs/gravity-repository.fr.md).
+- [Suivi alpha.6 de la continuité des portails](docs/seamless-26.2.fr.md) : périmètre de l’implémentation et validation étendue encore en attente.
 - [Dimensions alternatives intégrées](docs/alternate-dimensions.fr.md) et [API/commandes de dimensions](docs/dimension-library.fr.md).
 - [Dépannage des crashes de rendu des portails](docs/troubleshooting.fr.md).
 - [Datapack de génération optionnel](examples/custom_portal_gen/README.fr.md).

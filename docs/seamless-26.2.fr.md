@@ -1,0 +1,35 @@
+# Suivi de la continuité des portails
+
+[English](seamless-26.2.md) · [Français](seamless-26.2.fr.md)
+
+Le travail alpha.6 traite les défauts signalés après les premiers contrôles en jeu : clignotement près du portail avec la caméra inclinée, pièces sombres paraissant éclairées, caméra subjective détachée, images résiduelles du joueur, terrain visible à travers les blocs et interactions indisponibles à travers les portails. La validation GitHub étendue est **en attente**. Les anciens passages réussis ne valident pas ces nouvelles modifications et ne démontrent pas une transition visuelle parfaite.
+
+## Rendu et caméra
+
+Chaque scène hors écran possède un extracteur de lightmap. Seul le moteur de rendu principal reçoit le tick vanilla ordinaire : les extracteurs distants ont donc besoin d’une première mise à jour, puis de mises à jour à chaque tick client. La scène conserve les valeurs natives de lumière, de ciel et d’ambiance de la destination, tout en partageant le scintillement de la lumière des blocs et l’assombrissement des boss du spectateur. Ce mécanisme est distinct de la propagation des invalidations du terrain Sodium.
+
+Les corps des joueurs utilisent une passe de découpage indépendante du plan de la vue du portail. Leur couleur et leur profondeur sont rendues dans une cible isolée, puis composées avec les demi-espaces du corps et de la vue. Un contrôle géométrique de la caméra à l’intérieur du corps évite d’afficher la tête locale autour de l’œil subjectif ; les vues légitimes du joueur au loin à travers un autre portail restent possibles. Les collisions de la caméra à la troisième personne suivent les huit rayons de coin natifs à travers cinq ouvertures au maximum, y compris les coins déjà passés de l’autre côté, et respectent les véritables obstacles à destination.
+
+La scène optique parcourt des distances œil-plan de `0.9`, `0.3`, `0.04` et `0.001` bloc, des inclinaisons de caméra de `30`, `45`, `60` et `89` degrés et deux angles horizontaux. Des images consécutives contrôlent l’ouverture, les obstacles source/destination et les témoins cachés dans le terrain. Une destination fermée, successivement sombre, éclairée puis sombre à nouveau, est comparée aux vues natives directes avec de véritables changements de lampes et l’éclairage adouci. Des scènes distinctes du corps exercent la visibilité du joueur au loin, le chevauchement du plan, l’accroupissement et les vues avant/arrière à la troisième personne. Les pixels de l’interface et du tutoriel sont exclus des mesures de couleur du corps.
+
+## Interaction et ramassage
+
+Le ciblage natif des blocs et entités utilise un modèle de rayon commun au client et au serveur, limité à cinq traversées de portail et à la portée d’interaction ordinaire du joueur. L’échelle des portails contribue à la distance. Les blocs et entités arrêtent le rayon, y compris à la sortie ; le serveur recalcule le chemin annoncé à partir de la géométrie chargée. Le contour de sélection du bloc appartient uniquement à la vue distante correspondante. Le minage conserve le monde ciblé lors des changements de ciblage local/distant, et la validité des conteneurs revérifie le chemin accessible.
+
+La scène d’entrée native utilise les véritables commandes d’utilisation et d’attaque, puis contrôle les effets serveur pour les conteneurs, boutons, poses et destructions de blocs, utilisations/attaques d’entités, obstacles source et destination, limites de l’ouverture, portée et minage pendant une traversée. L’interaction avec un corps projeté dispose de cas distincts : la réussite des cas d’entités distantes ordinaires ne valide pas à elle seule une moitié de corps dont l’entité appartient à un autre monde. Les actions persistantes dépendant de la position, comme monter une entité ou commercer, demandent leurs propres preuves d’acceptation.
+
+Le ramassage automatique étend le volume de ramassage vanilla à travers une ouverture accessible. Il utilise la forme réelle de l’ouverture, la portion visible de l’objet et les règles vanilla de `playerTouch` pour le délai, la propriété, la place dans l’inventaire, les statistiques et la suppression. Un ramassage autoritaire ne peut pas attribuer deux fois la même pile. L’animation inclut un point d’arrivée fourni par le serveur pour les observateurs dont les mondes chargés ne contiennent pas le collecteur. La scène de qualité couvre l’approche, le délai, la propriété, l’inventaire plein, les refus liés à l’ouverture ou à la portée, la concurrence entre deux joueurs et le ramassage entre dimensions.
+
+## Son et environnement de destination
+
+L’audio choisit le plus court chemin admissible, direct ou passant par un seul portail, avec un rayon de recherche borné à 128 blocs au maximum. La source virtuelle pointe vers l’ouverture et encode toute la distance acoustique dépliée, échelle du portail comprise, tandis que le gain, la hauteur et l’atténuation restent gérés nativement. Ce mécanisme n’implémente pas une propagation acoustique arbitraire par plusieurs portails, l’occlusion sonore ou la diffraction.
+
+Le brouillard hors écran conserve sa propre interpolation de pluie atmosphérique pour chaque moteur de rendu et monde client. Les moteurs de particules distants avancent une fois par tick de monde distant, indépendamment du nombre de vues de portail extraites. La scène d’environnement observe de véritables paquets sonores redirigés et les instances sonores natives pour trois chemins, compte les ticks d’une particule distante et compare un Overworld pluvieux à un Nether sec. Elle ne démontre pas toutes les transitions de biome, de fluide ou de météo.
+
+## Deux joueurs, persistance et limites
+
+Le scénario de qualité connecte deux véritables clients distincts à un serveur dédié. Ils approchent, s’arrêtent, se croisent en sens opposés puis reviennent avec les commandes ordinaires. Le serveur observe aussi le mouvement naturel de créatures, d’objets et de projectiles, les impacts des projectiles à destination et la conservation des UUID/NBT des entités entre dimensions. Le monde est sauvegardé avec les deux joueurs à cheval sur les ouvertures, puis le serveur et les deux clients redémarrent ; les identités des portails, positions et inventaires sauvegardés sont contrôlés avant une nouvelle traversée naturelle.
+
+Les limites de temps d’image client et de tick serveur sont mesurées sur les exécutants logiciels Mesa. Il s’agit de budgets de régression, pas d’une promesse de performances sur le GPU d’un joueur. L’absence de plantage ne permet pas à elle seule de conclure au bon préchargement ou à la disponibilité de la destination.
+
+Les scènes étendues ne prouvent pas encore toutes les transitions d’utilisation maintenue d’objets ou d’arc, les poses de nage/vol/chute, les montures ou menus de commerce, les chemins sonores imbriqués, les GPU, les versions de Sodium/Iris ou les shaderpacks. Indiquer dans la PR le workflow exact réussi et les limites restantes. Le [guide de validation GitHub](port-26.2.fr.md) décrit les journaux et images conservés.

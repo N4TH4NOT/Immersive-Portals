@@ -18,6 +18,7 @@ All compilation, automated tests and runtime scenarios run **exclusively on GitH
 
 - [Source provenance and scope](docs/provenance.md), [upstream review](docs/upstream-1.21-review.md) and [migration findings](docs/migration-audit-26.2.md).
 - [Rendering design](docs/rendering-26.2.md), [network compatibility](docs/network-audit-26.2.md) and [gravity integration](docs/gravity-repository.md).
+- [Alpha.6 seamless portal follow-up](docs/seamless-26.2.md): implementation scope and expanded validation still pending.
 - [Built-in alternate dimensions](docs/alternate-dimensions.md) and [dimension API/commands](docs/dimension-library.md).
 - [Troubleshooting portal-render crashes](docs/troubleshooting.md).
 - [Optional generation datapack](examples/custom_portal_gen/README.md).

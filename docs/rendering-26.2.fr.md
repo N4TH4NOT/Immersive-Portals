@@ -37,6 +37,8 @@ Les points d’entrée des mises à jour propagent `setBlocksDirty`, `setBlockDi
 
 ## Réglages et validation
 
+Alpha.6 ajoute des ticks de lightmap isolés, un découpage indépendant des corps des joueurs, des collisions de caméra à la troisième personne traversant les portails et un état de pluie du brouillard atmosphérique propre à chaque monde. Leur validation étendue en jeu est en attente. Le [suivi de la continuité des portails](seamless-26.2.fr.md) décrit les mécanismes, les scènes inclinées/sombres/de corps et les limites des preuves ; les anciens contrôles de terrain ou de profondeur sur mur ne permettent pas à eux seuls de conclure sur ces changements.
+
 Les réglages actuels figurent dans [`IPConfig`](../src/main/java/qouteall/imm_ptl/core/platform_specific/IPConfig.java) et les diagnostics dans [`PortalDebugCommands`](../src/main/java/qouteall/imm_ptl/core/commands/PortalDebugCommands.java). Les options OpenGL obsolètes de tampons/caches ont été retirées. Les anciennes clés JSON sont ignorées.
 
 Le [guide de validation GitHub](port-26.2.fr.md) décrit les scénarios de rendu et les preuves conservées. La suite intégrée ne démontre pas une compatibilité arbitraire avec Sodium/Iris ou les shaderpacks. Le cave culling conserve un repli pour les caméras transformées incompatibles ; le rejet d’octree exige que tout le volume soit hors de la région visible.

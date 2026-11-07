@@ -2,6 +2,16 @@
 
 [English](changelog.md) · [Français](changelog.fr.md)
 
+## 7.0.0-alpha.6 — validation pending
+
+- Update offscreen lightmaps on the client tick clock and tick remote particles once.
+- Clip player bodies independently from portal views, preserve legitimate remote self views, and trace third-person camera corners through openings.
+- Restore native block/entity targeting, remote selection outlines and mining-world continuity with server path validation; add automatic remote pickup with vanilla collection rules.
+- Preserve folded sound distance and native attenuation; isolate atmospheric rain-fog interpolation per renderer and world.
+- Expand GitHub-only scenarios with pitched optics, real dark-room comparisons, clipped bodies, native input, environment observations, two real players and save/rejoin checks.
+
+The [seamless portal follow-up](docs/seamless-26.2.md) distinguishes implementation from pending acceptance evidence and records remaining coverage limits.
+
 ## 7.0.0-alpha.4
 
 - Fix traversal through portals placed exactly on a solid wall face while preserving collisions outside the opening and at the destination.
