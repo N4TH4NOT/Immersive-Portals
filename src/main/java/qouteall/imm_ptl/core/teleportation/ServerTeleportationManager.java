@@ -215,8 +215,6 @@ public class ServerTeleportationManager {
             // teleportPlayer accepts the server's current eye offset, not the snapshot's.
             teleportPlayer(player, dimensionTo, plannedFeet.add(McHelper.getEyeOffset(player)));
             
-            portal.onEntityTeleportedOnServer(player);
-            
             ScaleUtils.onServerEntityTeleported(player, portal);
             
             if (portal.getTeleportChangesGravity()) {
@@ -230,14 +228,17 @@ public class ServerTeleportationManager {
             // A crouch/swim command may reach the server after the crossing packet.
             // Both offsets use the crossing's pose and server-owned scale/gravity;
             // subtracting the server's current pose would add a visible height jump.
-            Vec3 newFeet = PlayerTeleportAnchor.transformFeet(oldFeetPos, sourceEyeOffset,
-                    PlayerTeleportAnchor.eyeOffset(player, poseBeforeTeleportation), portal::transformPoint);
+            Vec3 newFeet = newEyePos.subtract(
+                    PlayerTeleportAnchor.eyeOffset(player, poseBeforeTeleportation));
             McHelper.setPosAndLastTickPos(player, newFeet, newFeet);
             McHelper.updateBoundingBox(player);
             McHelper.adjustVehicle(player);
             player.connection.resetPosition();
             PortalCollisionHandler.updateCollidingPortalAfterTeleportation(player,
                     McHelper.getEyePos(player), McHelper.getLastTickEyePos(player), 1);
+            // Portal commands run against the completed anchor. An intentional
+            // callback teleport must not be overwritten by this crossing's setup.
+            portal.onEntityTeleportedOnServer(player);
             
         }
         else {
