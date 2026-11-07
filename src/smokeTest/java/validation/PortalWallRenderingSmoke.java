@@ -20,9 +20,12 @@ final class PortalWallRenderingSmoke {
     private static final String[] PHASES = {
         "prediction", "synchronous", "angled", "compatibility", "occluded", "revealed",
         "near-04-normal", "near-04-oblique", "near-01-normal", "near-01-oblique",
-        "near-001-normal", "near-001-oblique", "near-direct"
+        "near-001-normal", "near-001-oblique", "near-direct",
+        "near-micro-normal", "near-micro-oblique"
     };
-    private static final double[] NEAR_DISTANCES = {.04, .04, .01, .01, .001, .001, .001};
+    private static final double[] NEAR_DISTANCES = {
+        .04, .04, .01, .01, .001, .001, .001, .000001, .000001
+    };
     private static int phase = -1;
     private static int phaseTick;
     private static int captured;
@@ -58,17 +61,26 @@ final class PortalWallRenderingSmoke {
                         "The coplanar portal's intact backing wall was removed");
     }
 
+    private static boolean oblique() {
+        return switch (PHASES[phase]) {
+            case "near-04-oblique", "near-01-oblique", "near-001-oblique",
+                    "near-direct", "near-micro-oblique" -> true;
+            default -> false;
+        };
+    }
+
     private static void requireNearCamera(Minecraft client) {
         if (phase < 6) return;
         double distance = NEAR_DISTANCES[phase - 6];
+        double tolerance = Math.min(1.0E-5, distance * .001);
         var camera = client.gameRenderer.mainCamera().position();
         require(client.level.dimension() == Level.OVERWORLD
-                        && Math.abs(camera.x) < 1.0E-5
-                        && Math.abs(camera.z - distance) < 1.0E-5,
+                        && Math.abs(camera.x) <= tolerance
+                        && camera.z > 0 && Math.abs(camera.z - distance) <= tolerance,
                 "The near-plane probe camera moved away from its source plane: " + camera);
         require(IPGlobal.enableDepthClampForPortalRendering,
                 "The near-plane regression probe disabled portal depth clamping");
-        boolean oblique = phase % 2 == 1 || phase == 12;
+        boolean oblique = oblique();
         require(Math.abs(client.player.getYRot() - (oblique ? 135 : 180)) < .01,
                 "The near-plane probe camera did not retain its intended angle");
         if (oblique) {
@@ -149,11 +161,14 @@ final class PortalWallRenderingSmoke {
                     client.player.connection.sendCommand("portal_smoke_wall true");
                 }
                 case 5 -> client.player.connection.sendCommand("portal_smoke_wall false");
-                case 6, 7, 8, 9, 10, 11, 12 -> {
-                    IPGlobal.renderMode = phase == 12
+                case 6, 7, 8, 9, 10, 11, 12, 13, 14 -> {
+                    IPGlobal.renderMode = PHASES[phase].equals("near-direct")
                             ? IPGlobal.RenderMode.compatibility : IPGlobal.RenderMode.normal;
+                    // Brigadier's numeric reader does not accept exponent notation.
+                    String distance = String.format(java.util.Locale.ROOT, "%.9f",
+                            NEAR_DISTANCES[phase - 6]);
                     client.player.connection.sendCommand("portal_smoke_wall_camera "
-                            + NEAR_DISTANCES[phase - 6] + " " + (phase % 2 == 1 || phase == 12));
+                            + distance + " " + oblique());
                 }
                 default -> throw new AssertionError("Unexpected wall probe phase " + phase);
             }

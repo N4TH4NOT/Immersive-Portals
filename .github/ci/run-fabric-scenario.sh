@@ -52,7 +52,7 @@ cleanup() {
         wait "$server_pid" 2>/dev/null || true
     fi
     if [[ "$modset" == sodium ]]; then
-        extractor_class=run/smoke-client/.mixin.out/net/minecraft/client/renderer/extract/LevelExtractor.class
+        extractor_class=run/smoke-client/.mixin.out/class/net/minecraft/client/renderer/extract/LevelExtractor.class
         if [[ -f "$extractor_class" ]]; then
             javap -c -p "$extractor_class" > "$evidence/sodium-level-extractor-bytecode.txt" || true
             printf '%s\n' '::group::Sodium terrain update injection evidence'

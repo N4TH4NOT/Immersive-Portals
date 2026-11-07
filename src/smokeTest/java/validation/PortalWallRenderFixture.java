@@ -42,7 +42,7 @@ final class PortalWallRenderFixture {
                 dispatcher.register(Commands.literal("portal_smoke_wall_camera")
                         .requires(source -> source.getPlayer() != null
                                 && source.getPlayer().getGameProfile().name().equals("OcclusionTest"))
-                        .then(Commands.argument("distance", DoubleArgumentType.doubleArg(.0001, .05))
+                        .then(Commands.argument("distance", DoubleArgumentType.doubleArg(.0000001, .05))
                                 .then(Commands.argument("oblique", BoolArgumentType.bool())
                                         .executes(context -> {
                                             double distance = DoubleArgumentType.getDouble(

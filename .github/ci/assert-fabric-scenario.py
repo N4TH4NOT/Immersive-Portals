@@ -193,7 +193,8 @@ if scenario == "rendering":
     wall_failures = []
     phases = ("prediction", "synchronous", "angled", "compatibility", "occluded", "revealed",
               "near-04-normal", "near-04-oblique", "near-01-normal", "near-01-oblique",
-              "near-001-normal", "near-001-oblique", "near-direct")
+              "near-001-normal", "near-001-oblique", "near-direct",
+              "near-micro-normal", "near-micro-oblique")
     for phase in phases:
         frames = re.findall(
             rf"PORTAL_RENDER_WALL_FRAME phase={phase} sample=(\d+) frame=(\d+)", client)
@@ -210,7 +211,8 @@ if scenario == "rendering":
             with Image.open(path) as capture:
                 rgb = capture.convert("RGB")
                 if sample == 0 and phase in ("prediction", "occluded", "revealed",
-                                              "near-04-oblique", "near-001-oblique", "near-direct"):
+                                              "near-04-oblique", "near-001-oblique", "near-direct",
+                                              "near-micro-oblique"):
                     fixture_thumbnail(rgb, "PORTAL_WALL_THUMBNAIL", phase)
                 # This upper central patch lies well inside the fixed aperture, away
                 # from the crosshair and from the portal's edges at both camera angles.

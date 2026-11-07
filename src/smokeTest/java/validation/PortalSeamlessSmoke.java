@@ -3,6 +3,7 @@ package validation;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
@@ -135,10 +136,13 @@ final class PortalSeamlessSmoke {
                 }
                 if (sample.tick() > previous.tick()) {
                     int elapsedTicks = sample.tick() - previous.tick();
-                    // Normal acceleration is at most 0.1 blocks/tick. A portal must not add
-                    // an extra movement to finish crossing after the controls have stopped.
+                    // Vanilla input acceleration is bounded in world coordinates. A smaller
+                    // destination maps the same movement-speed attribute to a larger bound
+                    // in source coordinates; the portal must not add a separate movement.
+                    double acceleration = client.player.getAttributeValue(Attributes.MOVEMENT_SPEED);
+                    if (destination) acceleration /= portal.getScaling();
                     double allowance = elapsedTicks == 1
-                            ? horizontal(previous.velocity()) + .115
+                            ? horizontal(previous.velocity()) + acceleration + .015
                             : maximumSpeed * elapsedTicks + .045;
                     require(horizontal(feet.subtract(previous.feet())) <= allowance,
                             "Portal forced additional player movement: previous=" + previous
@@ -202,6 +206,7 @@ final class PortalSeamlessSmoke {
     static void tick(Minecraft client, int currentTick) {
         if (!enabled(client) || currentTick < 150) return;
         ticks = currentTick;
+        client.options.keySprint.setDown(false);
         if (controlled && !sameWorld && stage == Stage.COMPLETE) {
             verifyPhase(client);
             sameWorld = true;
