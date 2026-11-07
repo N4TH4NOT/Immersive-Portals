@@ -149,6 +149,10 @@ public final class DimensionLibrarySmoke {
         }
         ServerLevel kept = server.getLevel(KEPT);
         if (kept == null) throw new AssertionError("Dynamic dimension was not created");
+        var keptStem = ResourceKey.create(Registries.LEVEL_STEM, KEPT_ID);
+        if (!kept.registryAccess().lookupOrThrow(Registries.LEVEL_STEM).containsKey(keptStem)
+                || !server.overworld().registryAccess().lookupOrThrow(Registries.LEVEL_STEM).containsKey(keptStem))
+            throw new AssertionError("A native world retained stale dimension registry access");
         DimensionAPI.addDimensionIfNotExists(server, KEPT_ID, () -> {
             throw new AssertionError("Existing dimension invoked the replacement supplier");
         });
@@ -211,7 +215,14 @@ public final class DimensionLibrarySmoke {
     }
 
     private static void run(MinecraftServer server, String command) {
-        server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), command);
+        try {
+            // A nested performPrefixedCommand only queues work in the outer 26.2 execution context.
+            // Execute the real registered command tree synchronously before checking its result.
+            int result = server.getCommands().getDispatcher().execute(command, server.createCommandSourceStack());
+            if (result <= 0) throw new AssertionError("Dimension command failed: " + command);
+        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException exception) {
+            throw new AssertionError("Dimension command could not be parsed or executed: " + command, exception);
+        }
     }
 
     private static JsonElement codec(MinecraftServer server, ResourceKey<Level> dimension) {
