@@ -104,6 +104,7 @@ public final class PortalSmokeClient implements ClientModInitializer {
                         performanceSampleStartNanos = System.nanoTime();
                         validateItemModels(client);
                         PortalMigrationSmoke.validate();
+                        PortalOnboardingSmoke.validate(client);
                     }
                     validatePerformanceSampling(client);
                     if (Boolean.getBoolean("portalSmoke.gravity")) {

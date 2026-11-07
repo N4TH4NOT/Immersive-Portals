@@ -80,6 +80,7 @@
     "client.MixinClientLevel",
     "client.MixinDebugScreenOverlay",
     "client.MixinGlDebug",
+    "client.MixinGui_InitialScreen",
     "client.MixinLivingEntity_C",
     "client.MixinMinecraft",
     "client.accessor.IEClientLevel_Accessor",
