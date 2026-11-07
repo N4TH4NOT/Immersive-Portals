@@ -49,6 +49,17 @@ cleanup() {
         kill -TERM "$server_pid" 2>/dev/null || true
         wait "$server_pid" 2>/dev/null || true
     fi
+    if (( status != 0 )); then
+        # Keep crash evidence readable through the job-log API when artifact delivery
+        # is unavailable. Only the two isolated fixture-server consoles are eligible.
+        for name in server-console.log reload-server-console.log; do
+            if [[ -f "$evidence/$name" ]]; then
+                printf '::group::Fixture server failure: %s\n' "$name"
+                tail -n 300 "$evidence/$name"
+                printf '%s\n' '::endgroup::'
+            fi
+        done
+    fi
     printf 'Backend: %s\nScenario: %s\nMod set: %s\nExit status: %s\n' \
         "$backend" "$scenario" "$modset" "$status" > "$evidence/result.txt"
     if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
