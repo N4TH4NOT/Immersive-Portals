@@ -3,6 +3,7 @@ package validation;
 import com.mojang.blaze3d.platform.NativeImage;
 
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
@@ -75,36 +76,43 @@ final class PortalBodyRenderingSmoke {
     private static void initialize() {
         if (initialized) return;
         initialized = true;
+        // NativeEntityPass is populated by a separate extractor RETURN injection.
+        // Observe the states when drawn, after all extraction callbacks have finished.
+        LevelRenderEvents.END_MAIN.register(context -> {
+            if (!started || complete || phase.ordinal() < Phase.APPROACH.ordinal()) return;
+            var client = Minecraft.getInstance();
+            if (client.player == null) return;
+            for (var body : NativeEntityPass.snapshots(context.levelState())) {
+                if (!body.localPlayer()) continue;
+                boolean destination = client.player.getX() > 160;
+                double physicalX = destination ? PortalBodyRenderFixture.DESTINATION_X
+                        : PortalBodyRenderFixture.SOURCE_X;
+                double otherX = destination ? PortalBodyRenderFixture.SOURCE_X
+                        : PortalBodyRenderFixture.DESTINATION_X;
+                double expectedX = body.projected() ? otherX : physicalX;
+                require(Math.abs(body.position().x - expectedX) < .02,
+                        "A player body was rendered at an unrelated portal position: " + body);
+                require(body.clip() != null
+                                && Math.abs(body.clip().pos().x - expectedX) < .02
+                                && Math.abs(body.clip().pos().z) < .001
+                                && body.clip().normal().z
+                                        * (expectedX == PortalBodyRenderFixture.SOURCE_X ? 1 : -1)
+                                        > .99,
+                        "The rendered body clipping plane did not keep its physical portal side: " + body);
+                if (body.projected()) projectedBodies++;
+                else normalBodies++;
+                if (PortalRendering.isRendering()) {
+                    require(body.viewClip() != null,
+                            "A portal view replaced the rendered body's independent clipping plane: " + body
+                                    + " active=" + PortalRendering.getActiveClippingPlane());
+                    independentlyClippedViews++;
+                }
+            }
+        });
         LevelExtractionEvents.END_EXTRACTION.register(context -> {
             if (!started || complete) return;
             var client = Minecraft.getInstance();
             if (client.player == null) return;
-            if (phase.ordinal() >= Phase.APPROACH.ordinal())
-                for (var body : NativeEntityPass.snapshots(context.levelState())) {
-                    if (!body.localPlayer()) continue;
-                    boolean destination = client.player.getX() > 160;
-                    double physicalX = destination ? PortalBodyRenderFixture.DESTINATION_X
-                            : PortalBodyRenderFixture.SOURCE_X;
-                    double otherX = destination ? PortalBodyRenderFixture.SOURCE_X
-                            : PortalBodyRenderFixture.DESTINATION_X;
-                    double expectedX = body.projected() ? otherX : physicalX;
-                    require(Math.abs(body.position().x - expectedX) < .02,
-                            "A player body was extracted at an unrelated portal position: " + body);
-                    require(body.clip() != null
-                                    && Math.abs(body.clip().pos().x - expectedX) < .02
-                                    && Math.abs(body.clip().pos().z) < .001
-                                    && body.clip().normal().z
-                                            * (expectedX == PortalBodyRenderFixture.SOURCE_X ? 1 : -1)
-                                            > .99,
-                            "The body clipping plane did not keep its physical portal side: " + body);
-                    if (body.projected()) projectedBodies++;
-                    else normalBodies++;
-                    if (PortalRendering.isRendering()) {
-                        require(body.viewClip() != null,
-                                "A portal view replaced the body's independent clipping plane: " + body);
-                        independentlyClippedViews++;
-                    }
-                }
             if (WorldRenderInfo.isRendering()) return;
             if (phase == Phase.F5_FRONT && phaseFrames >= 4) {
                 require(context.camera().position().z > -2.2
