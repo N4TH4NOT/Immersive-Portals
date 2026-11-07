@@ -30,6 +30,8 @@ The origin-side test allows a collision rounding tolerance of `1e-7` blocks. Blo
 
 Version `7.0.0-alpha.4` introduces shared depth priority for a portal and a backing block face on the same surface. Coverage and composition use the same small relative reverse-Z offset. For planar apertures near the camera, the renderer computes the portal-plane depth equation on the CPU in double precision. Coverage and direct composition evaluate that equation per pixel and clamp its depth, preserving the aperture when corners pass behind the eye without unstable reciprocal-W interpolation. Nonplanar shapes retain the general depth-reconstruction path. Both masked and direct composition follow this depth-clamp path with `useDepthClampForPortalRendering` enabled, as it is by default.
 
+With Sodium, aperture placement and parent clipping also match the rounded origin used to render chunk terrain. If rounding reaches or crosses the aperture plane while the real eye is still in front, the planar aperture uses the real origin instead. This changes only the aperture's rendering basis and leaves the physical camera in place.
+
 These adjustments preserve the portal's geometric and collision planes. The GitHub scene checks consecutive frames close to the aperture, at oblique angles, and with a real foreground occluder. Use the GitHub runtime results for the matching commit to confirm the depth behavior; a successful build alone does not establish it.
 
 ## The player catches near a same-world portal exit

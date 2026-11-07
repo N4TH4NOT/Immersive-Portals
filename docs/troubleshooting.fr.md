@@ -30,6 +30,8 @@ Le test côté origine accepte une tolérance d’arrondi de collision de `1e-7`
 
 La version `7.0.0-alpha.4` introduit une priorité de profondeur commune au portail et à la face du bloc de support située sur la même surface. La couverture et la composition utilisent le même petit décalage relatif reverse-Z. Pour les ouvertures planes proches de la caméra, le moteur calcule l’équation de profondeur du plan du portail sur le CPU en double précision. La couverture et la composition directe évaluent cette équation par pixel et bornent sa profondeur : l’ouverture est conservée lorsque des sommets passent derrière l’œil, sans interpolation instable du W inverse. Les formes non planes conservent le chemin général de reconstruction de profondeur. Les compositions masquée et directe suivent toutes deux ce chemin lorsque `useDepthClampForPortalRendering` est activé, comme c’est le cas par défaut.
 
+Avec Sodium, le placement de l’ouverture et le découpage parent correspondent aussi à l’origine arrondie utilisée pour afficher le terrain des chunks. Si cet arrondi atteint ou dépasse le plan de l’ouverture alors que l’œil réel est encore devant, l’ouverture plane utilise plutôt l’origine réelle. Cela ne modifie que la base de rendu de l’ouverture et laisse la caméra physique en place.
+
 Ces ajustements préservent les plans géométriques et de collision du portail. La scène GitHub vérifie des images consécutives proches de l’ouverture, sous des angles obliques et avec un véritable obstacle au premier plan. Utiliser les résultats en jeu sur GitHub pour le commit correspondant afin de confirmer le comportement de profondeur ; une compilation réussie ne le démontre pas à elle seule.
 
 ## Le joueur accroche près de la sortie d’un portail dans le même monde

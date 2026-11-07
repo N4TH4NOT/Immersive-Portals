@@ -23,6 +23,10 @@ For coplanar backing walls, coverage and composition share `portalSurfaceDepth`:
 
 `useDepthClampForPortalRendering` defaults to `true`; disabling it retains native near/far clipping. With it enabled, the vertex shader uses neutral clip Z so an aperture crossing the eye plane remains covered after clipping. For planar apertures, [`NativePortalDepth`](../src/main/java/qouteall/imm_ptl/core/render/NativePortalDepth.java) computes the transformed portal-plane equation on the CPU in double precision and converts it to affine window-depth coefficients. Coverage and direct composition receive those coefficients as uniforms and evaluate depth from each fragment's pixel position. This avoids reciprocal-W interpolation cancellation near the eye, including oblique views with corners behind it.
 
+With Sodium, aperture vertices and the parent clipping equation use the effective terrain origin returned by Sodium's `CameraTransform`, including its rounded fractional coordinates. For example, a nominal fractional coordinate of `0.04` can render as approximately `0.0399932861`. The analytic depth equation is derived from the mesh uploaded with that same origin, so the aperture and its coplanar terrain share a rendering basis. Vanilla uses the actual camera position.
+
+For a planar aperture, if rounding puts that terrain origin on or behind the plane while the actual eye is still in front, the aperture retains the actual origin to avoid collapsing at the eye plane. This is a rendering-basis choice: the physical camera, portal plane, destination-view setup and teleportation are unchanged.
+
 The fragment depth is clamped to the backend's depth range before the shared surface offset is applied. Nonplanar shapes, including box portals, and degenerate transformed planes retain the general reconstruction from interpolated clip Z and reciprocal W. Parent-plane clipping still applies, and neither path moves the geometric aperture. Use the GitHub runtime results for the matching commit to confirm these paths; shader compilation alone does not establish their rendered output.
 
 ## Terrain updates with Sodium
