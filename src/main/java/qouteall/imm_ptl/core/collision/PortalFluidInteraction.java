@@ -103,7 +103,8 @@ public final class PortalFluidInteraction {
             AABB remoteBox = Helper.transformBox(projected, portal::transformPoint);
             var plane = portal.getInnerClipping();
             remoteBox = CollisionHelper.clipBox(remoteBox, plane.pos(), plane.normal());
-            if (remoteBox == null || !destination.hasChunkAt(
+            if (remoteBox == null || PortalCollisionHandler.isBoxTooBig(remoteBox)
+                    || !destination.hasChunkAt(
                     net.minecraft.core.BlockPos.containing(remoteBox.getCenter()))) return;
             var trackers = ((EntityFluidInteractionAccess) interaction).ip_trackers();
             EntityFluidInteraction remote = REMOTE.computeIfAbsent(entity,

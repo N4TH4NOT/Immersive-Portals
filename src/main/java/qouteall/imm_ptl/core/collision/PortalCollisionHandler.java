@@ -534,7 +534,7 @@ public class PortalCollisionHandler {
         }
     }
     
-    private static boolean isBoxTooBig(AABB aabb) {
+    static boolean isBoxTooBig(AABB aabb) {
         return aabb.getXsize() > 100 || aabb.getYsize() > 100 || aabb.getZsize() > 100;
     }
 }
