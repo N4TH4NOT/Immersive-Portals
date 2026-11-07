@@ -6,6 +6,7 @@
   "mixins": [
     "DimensionServerAccess",
     "DimensionSettingsAccess",
+    "DimensionLevelAccess",
     "DimensionStabilityMixin",
     "DimensionGlobalStabilityMixin"
   ],

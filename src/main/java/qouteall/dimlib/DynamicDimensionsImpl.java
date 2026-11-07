@@ -25,6 +25,7 @@ import net.minecraft.world.level.levelgen.WorldDimensions;
 import net.minecraft.world.level.storage.DerivedLevelData;
 import org.slf4j.Logger;
 import qouteall.dimlib.mixin.DimensionServerAccess;
+import qouteall.dimlib.mixin.DimensionLevelAccess;
 import qouteall.dimlib.mixin.DimensionSettingsAccess;
 import qouteall.q_misc_util.dimension.DimensionLifecycle;
 
@@ -63,17 +64,35 @@ public final class DynamicDimensionsImpl {
             throw new IllegalArgumentException("Unknown dimension type: " + typeKey.identifier());
 
         var access = (DimensionServerAccess) server;
-        long seed = server.getWorldGenSettings().options().seed();
+        var previousRegistries = server.registries();
+        var previousLevels = access.dimlib_levels();
+        var settings = server.getWorldGenSettings();
+        var previousDimensions = settings.dimensions();
+        boolean previouslyDirty = settings.isDirty();
+        long seed = settings.options().seed();
         var registry = replacementRegistry(server, id, stem);
-        ServerLevel world = new ServerLevel(server, access.dimlib_executor(), access.dimlib_storage(),
-            new DerivedLevelData(server.getWorldData(), server.getWorldData().overworldData()),
-            key, stem, false, BiomeManager.obfuscateSeed(seed), List.of(), false);
-        world.getWorldBorder().setAbsoluteMaxSize(server.getAbsoluteMaxWorldSize());
-        server.getPlayerList().addWorldborderListener(world);
-        var levels = new LinkedHashMap<>(access.dimlib_levels());
+        ServerLevel world = null;
+        try {
+            // ServerLevel and its data stores capture registry access in their constructors.
+            replaceRegistryAndSavedSettings(server, registry);
+            world = new ServerLevel(server, access.dimlib_executor(), access.dimlib_storage(),
+                new DerivedLevelData(server.getWorldData(), server.getWorldData().overworldData()),
+                key, stem, false, BiomeManager.obfuscateSeed(seed), List.of(), false);
+            world.getWorldBorder().setAbsoluteMaxSize(server.getAbsoluteMaxWorldSize());
+            server.getPlayerList().addWorldborderListener(world);
+        } catch (RuntimeException | Error failure) {
+            access.dimlib_registries(previousRegistries);
+            ((DimensionSettingsAccess) (Object) settings).dimlib_dimensions(previousDimensions);
+            settings.setDirty(previouslyDirty);
+            refreshWorldRegistryAccess(server);
+            if (world != null) {
+                try { world.close(); } catch (IOException closeFailure) { failure.addSuppressed(closeFailure); }
+            }
+            throw failure;
+        }
+        var levels = new LinkedHashMap<>(previousLevels);
         levels.put(key, world);
         access.dimlib_levels(levels);
-        replaceRegistryAndSavedSettings(server, registry);
         DimensionLifecycle.SERVER_DIMENSION_DYNAMIC_UPDATE_EVENT.invoker().accept(server, Set.copyOf(server.levelKeys()));
         ServerLevelEvents.LOAD.invoker().onLevelLoad(server, world);
         LOGGER.info("Added dimension {}", id);
@@ -182,6 +201,13 @@ public final class DynamicDimensionsImpl {
         var settings = server.getWorldGenSettings();
         ((DimensionSettingsAccess) (Object) settings).dimlib_dimensions(new WorldDimensions(registry));
         settings.setDirty();
+        refreshWorldRegistryAccess(server);
+    }
+
+    private static void refreshWorldRegistryAccess(MinecraftServer server) {
+        var current = server.registryAccess();
+        for (var world : server.getAllLevels())
+            ((DimensionLevelAccess) (Object) world).dimlib_registryAccess(current);
     }
 
     private static void requireServerThread(MinecraftServer server) {
