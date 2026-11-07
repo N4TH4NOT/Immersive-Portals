@@ -214,8 +214,9 @@ public class ClientWorldLoader {
             LOGGER.error("The entities of that dimension was not cleared before removal");
         }
         
-        CLIENT.gameRenderer.resetData();
-        
+        // Only the removed world's scenes are disposed above. The shared GameRenderer
+        // still owns the active world's camera; resetData() would clear its level/entity
+        // before Minecraft's next extraction, which runs ahead of the next camera update.
         CLIENT_DIMENSION_DYNAMIC_REMOVE_EVENT.invoker().accept(dimension);
     }
     
