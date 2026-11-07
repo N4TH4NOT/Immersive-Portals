@@ -15,6 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import qouteall.imm_ptl.core.*;
 import qouteall.imm_ptl.core.ducks.IEMinecraftClient;
 import qouteall.imm_ptl.core.mixin.client.render.NativeGameRendererAccess;
+import qouteall.imm_ptl.core.miscellaneous.ClientPerformanceMonitor;
 import qouteall.imm_ptl.core.portal.animation.*;
 import qouteall.imm_ptl.core.render.NativeWorldRenderer;
 import qouteall.imm_ptl.core.render.context_management.RenderStates;
@@ -28,9 +29,19 @@ public abstract class MixinMinecraft implements IEMinecraftClient {
     @Shadow @Mutable @Final public ParticleEngine particleEngine;
     @Shadow public ClientLevel level;
     @Shadow private Thread gameThread;
+    @Unique private long ip_lastPerformanceSampleNanos = System.nanoTime();
 
     @Inject(method="renderFrame",at=@At(value="INVOKE",target="Lnet/minecraft/client/renderer/LevelRenderer;endFrame()V",shift=At.Shift.AFTER))
     private void ip_endSubmittedFrame(CallbackInfo ci) { NativeWorldRenderer.endFrame(); }
+
+    @Inject(method = "renderFrame", at = @At("TAIL"))
+    private void ip_sampleClientPerformance(CallbackInfo ci) {
+        long now = System.nanoTime();
+        if (now - ip_lastPerformanceSampleNanos >= 1_000_000_000L) {
+            ip_lastPerformanceSampleNanos = now;
+            ClientPerformanceMonitor.updateEverySecond(((Minecraft) (Object) this).getFps());
+        }
+    }
 
     @Inject(method = "tick", at = @At(value="INVOKE", target="Lnet/minecraft/client/multiplayer/ClientLevel;tick(Ljava/util/function/BooleanSupplier;)V", shift=At.Shift.AFTER))
     private void ip_afterWorldTick(CallbackInfo ci) {
