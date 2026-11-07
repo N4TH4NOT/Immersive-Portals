@@ -26,6 +26,7 @@
     "common.collision.MixinAbstractHurtingProjectile",
     "common.collision.MixinEntity",
     "common.collision.MixinEntityFluidInteraction",
+    "common.collision.MixinEntityFluidTracker",
     "common.collision.EntityFluidInteractionAccess",
     "common.collision.EntityFluidTrackerAccess",
     "common.collision.MixinPlayer_Collision",

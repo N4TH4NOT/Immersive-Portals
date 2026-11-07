@@ -72,10 +72,14 @@ if scenario in ("multiplayer", "singleplayer"):
         for case in ("sprint", "crouch", "fly", "fall", "swim", "bow", "food"):
             client_markers.append(f"PORTAL_POSE_USE_CLIENT_OK case={case}")
             server_markers.append(f"PORTAL_POSE_USE_SERVER_OK case={case}")
-        client_markers.append("PORTAL_FLUID_COMPLETE cases=7")
+        client_markers.append("PORTAL_FLUID_COMPLETE cases=9")
         client_markers.append("PORTAL_FLUID_LAVA_CURRENT_OK")
+        client_markers.append("PORTAL_FLUID_NONPLAYER_NATIVE_OK")
+        server_markers.append("PORTAL_FLUID_NONPLAYER_NATIVE_OK")
+        server_markers.append("PORTAL_FLUID_FORCE_CONTRACT_OK cases=3")
         for case in ("hidden_water", "hidden_lava", "visible_water", "destination_water",
-                     "scaled_water", "rotated_water", "destination_lava"):
+                     "scaled_water", "rotated_water", "narrow_edge_water",
+                     "nonplayer_lava", "destination_lava"):
             client_markers.append(f"PORTAL_FLUID_CLIENT_OK case={case}")
             server_markers.append(f"PORTAL_FLUID_SERVER_OK case={case}")
 if scenario == "multiplayer":

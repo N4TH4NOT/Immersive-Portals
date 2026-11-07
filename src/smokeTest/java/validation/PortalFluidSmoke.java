@@ -58,7 +58,7 @@ final class PortalFluidSmoke {
         if (!messages.contains("PORTAL_FLUID_SETUP " + name())
                 || client.level.dimension() != Level.OVERWORLD
                 || (!name().equals("destination_lava")
-                    && client.player.position().distanceTo(PortalFluidFixture.START) > .08)
+                    && client.player.position().distanceTo(PortalFluidFixture.start(name())) > .08)
                 || (name().equals("destination_lava")
                     && (Math.abs(client.player.getX() - PortalFluidFixture.START.x) > 2.5
                         || Math.abs(client.player.getY() - PortalFluidFixture.START.y) > .08
@@ -66,7 +66,7 @@ final class PortalFluidSmoke {
                 || Math.abs(ScaleUtils.getScale(client.player) - PortalFluidFixture.scale(name())) > .001)
             return false;
         if (PortalFluidFixture.physicalFluid(client.player)
-                == PortalFluidFixture.destinationCase(name())) return false;
+                != PortalFluidFixture.rawSourceFluid(name())) return false;
         for (var entity : client.level.entitiesForRendering())
             if (entity instanceof Portal portal && portal.getOriginPos().x == 512
                     && portal.getOriginPos().z == 64 && portal.getNormal().z > .99)
@@ -88,7 +88,8 @@ final class PortalFluidSmoke {
         switch (stage) {
             case SETUP -> {
                 stop(client);
-                if (ticks - started < (name().equals("destination_lava") ? 220 : 30)
+                if (ticks - started < ((name().equals("destination_lava") || name().equals("nonplayer_lava"))
+                        ? 220 : 30)
                         || !ready(client)) return false;
                 stage = Stage.SOURCE;
                 stageTick = ticks;
@@ -98,7 +99,26 @@ final class PortalFluidSmoke {
                 require(client.level.dimension() == Level.OVERWORLD,
                         "The stationary fluid probe crossed without ordinary movement input");
                 boolean hidden = name().startsWith("hidden_");
-                if (hidden) {
+                if (name().equals("nonplayer_lava")) {
+                    require(!PortalFluidFixture.physicalFluid(client.player)
+                                    && !client.player.isInWater() && !client.player.isInLava()
+                                    && client.player.getAirSupply() == client.player.getMaxAirSupply()
+                                    && client.player.getHealth() == client.player.getMaxHealth(),
+                            "The non-player force observer did not remain in dry physical space");
+                } else if (name().equals("narrow_edge_water")) {
+                    require(PortalFluidFixture.physicalFluid(client.player)
+                                    && client.player.isInWater() && !client.player.isInLava()
+                                    && client.player.getFluidHeight(FluidTags.WATER) > 0
+                                    && !client.player.isEyeInFluid(FluidTags.WATER),
+                            "Real source water outside the finite opening lost native contact");
+                    require(Math.abs(client.player.getY() - 80.875) < .025
+                                    && client.player.getAirSupply() == client.player.getMaxAirSupply()
+                                    && client.player.getHealth() == client.player.getMaxHealth(),
+                            "The shallow edge-water observer lost its raised floor or dry eye");
+                    if (settled == null) settled = client.player.position();
+                    require(client.player.position().distanceTo(settled) < .025,
+                            "The enclosed edge-water pocket moved the actual client");
+                } else if (hidden) {
                     require(PortalFluidFixture.physicalFluid(client.player),
                             "The hidden-fluid chamber never reached the raw actual client body");
                     require(!client.player.isInWater() && !client.player.isInLava()
@@ -136,6 +156,8 @@ final class PortalFluidSmoke {
                 }
                 sourceSamples++;
                 if (sourceSamples < (PortalFluidFixture.destinationCase(name()) ? 35 : 80)) return false;
+                if (name().equals("nonplayer_lava")
+                        && !messages.contains("PORTAL_FLUID_NONPLAYER_NATIVE_OK")) return false;
                 if (PortalFluidFixture.destinationCase(name())) {
                     stage = Stage.CROSS;
                     stageTick = ticks;
@@ -174,6 +196,8 @@ final class PortalFluidSmoke {
                 if (name().equals("destination_lava"))
                     System.out.println("PORTAL_FLUID_LAVA_CURRENT_OK projected=" + projectedLavaCurrent
                             + " destination=" + destinationLavaCurrent + " nativeNetherStrength=0.007");
+                if (name().equals("nonplayer_lava"))
+                    System.out.println("PORTAL_FLUID_NONPLAYER_NATIVE_OK observedServerTicks=true");
                 begin(client);
             }
             case RESTORE -> {

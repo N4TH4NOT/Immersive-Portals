@@ -3,8 +3,8 @@ package qouteall.imm_ptl.core.collision;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityFluidInteraction;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.attribute.EnvironmentAttributes;
-import net.minecraft.tags.FluidTags;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -16,13 +16,17 @@ import qouteall.imm_ptl.core.portal.Portal;
 import qouteall.q_misc_util.Helper;
 
 import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
 /** Runs the native fluid sampler on the physical body parts on both sides of an opening. */
 public final class PortalFluidInteraction {
     public record Frame(Entity entity, Level world, AABB body, @Nullable AABB sample,
-            Vec3 feet, Vec3 eye) {}
+            Vec3 feet, Vec3 eye, @Nullable List<AABB> physicalParts) {}
+
+    private record BodyParts(List<AABB> physical, @Nullable AABB projected) {}
 
     private static final ThreadLocal<Frame> FRAME = new ThreadLocal<>();
     private static final Map<Entity, EntityFluidInteraction> REMOTE =
@@ -33,6 +37,12 @@ public final class PortalFluidInteraction {
     public static @Nullable Frame frame(Entity entity) {
         var frame = FRAME.get();
         return frame != null && frame.entity() == entity ? frame : null;
+    }
+
+    public static @Nullable Frame currentFrame() { return FRAME.get(); }
+
+    public static @Nullable PortalFluidForces.Result lastForce(Entity entity, TagKey<Fluid> fluid) {
+        return PortalFluidForces.lastForce(entity, fluid);
     }
 
     private static @Nullable Portal contact(Entity entity) {
@@ -58,22 +68,36 @@ public final class PortalFluidInteraction {
         return best;
     }
 
-    private static @Nullable AABB aperturePart(AABB box, Portal portal) {
+    private static void keep(List<AABB> parts, @Nullable AABB box) {
+        if (box != null && box.getXsize() > 1.0E-10 && box.getYsize() > 1.0E-10
+                && box.getZsize() > 1.0E-10) parts.add(box);
+    }
+
+    private static BodyParts bodyParts(AABB box, Portal portal) {
+        List<AABB> physical = new ArrayList<>();
+        keep(physical, CollisionHelper.clipBox(box, portal.getOriginPos(), portal.getNormal()));
         var state = portal.getThisSideState();
         AABB result = CollisionHelper.clipBox(box, portal.getOriginPos(), portal.getNormal().scale(-1));
-        if (result == null) return null;
+        if (result == null) return new BodyParts(physical, null);
         Vec3 horizontal = state.getAxisW(), vertical = state.getAxisH();
-        result = CollisionHelper.clipBox(result,
-                portal.getOriginPos().subtract(horizontal.scale(state.width() / 2)), horizontal);
-        if (result == null) return null;
-        result = CollisionHelper.clipBox(result,
-                portal.getOriginPos().add(horizontal.scale(state.width() / 2)), horizontal.scale(-1));
-        if (result == null) return null;
-        result = CollisionHelper.clipBox(result,
-                portal.getOriginPos().subtract(vertical.scale(state.height() / 2)), vertical);
-        if (result == null) return null;
-        return CollisionHelper.clipBox(result,
-                portal.getOriginPos().add(vertical.scale(state.height() / 2)), vertical.scale(-1));
+        Vec3 edge = portal.getOriginPos().subtract(horizontal.scale(state.width() / 2));
+        keep(physical, CollisionHelper.clipBox(result, edge, horizontal.scale(-1)));
+        result = CollisionHelper.clipBox(result, edge, horizontal);
+        if (result == null) return new BodyParts(physical, null);
+        edge = portal.getOriginPos().add(horizontal.scale(state.width() / 2));
+        keep(physical, CollisionHelper.clipBox(result, edge, horizontal));
+        result = CollisionHelper.clipBox(result, edge, horizontal.scale(-1));
+        if (result == null) return new BodyParts(physical, null);
+        edge = portal.getOriginPos().subtract(vertical.scale(state.height() / 2));
+        keep(physical, CollisionHelper.clipBox(result, edge, vertical.scale(-1)));
+        result = CollisionHelper.clipBox(result, edge, vertical);
+        if (result == null) return new BodyParts(physical, null);
+        edge = portal.getOriginPos().add(vertical.scale(state.height() / 2));
+        keep(physical, CollisionHelper.clipBox(result, edge, vertical));
+        result = CollisionHelper.clipBox(result, edge, vertical.scale(-1));
+        // Only the finite opening removes a source part. The remaining disjoint
+        // width/height residuals keep real source fluids beside the portal frame.
+        return new BodyParts(physical, result);
     }
 
     public static void update(EntityFluidInteraction interaction, Entity entity,
@@ -82,6 +106,7 @@ public final class PortalFluidInteraction {
             nativeUpdate.run();
             return;
         }
+        PortalFluidForces.clear(entity);
         Portal portal = contact(entity);
         if (portal == null) {
             nativeUpdate.run();
@@ -92,14 +117,17 @@ public final class PortalFluidInteraction {
             nativeUpdate.run();
             return;
         }
-        AABB physical = portal.getPortalShape().transformEntityActiveCollisionBox(portal, original, entity);
+        BodyParts parts = bodyParts(original, portal);
+        List<AABB> physical = parts.physical();
         Frame previous = FRAME.get();
-        FRAME.set(new Frame(entity, entity.level(), entity.getBoundingBox(), physical,
-                entity.position(), entity.getEyePosition()));
+        FRAME.set(new Frame(entity, entity.level(), entity.getBoundingBox(),
+                physical.isEmpty() ? null : original,
+                entity.position(), entity.getEyePosition(), physical));
         try {
             nativeUpdate.run();
-            restrictEye(interaction, physical, entity.getEyePosition());
-            AABB projected = aperturePart(original, portal);
+            var trackers = ((EntityFluidInteractionAccess) interaction).ip_trackers();
+            updateEye(interaction, entity.level(), physical, entity.getEyePosition());
+            AABB projected = parts.projected();
             Level destination = portal.getDestinationWorld();
             if (projected == null || destination == null) return;
             AABB remoteBox = Helper.transformBox(projected, portal::transformPoint);
@@ -108,51 +136,46 @@ public final class PortalFluidInteraction {
             if (remoteBox == null || PortalCollisionHandler.isBoxTooBig(remoteBox)
                     || !destination.hasChunkAt(
                     net.minecraft.core.BlockPos.containing(remoteBox.getCenter()))) return;
-            var trackers = ((EntityFluidInteractionAccess) interaction).ip_trackers();
             EntityFluidInteraction remote = REMOTE.computeIfAbsent(entity,
                     ignored -> new EntityFluidInteraction(new HashSet<>(trackers.keySet())));
             Vec3 eye = portal.transformPoint(entity.getEyePosition());
             FRAME.set(new Frame(entity, destination,
                     Helper.transformBox(entity.getBoundingBox(), portal::transformPoint), remoteBox,
-                    portal.transformPoint(entity.position()), eye));
+                    portal.transformPoint(entity.position()), eye, null));
             remote.update(entity, ignoreCurrent);
-            restrictEye(remote, remoteBox, eye);
-            merge(interaction, remote, portal);
+            updateEye(remote, destination, List.of(remoteBox), eye);
+            PortalFluidForces.prepare(entity, interaction, remote, portal);
+            merge(interaction, remote, portal.getScaling());
         } finally {
             if (previous == null) FRAME.remove();
             else FRAME.set(previous);
         }
     }
 
-    private static void restrictEye(EntityFluidInteraction interaction,
-            @Nullable AABB sample, Vec3 eye) {
-        if (sample != null && sample.contains(eye)) return;
-        for (Object value : ((EntityFluidInteractionAccess) interaction).ip_trackers().values())
-            ((EntityFluidTrackerAccess) value).ip_eyesInside(false);
+    private static void updateEye(EntityFluidInteraction interaction, Level world,
+            List<AABB> samples, Vec3 eye) {
+        boolean kept = samples.stream().anyMatch(box -> box.contains(eye));
+        var position = net.minecraft.core.BlockPos.containing(eye);
+        var fluid = world.getFluidState(position);
+        boolean immersed = kept && !fluid.isEmpty()
+                && eye.y >= position.getY()
+                && eye.y <= position.getY() + fluid.getHeight(world, position);
+        for (var entry : ((EntityFluidInteractionAccess) interaction).ip_trackers().entrySet()) {
+            var tracker = (EntityFluidTrackerAccess) entry.getValue();
+            tracker.ip_eyesInside(immersed && tracker.ip_height() > 0 && fluid.is(entry.getKey()));
+        }
     }
 
     private static void merge(EntityFluidInteraction physical, EntityFluidInteraction remote,
-            Portal portal) {
+            double scale) {
         var source = ((EntityFluidInteractionAccess) physical).ip_trackers();
         for (var entry : ((EntityFluidInteractionAccess) remote).ip_trackers().entrySet()) {
             Object value = source.get(entry.getKey());
             if (value == null) continue;
             var from = (EntityFluidTrackerAccess) entry.getValue();
             var into = (EntityFluidTrackerAccess) value;
-            into.ip_height(Math.max(into.ip_height(), from.ip_height() / portal.getScaling()));
+            into.ip_height(Math.max(into.ip_height(), from.ip_height() / scale));
             into.ip_eyesInside(into.ip_eyesInside() || from.ip_eyesInside());
-            Vec3 current = from.ip_current();
-            if (entry.getKey().equals(FluidTags.LAVA)) {
-                // Entity applies lava strength later using its physical world. Express
-                // the destination's native FAST_LAVA strength in that same base first.
-                double sourceStrength = portal.level().environmentAttributes()
-                        .getDimensionValue(EnvironmentAttributes.FAST_LAVA) ? .007 : .007 / 3;
-                double destinationStrength = portal.getDestinationWorld().environmentAttributes()
-                        .getDimensionValue(EnvironmentAttributes.FAST_LAVA) ? .007 : .007 / 3;
-                current = current.scale(destinationStrength / sourceStrength);
-            }
-            into.ip_current(into.ip_current().add(portal.inverseTransformLocalVec(current)));
-            into.ip_currentCount(into.ip_currentCount() + from.ip_currentCount());
         }
     }
 }
