@@ -230,7 +230,7 @@ public final class PortalSmokeClient implements ClientModInitializer {
                         System.out.println("PORTAL_SMOKE_INTERACTION_OK");
                     }
                     if (interactions) PortalInteractionSmoke.tick(client, ticks);
-                    PortalSeamlessSmoke.tick(client, ticks);
+                    if (!traversalValidated) PortalSeamlessSmoke.tick(client, ticks);
                     if (ticks == 160 && !PortalSeamlessSmoke.controls(client))
                         client.options.keyUp.setDown(true);
                     if (ticks > 160
@@ -274,6 +274,8 @@ public final class PortalSmokeClient implements ClientModInitializer {
                     }
                     if (ticks >= 280
                             && traversalValidated
+                            && (Boolean.getBoolean("portalSmoke.dimensionReload")
+                                || PortalPoseUseSmoke.tick(client, ticks))
                             && (!Boolean.getBoolean("portalSmoke.dynamicDimensions")
                                 || DimensionLibrarySmoke.tickClient(client))) {
                         System.out.println("PORTAL_SMOKE_COMPLETE");

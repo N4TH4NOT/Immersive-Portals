@@ -51,6 +51,8 @@ if not trade or int(trade.group(1)) < 25:
 for marker in ("TRADE_CLOSED_ON_OBSTRUCTION", "MOUNT_SAME_WORLD", "REFLECTION_SOURCE_WORLD drops=7"):
     if f"PORTAL_NATIVE_INTERACTION_{marker}" not in server:
         raise AssertionError(f"Missing native entity action evidence: {marker}")
+if "PORTAL_NATIVE_INTERACTION_MINING_SERVER_COMPLETE" not in server:
+    raise AssertionError("Held mining did not finish on the authoritative server.")
 
 screenshots = Path("run/smoke-client/screenshots")
 images = {}

@@ -66,6 +66,11 @@ if scenario in ("multiplayer", "singleplayer"):
         "PORTAL_SMOKE_SAME_WORLD_READY",
         "PORTAL_SMOKE_SERVER_SAME_WORLD_OK",
     ]
+    if not reloaded:
+        client_markers.append("PORTAL_POSE_USE_COMPLETE cases=7 heldDimensionCrossings=2")
+        for case in ("sprint", "crouch", "fly", "fall", "swim", "bow", "food"):
+            client_markers.append(f"PORTAL_POSE_USE_CLIENT_OK case={case}")
+            server_markers.append(f"PORTAL_POSE_USE_SERVER_OK case={case}")
 if scenario == "multiplayer":
     client_markers.append(
         "PORTAL_SMOKE_DYNAMIC_DIMENSION_RELOAD_OK"

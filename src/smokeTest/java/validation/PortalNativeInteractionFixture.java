@@ -44,6 +44,8 @@ final class PortalNativeInteractionFixture {
     private static net.minecraft.world.entity.monster.zombie.Zombie reflectedTarget;
     private static ServerPlayer tradeClosurePlayer;
     private static int tradeClosureTicks;
+    private static ServerPlayer miningCompletionPlayer;
+    private static int miningCompletionTicks;
     private static boolean buttonActivated;
     private static final java.util.Set<String> VERIFIED = new java.util.HashSet<>();
 
@@ -79,6 +81,18 @@ final class PortalNativeInteractionFixture {
                             })));
         });
         ServerTickEvents.END_SERVER_TICK.register(server -> {
+            if (miningCompletionPlayer != null) {
+                var player = miningCompletionPlayer;
+                if (server.getLevel(Level.NETHER).getBlockState(TARGET).isAir()) {
+                    miningCompletionPlayer = null;
+                    finishVerification(player, "mining_cross");
+                    System.out.println("PORTAL_NATIVE_INTERACTION_MINING_SERVER_COMPLETE ticks="
+                            + miningCompletionTicks);
+                } else if (++miningCompletionTicks >= 40) {
+                    throw new AssertionError("Holding attack while crossing did not finish the destination block: "
+                            + miningState(player));
+                }
+            }
             if (tradeClosurePlayer != null && ++tradeClosureTicks >= 6) {
                 var player = tradeClosurePlayer;
                 tradeClosurePlayer = null;
@@ -338,8 +352,12 @@ final class PortalNativeInteractionFixture {
             case "mining_cross" -> {
                 require(player.level().dimension() == Level.NETHER,
                         "The held mining trajectory did not cross the portal");
-                require(destination.getBlockState(TARGET).isAir(),
-                        "Holding attack while crossing did not finish the destination block");
+                // Client prediction can precede the vanilla server's delayed-destroy tick.
+                // Observe the authoritative result without injecting another break action.
+                miningCompletionPlayer = player;
+                miningCompletionTicks = 0;
+                System.out.println("PORTAL_NATIVE_INTERACTION_MINING_WAIT_FOR_SERVER " + miningState(player));
+                return;
             }
             case "projected_use" -> require(stand != null && stand.level() == source
                             && stand.getItemBySlot(EquipmentSlot.HEAD).is(Items.DIAMOND_HELMET),
@@ -389,5 +407,21 @@ final class PortalNativeInteractionFixture {
         player.sendSystemMessage(Component.literal("PORTAL_NATIVE_VERIFIED " + expected));
         System.out.println("PORTAL_NATIVE_INTERACTION_SERVER_OK phase=" + expected
                 + " completed=" + VERIFIED.size());
+    }
+
+    private static String miningState(ServerPlayer player) {
+        var state = new StringBuilder("world=").append(player.level().dimension().identifier())
+                .append(" position=").append(player.position());
+        for (String name : new String[] {"isDestroyingBlock", "hasDelayedDestroy", "destroyPos",
+                "destroyProgressStart", "gameTicks"}) {
+            try {
+                var field = net.minecraft.server.level.ServerPlayerGameMode.class.getDeclaredField(name);
+                field.setAccessible(true);
+                state.append(' ').append(name).append('=').append(field.get(player.gameMode));
+            } catch (ReflectiveOperationException exception) {
+                throw new AssertionError("Cannot inspect native mining state", exception);
+            }
+        }
+        return state.toString();
     }
 }
