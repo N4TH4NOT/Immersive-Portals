@@ -45,8 +45,8 @@ final class PortalNativeInteractionSmoke {
     private static String pendingCapture;
     private static String captured;
     private static boolean miningCrossed;
-    private static int lastMiningProgress = -1;
-    private static int miningProgressBeforeCross = -1;
+    private static float lastMiningProgress = -1;
+    private static float miningProgressBeforeCross = -1;
     private static int projectedBodyFrames;
     private static int projectedBodyEntity = -1;
 
@@ -334,12 +334,13 @@ final class PortalNativeInteractionSmoke {
         if (phaseName().equals("mining_cross")) {
             var destination = ClientWorldLoader.getWorld(Level.NETHER);
             boolean broken = destination.getBlockState(PortalNativeInteractionFixture.TARGET).isAir();
-            int progress = client.gameMode.getDestroyStage();
+            float progress = miningProgress(client);
             if (client.level.dimension() == Level.NETHER) {
                 client.options.keyUp.setDown(false);
                 client.options.keyShift.setDown(false);
                 if (!miningCrossed) {
-                    require(miningProgressBeforeCross >= 0 && progress >= miningProgressBeforeCross,
+                    require(miningProgressBeforeCross > 0 && !broken
+                                    && progress + 1e-6f >= miningProgressBeforeCross,
                             "Mining progress reset when ordinary movement crossed the portal: before="
                                     + miningProgressBeforeCross + " after=" + progress);
                     miningCrossed = true;
@@ -350,7 +351,7 @@ final class PortalNativeInteractionSmoke {
                 miningProgressBeforeCross = Math.max(miningProgressBeforeCross, progress);
             }
             if (!broken && progress >= 0) {
-                require(progress >= lastMiningProgress,
+                require(progress + 1e-6f >= lastMiningProgress,
                         "Held mining progress decreased while targeting the same destination block");
                 lastMiningProgress = progress;
             }
@@ -377,6 +378,17 @@ final class PortalNativeInteractionSmoke {
         if (phaseName().equals("chest"))
             return client.gui.screen() instanceof AbstractContainerScreen;
         return elapsed >= 8;
+    }
+
+    private static float miningProgress(Minecraft client) {
+        try {
+            var field = net.minecraft.client.multiplayer.MultiPlayerGameMode.class
+                    .getDeclaredField("destroyProgress");
+            field.setAccessible(true);
+            return field.getFloat(client.gameMode);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Cannot observe the native mining progress", exception);
+        }
     }
 
     static void tick(Minecraft client, int ticks) {
