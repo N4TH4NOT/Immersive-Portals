@@ -18,7 +18,6 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -26,13 +25,10 @@ import net.minecraft.world.phys.Vec3;
 import org.apache.commons.lang3.Validate;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
-import qouteall.imm_ptl.core.IPGlobal;
 import qouteall.imm_ptl.core.IPMcHelper;
-import qouteall.imm_ptl.core.ScaleUtils;
 import qouteall.imm_ptl.core.miscellaneous.IPVanillaCopy;
 import qouteall.imm_ptl.core.network.PacketRedirection;
 import qouteall.imm_ptl.core.portal.Portal;
-import qouteall.imm_ptl.core.portal.PortalUtils;
 import qouteall.imm_ptl.core.portal.global_portals.GlobalPortalStorage;
 
 import java.util.List;
@@ -66,36 +62,6 @@ public class BlockManipulationServer {
                 }
                 return true;
             });
-    
-    private static boolean canPlayerReach(
-        ResourceKey<Level> dimension,
-        ServerPlayer player,
-        BlockPos requestPos
-    ) {
-        if (!canDoCrossPortalInteractionEvent.invoker().test(player)) {
-            return false;
-        }
-        
-        double playerScale = ScaleUtils.computeBlockReachScale(player);
-        
-        Vec3 pos = Vec3.atCenterOf(requestPos);
-        Vec3 playerPos = player.position();
-        double distanceSquare = 6 * 6 * 4 * 4 * playerScale * playerScale;
-        if (player.level().dimension() == dimension) {
-            if (playerPos.distanceToSqr(pos) < distanceSquare) {
-                return true;
-            }
-        }
-        return IPMcHelper.getNearbyPortals(
-            player,
-            IPGlobal.maxNormalPortalRadius
-        ).anyMatch(portal ->
-            portal.getDestDim() == dimension &&
-                portal.isInteractableBy(player) &&
-                portal.transformPoint(playerPos).distanceToSqr(pos) <
-                    distanceSquare * portal.getScale() * portal.getScale()
-        );
-    }
     
     public static Tuple<BlockHitResult, ResourceKey<Level>> getHitResultForPlacing(
         Level world,
@@ -141,13 +107,25 @@ public class BlockManipulationServer {
         public static void processPlayerActionPacket(
             ServerPlayer player,
             ResourceKey<Level> dimension,
+            java.util.UUID[] path,
+            Vec3 targetPoint,
             byte[] packetBytes
         ) {
             FriendlyByteBuf buf = IPMcHelper.bytesToBuf(packetBytes);
-            ServerboundPlayerActionPacket packet = ServerboundPlayerActionPacket.STREAM_CODEC.decode(buf);
+            ServerboundPlayerActionPacket packet;
+            try { packet = ServerboundPlayerActionPacket.STREAM_CODEC.decode(buf); }
+            finally { buf.release(); }
             
             ServerLevel world = player.level().getServer().getLevel(dimension);
             Validate.notNull(world, "missing %s", dimension.identifier());
+            if (packet.getAction() != ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK
+                    && PortalInteractionServer.validateBlock(player, dimension, packet.getPos(),
+                            path, targetPoint, false) == null) {
+                LOGGER.warn("Rejected unreachable cross-portal block action {} {}",
+                        dimension.identifier(), packet.getPos());
+                player.connection.ackBlockChangesUpTo(packet.getSequence());
+                return;
+            }
             
             withRedirect(
                 new Context(world, null),
@@ -164,23 +142,77 @@ public class BlockManipulationServer {
         public static void processUseItemOnPacket(
             ServerPlayer player,
             ResourceKey<Level> dimension,
+            java.util.UUID[] path,
+            Vec3 targetPoint,
             byte[] packetBytes
         ) {
             FriendlyByteBuf buf = IPMcHelper.bytesToBuf(packetBytes);
-            ServerboundUseItemOnPacket packet = ServerboundUseItemOnPacket.STREAM_CODEC.decode(buf);
+            ServerboundUseItemOnPacket packet;
+            try { packet = ServerboundUseItemOnPacket.STREAM_CODEC.decode(buf); }
+            finally { buf.release(); }
             
             ServerLevel world = player.level().getServer().getLevel(dimension);
             Validate.notNull(world, "missing %s", dimension.identifier());
+            var target = PortalInteractionServer.validateBlock(player, dimension,
+                    packet.getHitResult().getBlockPos(), path, targetPoint, true);
+            if (target == null) {
+                LOGGER.warn("Rejected unreachable cross-portal block use {} {}",
+                        dimension.identifier(), packet.getHitResult().getBlockPos());
+                player.connection.ackBlockChangesUpTo(packet.getSequence());
+                return;
+            }
+            PortalInteractionServer.rememberContainer(player, target);
             
             withRedirect(
                 new Context(world, packet.getHitResult()),
                 () -> {
-                    doProcessUseItemOn(world, player, packet);
+                    PortalInteractionTarget.withRotation(player, target.portals(), () -> {
+                        doProcessUseItemOn(world, player, packet);
+                        return null;
+                    });
                 }
             );
         }
+
+        public static void processEntityAttackPacket(ServerPlayer player,
+                ResourceKey<Level> dimension, java.util.UUID[] path, java.util.UUID[] projection,
+                Vec3 point, byte[] bytes) {
+            var packet = decode(net.minecraft.network.protocol.game.ServerboundAttackPacket.STREAM_CODEC, bytes);
+            var world = player.level().getServer().getLevel(dimension);
+            if (world == null) return;
+            var entity = world.getEntityOrPart(packet.entityId());
+            var target = PortalInteractionServer.validateEntity(player, dimension, entity,
+                    path, projection, point, true);
+            if (target == null) return;
+            withRedirect(new Context(world, null), () -> PortalInteractionServer.withEntityAction(
+                    target, () -> player.connection.handleAttack(packet)));
+        }
+
+        public static void processEntityUsePacket(ServerPlayer player,
+                ResourceKey<Level> dimension, java.util.UUID[] path, java.util.UUID[] projection,
+                Vec3 point, byte[] bytes) {
+            var packet = decode(net.minecraft.network.protocol.game.ServerboundInteractPacket.STREAM_CODEC, bytes);
+            var world = player.level().getServer().getLevel(dimension);
+            if (world == null) return;
+            var entity = world.getEntityOrPart(packet.entityId());
+            var target = PortalInteractionServer.validateEntity(player, dimension, entity,
+                    path, projection, point, false);
+            if (target == null) return;
+            var originalMenu = player.containerMenu;
+            withRedirect(new Context(world, null), () -> PortalInteractionServer.withEntityAction(
+                    target, () -> player.connection.handleInteract(packet)));
+            if (player.containerMenu != originalMenu)
+                PortalInteractionServer.rememberEntityContainer(player, target);
+        }
     }
     
+    private static <T> T decode(net.minecraft.network.codec.StreamCodec<? super FriendlyByteBuf, T> codec,
+            byte[] bytes) {
+        var buffer = IPMcHelper.bytesToBuf(bytes);
+        try { return codec.decode(buffer); }
+        finally { buffer.release(); }
+    }
+
     public static void init() {
     
     }
@@ -209,11 +241,6 @@ public class BlockManipulationServer {
         player.resetLastActionTime();
         BlockPos blockPos = packet.getPos();
         ServerboundPlayerActionPacket.Action action = packet.getAction();
-        
-        if (!canPlayerReach(world.dimension(), player, blockPos)) {
-            LOGGER.error("Reject cross-portal action {} {} {}", player, world, blockPos);
-            return;
-        }
         
         if (isAttackingAction(action)) {
             player.gameMode.handleBlockBreakAction(
@@ -252,11 +279,6 @@ public class BlockManipulationServer {
         Direction direction = blockHitResult.getDirection();
         player.resetLastActionTime();
         if (world.mayInteract(player, blockPos)) {
-            if (!canPlayerReach(dimension, player, blockPos)) {
-                LOGGER.error("Reject cross-portal action {} {} {}", player, world, blockPos);
-                return;
-            }
-            
             InteractionResult actionResult = player.gameMode.useItemOn(
                 player,
                 world,
@@ -286,18 +308,7 @@ public class BlockManipulationServer {
     }
     
     public static boolean validateReach(Player player, Level targetWorld, BlockPos targetPos) {
-        PortalUtils.PortalAwareRaytraceResult result = PortalUtils.portalAwareRayTrace(
-            player.level(),
-            player.getEyePosition(),
-            player.getViewVector(1),
-            32,
-            player,
-            ClipContext.Block.COLLIDER
-        );
-        
-        return result != null
-            && result.world() == targetWorld
-            && result.hitResult().getBlockPos().distManhattan(targetPos) < 8;
+        return PortalInteractionServer.canKeepContainer(player, targetWorld, targetPos);
     }
     
 }

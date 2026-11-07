@@ -26,7 +26,7 @@ public class MixinAbstractContainerMenu {
         @Local(argsOnly = true) Level world
     ) {
         boolean canInteract = operation.call(player, blockPos, distance);
-        if (canInteract) {
+        if (canInteract && player.level() == world) {
             return true;
         }
         

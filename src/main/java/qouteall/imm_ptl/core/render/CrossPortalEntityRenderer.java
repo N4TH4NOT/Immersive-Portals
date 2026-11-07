@@ -66,6 +66,13 @@ public final class CrossPortalEntityRenderer {
         if (IrisInterface.invoker.isRenderingShadowMap()) {
             return true;
         }
+        if (entity instanceof LocalPlayer player && WorldRenderInfo.isRendering()
+            && client.options.getCameraType().isFirstPerson()
+            && (!IPGlobal.renderYourselfInPortal || !shouldRenderLocalPlayerBody(
+                player, client.gameRenderer.mainCamera(), RenderStates.getPartialTick(), null
+            ))) {
+            return false;
+        }
         if (PortalRendering.isRendering()) {
             Portal renderingPortal = PortalRendering.getRenderingPortal();
             Portal collidingPortal = ((IEEntity) entity).ip_getCollidingPortal();

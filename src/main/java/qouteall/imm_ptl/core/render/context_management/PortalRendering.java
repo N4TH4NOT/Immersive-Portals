@@ -57,6 +57,16 @@ public class PortalRendering {
     public static int getPortalLayer() {
         return portalLayers.size();
     }
+
+    public static boolean matchesPortalPath(List<java.util.UUID> path) {
+        var cameraPath = qouteall.imm_ptl.core.render.CrossPortalViewRendering.getCameraPortalPath();
+        if (path.isEmpty() || path.size() != cameraPath.size() + portalLayers.size()) return false;
+        for (int i = 0; i < cameraPath.size(); i++)
+            if (!cameraPath.get(i).equals(path.get(i))) return false;
+        for (int i = 0; i < portalLayers.size(); i++)
+            if (!portalLayers.get(i).getUUID().equals(path.get(cameraPath.size() + i))) return false;
+        return true;
+    }
     
     public static boolean isRendering() {
         return isRenderingCache;

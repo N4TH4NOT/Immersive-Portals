@@ -9,6 +9,7 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.EntityType;
 import org.slf4j.Logger;
 import qouteall.imm_ptl.core.block_manipulation.BlockManipulationServer;
+import qouteall.imm_ptl.core.block_manipulation.CrossPortalPickup;
 import qouteall.imm_ptl.core.chunk_loading.EntitySync;
 import qouteall.imm_ptl.core.chunk_loading.ImmPtlChunkTickets;
 import qouteall.imm_ptl.core.chunk_loading.ImmPtlChunkTracking;
@@ -98,6 +99,7 @@ public class IPModMain {
         
         
         BlockManipulationServer.init();
+        CrossPortalPickup.init();
         
         CommandRegistrationCallback.EVENT.register(
             (dispatcher, ctx, environment) -> PortalCommand.register(dispatcher, ctx)

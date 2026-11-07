@@ -19,7 +19,9 @@ public abstract class MixinMinecraft_B {
         net.minecraft.world.entity.Entity entity, double padding, Operation<Boolean> original) {
         // The picker measures reach along the transformed ray. Source-world coordinates
         // cannot be compared directly with an entity in the destination world.
-        return BlockManipulationClient.isRemoteEntity(entity) || original.call(player, entity, padding);
+        return BlockManipulationClient.isRemoteEntity(entity)
+                ? BlockManipulationClient.isRemoteEntityWithinInteractionRange(entity)
+                : original.call(player, entity, padding);
     }
 
     @WrapOperation(method = "startAttack", at = @At(value = "INVOKE",
@@ -28,8 +30,9 @@ public abstract class MixinMinecraft_B {
         net.minecraft.world.entity.LivingEntity player, net.minecraft.world.phys.Vec3 position,
         Operation<Boolean> original) {
         return BlockManipulationClient.remoteHitResult instanceof net.minecraft.world.phys.EntityHitResult hit
-            && BlockManipulationClient.isRemoteEntity(hit.getEntity())
-            || original.call(range, player, position);
+                && BlockManipulationClient.isRemoteEntity(hit.getEntity())
+                ? BlockManipulationClient.isRemoteEntityWithinAttackRange(range)
+                : original.call(range, player, position);
     }
 
     @Shadow
@@ -63,11 +66,10 @@ public abstract class MixinMinecraft_B {
     private boolean wrapStartAttack(Minecraft instance, Operation<Boolean> original) {
         ClientLevel remoteWorld = BlockManipulationClient.getRemotePointedWorld();
         if (BlockManipulationClient.isPointingToPortal()) {
-            BlockManipulationClient.withSwitchedContext(
+            return BlockManipulationClient.withSwitchedContext(
                 () -> original.call(instance),
                 false
             );
-            return false;
         }
         else {
             return original.call(instance);

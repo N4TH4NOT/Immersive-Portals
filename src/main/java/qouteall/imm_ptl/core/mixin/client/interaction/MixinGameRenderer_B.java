@@ -24,7 +24,7 @@ public class MixinGameRenderer_B {
     
     @Inject(method = "pick", at = @At("RETURN"))
     private void onUpdateTargetedEntityFinish(float partialTick, CallbackInfo ci) {
-        if (Minecraft.getInstance().level != null) {
+        if (Minecraft.getInstance().level != null && !WorldRenderInfo.isRendering()) {
             BlockManipulationClient.updatePointedBlock(partialTick);
         }
     }

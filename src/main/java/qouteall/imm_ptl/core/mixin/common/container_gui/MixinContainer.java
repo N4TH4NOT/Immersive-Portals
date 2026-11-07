@@ -30,7 +30,7 @@ public interface MixinContainer {
     ) {
         Boolean originalResult = operation.call(player, blockPos, distance);
         
-        if (!originalResult) {
+        if (!originalResult || player.level() != blockEntity.getLevel()) {
             BlockPos targetPos = blockEntity.getBlockPos();
             Level targetWorld = blockEntity.getLevel();
             
