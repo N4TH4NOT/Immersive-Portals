@@ -5,6 +5,8 @@ import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 
+import net.fabricmc.fabric.impl.client.rendering.LevelRendererExtensions;
+
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -333,6 +335,10 @@ public final class NativeWorldRenderer {
                         access.ip_lightmapExtractor().extract(state.lightmapRenderState, partial);
                         access.ip_extractCamera(delta, partial, partial);
                         state.levelRenderState.cameraRenderState.entityRenderState.isLiving = false;
+                        // Direct offscreen extraction bypasses Fabric's GameRenderer.extract hook.
+                        // Prepare this scene's context after installing its world, renderer and camera.
+                        ((LevelRendererExtensions) scene.extractor)
+                                .fabric_prepareLevelExtractionContext(delta);
                         scene.extractor.extract(delta, camera, partial);
                         if (scene.gameRenderer.mainRenderTarget().width
                                         != state.windowRenderState.width
