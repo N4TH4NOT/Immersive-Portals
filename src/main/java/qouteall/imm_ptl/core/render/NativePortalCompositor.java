@@ -255,7 +255,7 @@ public final class NativePortalCompositor {
                                     | (clip == null ? 0 : 4)
                                     | (key.depth ? 8 : 0));
             (clip == null ? new Vector4f() : clip).get(224, uniform);
-            (depthEquation == null ? new Vector4f() : depthEquation).get(240, uniform);
+            (depthEquation == null ? new Vector4f(0, 0, 0, 0) : depthEquation).get(240, uniform);
             uniform.position(256).flip();
             var device = RenderSystem.getDevice();
             try (GpuBuffer vertexBuffer =
