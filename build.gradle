@@ -105,7 +105,11 @@ if (providers.gradleProperty('portalSmoke').isPresent()) {
                 vmArg '-Dimm_ptl.renderDiagnostics=true'
                 vmArg '-DportalSmoke.gravity=' + providers.gradleProperty('portalGravitySmoke').getOrElse('false')
             }
-            server { source sourceSets.smokeTest; runDir 'run/smoke-server' }
+            server {
+                source sourceSets.smokeTest
+                runDir 'run/smoke-server'
+                vmArg '-DportalSmoke.dimensionReload=' + providers.gradleProperty('portalSmokeDimensionReload').getOrElse('false')
+            }
         }
     }
     if (providers.gradleProperty('portalSmokeIris').isPresent()) {
