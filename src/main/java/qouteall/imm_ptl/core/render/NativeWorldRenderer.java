@@ -543,6 +543,12 @@ public final class NativeWorldRenderer {
 
     public static void markSectionDirty(
             LevelExtractor source, ClientLevel world, int x, int y, int z) {
+        markSectionRangeDirty(source, world, x, y, z, x, y, z);
+    }
+
+    public static void markSectionRangeDirty(
+            LevelExtractor source, ClientLevel world,
+            int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
         if (propagatingDirty || reloading) return;
         propagatingDirty = true;
         try {
@@ -551,7 +557,8 @@ public final class NativeWorldRenderer {
                     withContext(
                             scene,
                             () -> {
-                                scene.extractor.setSectionDirty(x, y, z);
+                                scene.extractor.setSectionRangeDirty(
+                                        minX, minY, minZ, maxX, maxY, maxZ);
                                 return null;
                             });
         } finally {

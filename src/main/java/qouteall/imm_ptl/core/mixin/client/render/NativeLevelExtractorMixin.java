@@ -9,6 +9,8 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.extract.LevelExtractor;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.world.entity.Entity;
 
 import org.spongepowered.asm.mixin.*;
@@ -16,6 +18,7 @@ import org.spongepowered.asm.mixin.injection.*;
 import org.spongepowered.asm.mixin.injection.callback.*;
 
 import qouteall.imm_ptl.core.ClientWorldLoader;
+import qouteall.imm_ptl.core.compat.sodium_compatibility.SodiumInterface;
 import qouteall.imm_ptl.core.ducks.IEEntity;
 import qouteall.imm_ptl.core.render.*;
 
@@ -59,10 +62,42 @@ public abstract class NativeLevelExtractorMixin {
 
     @Inject(method = "setSectionDirty(IIIZ)V", at = @At("HEAD"))
     private void ip_dirty(int x, int y, int z, boolean playerChanged, CallbackInfo ci) {
-        // Neighbor/range updates call this overload directly. Run before Sodium can
-        // cancel vanilla processing, so every view of the same world is invalidated.
         if (level != null)
             NativeWorldRenderer.markSectionDirty((LevelExtractor) (Object) this, level, x, y, z);
+    }
+
+    @Inject(method = "setBlocksDirty(IIIIII)V", at = @At("HEAD"))
+    private void ip_sodiumDirtyBlockArea(
+            int minX, int minY, int minZ, int maxX, int maxY, int maxZ, CallbackInfo ci) {
+        ip_propagateSodiumBlockArea(minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
+    @Inject(method = "setBlockDirty(Lnet/minecraft/core/BlockPos;Z)V", at = @At("HEAD"))
+    private void ip_sodiumDirtyBlock(BlockPos pos, boolean playerChanged, CallbackInfo ci) {
+        ip_propagateSodiumBlockArea(pos.getX(), pos.getY(), pos.getZ(),
+                pos.getX(), pos.getY(), pos.getZ());
+    }
+
+    @Inject(method = "setSectionDirtyWithNeighbors(III)V", at = @At("HEAD"))
+    private void ip_sodiumDirtyNeighbors(int x, int y, int z, CallbackInfo ci) {
+        if (level != null && SodiumInterface.invoker.isSodiumPresent())
+            NativeWorldRenderer.markSectionRangeDirty((LevelExtractor) (Object) this, level,
+                    x - 1, y - 1, z - 1, x + 1, y + 1, z + 1);
+    }
+
+    @Unique
+    private void ip_propagateSodiumBlockArea(
+            int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        // Sodium overwrites these entry points and bypasses the single-section overload.
+        // Include block neighbors, then invalidate every scoped view's mesh.
+        if (level != null && SodiumInterface.invoker.isSodiumPresent())
+            NativeWorldRenderer.markSectionRangeDirty((LevelExtractor) (Object) this, level,
+                    SectionPos.blockToSectionCoord(minX - 1),
+                    SectionPos.blockToSectionCoord(minY - 1),
+                    SectionPos.blockToSectionCoord(minZ - 1),
+                    SectionPos.blockToSectionCoord(maxX + 1),
+                    SectionPos.blockToSectionCoord(maxY + 1),
+                    SectionPos.blockToSectionCoord(maxZ + 1));
     }
 
     @Inject(method = "onResourceManagerReload", at = @At("RETURN"))
