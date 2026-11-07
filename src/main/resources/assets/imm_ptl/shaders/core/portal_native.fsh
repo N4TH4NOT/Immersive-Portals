@@ -10,6 +10,7 @@ layout(std140) uniform PortalTransform {
     mat4 ParentProjection;
     vec4 PortalFlags;
     vec4 PortalClipPlane;
+    vec4 PortalDepthEquation;
 };
 in float portalClipDistance;
 in float portalOriginalClipZ;
@@ -19,7 +20,7 @@ void main() {
     vec2 uv = (gl_FragCoord.xy - PortalViewport.xy) / PortalViewport.zw;
     int flags = int(PortalFlags.w + 0.5);
     gl_FragDepth = (flags & 2) != 0
-        ? portalClampedDepth(portalOriginalClipZ, gl_FragCoord.w, PortalFlags.y > 0.5)
+        ? portalClampedDepth(portalOriginalClipZ, gl_FragCoord.w, PortalFlags.y > 0.5, PortalDepthEquation)
         : gl_FragCoord.z;
     if ((flags & 1) != 0) {
         vec2 mask = texelFetch(PortalMask, ivec2(gl_FragCoord.xy), 0).rg;

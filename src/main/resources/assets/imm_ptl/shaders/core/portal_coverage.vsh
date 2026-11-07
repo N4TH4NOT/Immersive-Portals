@@ -4,6 +4,7 @@ layout(std140) uniform MaskTransform {
     mat4 MaskMvp;
     vec4 MaskFlags;
     vec4 MaskClipPlane;
+    vec4 MaskDepthEquation;
 };
 out float portalClipDistance;
 out float portalOriginalClipZ;

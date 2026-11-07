@@ -7,6 +7,7 @@ layout(std140) uniform PortalTransform {
     mat4 ParentProjection;
     vec4 PortalFlags;
     vec4 PortalClipPlane;
+    vec4 PortalDepthEquation;
 };
 out float portalClipDistance;
 out float portalOriginalClipZ;

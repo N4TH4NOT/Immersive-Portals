@@ -136,7 +136,10 @@ public final class NativePortalCompositor {
                                 portal.isFuseView(),
                                 projection,
                                 null,
-                                NativePortalClipping.equation(parentClip, camera)));
+                                NativePortalClipping.equation(parentClip, camera),
+                                NativePortalDepth.equation(portal,
+                                        new Matrix4f(projection).mul(view), vertices,
+                                        target.width, target.height)));
     }
 
     /** Texture-stencil composition: coverage and biased surface depth come from the prepass. */
@@ -170,6 +173,7 @@ public final class NativePortalCompositor {
                                 portal.isFuseView(),
                                 projection,
                                 mask.textureView(),
+                                null,
                                 null));
     }
 
@@ -208,6 +212,7 @@ public final class NativePortalCompositor {
                 false,
                 new Matrix4f(),
                 null,
+                null,
                 null);
     }
 
@@ -224,14 +229,15 @@ public final class NativePortalCompositor {
             boolean fuse,
             Matrix4fc parentProjection,
             GpuTextureView mask,
-            Vector4f clip) {
+            Vector4f clip,
+            Vector4f depthEquation) {
         RenderSystem.assertOnRenderThread();
         if (vertices.isEmpty()) return;
         if (source == destination)
             throw new IllegalArgumentException(
                     "A portal cannot sample its destination render target");
         ByteBuffer mesh = MemoryUtil.memAlloc(Math.multiplyExact(vertices.size(), Float.BYTES));
-        ByteBuffer uniform = MemoryUtil.memAlloc(240);
+        ByteBuffer uniform = MemoryUtil.memAlloc(256);
         try {
             for (float value : vertices) mesh.putFloat(value);
             mesh.flip();
@@ -249,7 +255,8 @@ public final class NativePortalCompositor {
                                     | (clip == null ? 0 : 4)
                                     | (key.depth ? 8 : 0));
             (clip == null ? new Vector4f() : clip).get(224, uniform);
-            uniform.position(240).flip();
+            (depthEquation == null ? new Vector4f() : depthEquation).get(240, uniform);
+            uniform.position(256).flip();
             var device = RenderSystem.getDevice();
             try (GpuBuffer vertexBuffer =
                             device.createBuffer(() -> "Portal mesh", GpuBuffer.USAGE_VERTEX, mesh);

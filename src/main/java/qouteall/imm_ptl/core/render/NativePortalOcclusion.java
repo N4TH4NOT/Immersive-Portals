@@ -241,7 +241,7 @@ public final class NativePortalOcclusion {
             IrisInterface.invoker.withCompositeTarget(
                     parent,
                     target -> {
-                        renderMask(mask, target, transform, vertices, clip);
+                        renderMask(portal, mask, target, transform, vertices, clip);
                         if (PENDING.size() < MAX_READBACKS
                                 && history.begin(RenderStates.frameIndex)) {
                             var encoder = RenderSystem.getDevice().createCommandEncoder();
@@ -306,12 +306,13 @@ public final class NativePortalOcclusion {
     }
 
     private static void renderMask(
-            Mask mask, RenderTarget parent, Matrix4fc transform, float[] vertices, Vector4f clip) {
+            Portal portal, Mask mask, RenderTarget parent, Matrix4fc transform,
+            float[] vertices, Vector4f clip) {
         var encoder = RenderSystem.getDevice().createCommandEncoder();
         encoder.clearColorTexture(mask.texture, new Vector4f());
         if (vertices.length == 0) return;
         ByteBuffer mesh = MemoryUtil.memAlloc(vertices.length * 4),
-                uniform = MemoryUtil.memAlloc(96);
+                uniform = MemoryUtil.memAlloc(112);
         try {
             for (float f : vertices) mesh.putFloat(f);
             mesh.flip();
@@ -322,7 +323,9 @@ public final class NativePortalOcclusion {
                     .putFloat(clip == null ? 0 : 1)
                     .putFloat(0);
             (clip == null ? new Vector4f() : clip).get(80, uniform);
-            uniform.position(96).flip();
+            NativePortalDepth.equation(portal, transform, vertices, parent.width, parent.height)
+                    .get(96, uniform);
+            uniform.position(112).flip();
             var device = RenderSystem.getDevice();
             try (var vb =
                             device.createBuffer(
