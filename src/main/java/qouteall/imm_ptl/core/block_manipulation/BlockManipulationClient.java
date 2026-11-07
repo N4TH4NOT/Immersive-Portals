@@ -46,7 +46,7 @@ public class BlockManipulationClient {
         remotePortals = java.util.List.of();
         remoteProjectionPortal = null;
         remoteHitDistance = Double.POSITIVE_INFINITY;
-        if (client.gameMode == null || client.level == null || client.player == null) return;
+        if (client.gameMode == null || !ClientWorldLoader.isPrimaryWorldReady()) return;
         if (!BlockManipulationServer.canDoCrossPortalInteractionEvent.invoker().test(client.player)) return;
         RemoteInteractionClient.updateTarget(partialTick);
     }
