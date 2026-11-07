@@ -86,7 +86,7 @@ public class BlockManipulationServer {
         BlockPos placingBlockPos = BlockPos.containing(newCenter);
         
         BlockHitResult newHitResult = new BlockHitResult(
-            Vec3.ZERO,
+            portal.transformPoint(blockHitResult.getLocation()),
             side.getOpposite(),
             placingBlockPos,
             blockHitResult.isInside()

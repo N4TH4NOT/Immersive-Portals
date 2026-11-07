@@ -48,7 +48,7 @@ public final class SignInteractionClient {
     public static Packet<?> updatePacket(SignBlockEntity sign, ServerboundSignUpdatePacket packet) {
         var current = session;
         boolean bound = current != null && current.sign() == sign;
-        if (!bound && sign.getLevel() == CLIENT.player.level()) return packet;
+        if (!bound && CLIENT.player != null && sign.getLevel() == CLIENT.player.level()) return packet;
         var buffer = new FriendlyByteBuf(Unpooled.buffer());
         try {
             ServerboundSignUpdatePacket.STREAM_CODEC.encode(buffer, packet);

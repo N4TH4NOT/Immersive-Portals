@@ -16,6 +16,8 @@ import qouteall.imm_ptl.core.portal.Portal;
 import qouteall.q_misc_util.api.McRemoteProcedureCall;
 
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.WeakHashMap;
@@ -33,16 +35,19 @@ public final class SignInteractionServer {
 
     public static void open(ServerPlayer player, SignBlockEntity sign, boolean front, Runnable original) {
         var target = PortalInteractionServer.currentEntityTarget();
+        var context = BlockManipulationServer.REDIRECT_CONTEXT.get();
         if (target == null || !(target.hit() instanceof BlockHitResult hit)
                 || sign.getLevel() != PortalInteractionServer.entityWorld()
-                || hit.getBlockPos().distManhattan(sign.getBlockPos()) > 1) {
+                || context == null || context.blockHitResult() == null
+                || context.blockHitResult().getBlockPos().distManhattan(sign.getBlockPos()) > 1) {
             SESSIONS.remove(player);
             original.run();
             return;
         }
         var session = new Session(sign, front, UUID.randomUUID(),
-                target.portals().stream().map(Portal::getUUID).toArray(UUID[]::new),
-                hit.getBlockPos().equals(sign.getBlockPos()) ? hit.getLocation()
+                actionPortals(target, sign).stream().map(Portal::getUUID).toArray(UUID[]::new),
+                context.blockHitResult().getBlockPos().equals(sign.getBlockPos())
+                        ? context.blockHitResult().getLocation()
                         : Vec3.atCenterOf(sign.getBlockPos()));
         SESSIONS.put(player, session);
         var previous = OPENING.get();
@@ -95,12 +100,30 @@ public final class SignInteractionServer {
 
     public static Vec3 positionForSign(ServerPlayer player, SignBlockEntity sign) {
         var target = PortalInteractionServer.currentEntityTarget();
+        var context = BlockManipulationServer.REDIRECT_CONTEXT.get();
         Vec3 position = player.position();
-        if (target != null && target.hit() instanceof BlockHitResult hit
-                && hit.getBlockPos().distManhattan(sign.getBlockPos()) <= 1
+        if (target != null && context != null && context.blockHitResult() != null
+                && context.blockHitResult().getBlockPos().distManhattan(sign.getBlockPos()) <= 1
                 && sign.getLevel() == PortalInteractionServer.entityWorld())
-            for (Portal portal : target.portals()) position = portal.transformPoint(position);
+            for (Portal portal : actionPortals(target, sign)) position = portal.transformPoint(position);
         return position;
+    }
+
+    private static List<Portal> actionPortals(PortalInteractionTarget.Target target, SignBlockEntity sign) {
+        if (target.world() == sign.getLevel()) return target.portals();
+        var context = BlockManipulationServer.REDIRECT_CONTEXT.get();
+        if (context == null || context.blockHitResult() == null
+                || !(target.hit() instanceof BlockHitResult hit)) return target.portals();
+        for (Portal portal : qouteall.imm_ptl.core.portal.global_portals.GlobalPortalStorage
+                .getGlobalPortals(target.world()))
+            if (portal.getDestDim() == sign.getLevel().dimension()
+                    && portal.transformPoint(hit.getLocation()).distanceToSqr(
+                            context.blockHitResult().getLocation()) < 1e-8) {
+                var path = new ArrayList<>(target.portals());
+                path.add(portal);
+                return List.copyOf(path);
+            }
+        return target.portals();
     }
 
     public static void applyFiltered(ServerPlayer player, ServerboundSignUpdatePacket packet, Runnable original) {
