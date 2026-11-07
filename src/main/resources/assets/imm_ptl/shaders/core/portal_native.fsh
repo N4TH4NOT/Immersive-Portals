@@ -12,18 +12,21 @@ layout(std140) uniform PortalTransform {
     vec4 PortalClipPlane;
 };
 in float portalClipDistance;
+in float portalOriginalClipZ;
 out vec4 fragColor;
 void main() {
     if (portalClipDistance < -0.0001) discard;
     vec2 uv = (gl_FragCoord.xy - PortalViewport.xy) / PortalViewport.zw;
     int flags = int(PortalFlags.w + 0.5);
-    gl_FragDepth = gl_FragCoord.z;
+    gl_FragDepth = (flags & 2) != 0
+        ? portalClampedDepth(portalOriginalClipZ, gl_FragCoord.w, PortalFlags.y > 0.5)
+        : gl_FragCoord.z;
     if ((flags & 1) != 0) {
         vec2 mask = texelFetch(PortalMask, ivec2(gl_FragCoord.xy), 0).rg;
         if (mask.r < 0.5) discard;
         // Coverage already applied the surface offset; do not bias a second time.
         gl_FragDepth = mask.g;
-    } else if ((flags & 8) != 0) gl_FragDepth = portalSurfaceDepth(gl_FragCoord.z);
+    } else if ((flags & 8) != 0) gl_FragDepth = portalSurfaceDepth(gl_FragDepth);
     if (PortalFlags.x > 0.5) {
         float depth = texture(PortalDepth, uv).r;
         // Reverse Z: the cleared depth represents an empty remote world.

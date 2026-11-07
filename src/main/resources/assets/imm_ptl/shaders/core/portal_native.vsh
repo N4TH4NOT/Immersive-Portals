@@ -9,9 +9,10 @@ layout(std140) uniform PortalTransform {
     vec4 PortalClipPlane;
 };
 out float portalClipDistance;
+out float portalOriginalClipZ;
 void main() {
     portalClipDistance = (int(PortalFlags.w + 0.5) & 4) != 0 ? dot(vec4(Position, 1.0), PortalClipPlane) : 1.0;
     gl_Position = PortalMvp * vec4(Position, 1.0);
-    if ((int(PortalFlags.w + 0.5) & 2) != 0 && gl_Position.w > 0.0)
-        gl_Position.z = clamp(gl_Position.z, PortalFlags.y > 0.5 ? 0.0 : -gl_Position.w, gl_Position.w);
+    portalOriginalClipZ = gl_Position.z;
+    if ((int(PortalFlags.w + 0.5) & 2) != 0) gl_Position.z = 0.0;
 }

@@ -6,9 +6,12 @@ layout(std140) uniform MaskTransform {
     vec4 MaskClipPlane;
 };
 out float portalClipDistance;
+out float portalOriginalClipZ;
 void main() {
     portalClipDistance = MaskFlags.z > 0.5 ? dot(vec4(Position, 1.0), MaskClipPlane) : 1.0;
     gl_Position = MaskMvp * vec4(Position, 1.0);
-    if (MaskFlags.x > 0.5 && gl_Position.w > 0.0)
-        gl_Position.z = clamp(gl_Position.z, MaskFlags.y > 0.5 ? 0.0 : -gl_Position.w, gl_Position.w);
+    portalOriginalClipZ = gl_Position.z;
+    // Neutral clip Z retains the whole aperture when an edge crosses behind the eye.
+    // Its actual clamped surface depth is reconstructed in the fragment shader.
+    if (MaskFlags.x > 0.5) gl_Position.z = 0.0;
 }
