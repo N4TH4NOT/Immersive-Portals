@@ -14,7 +14,7 @@ The GitHub runtime regression registers an independent Fabric event consumer, at
 
 ## Sodium portal terrain or lighting remains stale
 
-The development change in [commit `9a90027b`](https://github.com/N4TH4NOT/Immersive-Portals/commit/9a90027b955914ecdfd1363b489fcc788e5f2cfa) forwards block and neighboring-section updates to every portal view of the same world. Previously, Sodium could update the main view while bypassing the invalidation needed by remote terrain meshes. The change applies with Sodium alone; an active Iris shaderpack is not required to use those terrain update paths.
+Block and neighboring-section updates are forwarded to every portal view of the same world. Previously, Sodium could update the main view while bypassing the invalidation needed by remote terrain meshes. The change applies with Sodium alone; an active Iris shaderpack is not required to use those terrain update paths.
 
 Development artifacts can share a version string while containing different commits. Use the commit associated with the selected GitHub Actions artifact and its runtime results to identify the terrain-update change. The Fabric-context regression above uses an independent event consumer; it does not establish compatibility with every other mod or isolate all smooth-lighting calculations.
 
@@ -28,12 +28,12 @@ The origin-side test allows a collision rounding tolerance of `1e-7` blocks. Blo
 
 ## Portal view flickers with the backing block texture
 
-Version `7.0.0-alpha.4` introduces shared depth priority for a portal and a backing block face on the same surface. Coverage and composition use the same small relative reverse-Z offset. The current shader update also handles an aperture crossing the camera's near plane: it preserves its coverage when corners pass behind the eye, then reconstructs and clamps surface depth in the fragment shader. Both masked and direct composition follow this depth-clamp path with `useDepthClampForPortalRendering` enabled, as it is by default.
+Version `7.0.0-alpha.4` introduces shared depth priority for a portal and a backing block face on the same surface. Coverage and composition use the same small relative reverse-Z offset. For planar apertures near the camera, the renderer computes the portal-plane depth equation on the CPU in double precision. Coverage and direct composition evaluate that equation per pixel and clamp its depth, preserving the aperture when corners pass behind the eye without unstable reciprocal-W interpolation. Nonplanar shapes retain the general depth-reconstruction path. Both masked and direct composition follow this depth-clamp path with `useDepthClampForPortalRendering` enabled, as it is by default.
 
-These adjustments preserve the portal's geometric and collision planes. The GitHub scene checks consecutive frames close to the aperture, at oblique angles, and with a real foreground occluder. Validation of the latest shader combination is pending its GitHub Actions run.
+These adjustments preserve the portal's geometric and collision planes. The GitHub scene checks consecutive frames close to the aperture, at oblique angles, and with a real foreground occluder. Use the GitHub runtime results for the matching commit to confirm the depth behavior; a successful build alone does not establish it.
 
 ## The player catches near a same-world portal exit
 
 After teleportation, the current implementation sets the entity's final eye position and bounding box before discovering destination portals. It notifies that entity directly of its destination contacts instead of rescanning an entity section that can still refer to the source position during a same-world teleport. Contact is retained while either the previous or current eye position remains in front of the portal and the body still overlaps its opening.
 
-This keeps the backing-wall collision clipping associated with the reverse portal during a stop or reversal. For rectangular portals, a movement starting exactly on the plane and continuing inward is also a crossing; stopping on the plane, merely arriving there or moving away is not. It changes contact handoff and does not replace the existing anti-overlap handling. The slow-movement GitHub regression checks the resulting camera and player motion; validation of this revision is pending.
+This keeps the backing-wall collision clipping associated with the reverse portal during a stop or reversal. For rectangular portals, a movement starting exactly on the plane and continuing inward is also a crossing; stopping on the plane, merely arriving there or moving away is not. It changes contact handoff and does not replace the existing anti-overlap handling. The slow-movement GitHub regression checks the resulting camera and player motion. Use its results and traces for the matching commit to confirm the behavior; compilation alone does not exercise the trajectory.
