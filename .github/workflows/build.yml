@@ -1,5 +1,12 @@
 name: Minecraft 26.2 Fabric validation
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: fabric-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -43,3 +50,57 @@ jobs:
             **/build/reports/**
             **/build/test-results/**
             **/hs_err_pid*.log
+
+  fabric-runtime:
+    name: Fabric ${{ matrix.backend }} / ${{ matrix.scenario }}
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        backend: [opengl, vulkan]
+        scenario: [multiplayer, scaled, rendering, singleplayer]
+    env:
+      LIBGL_ALWAYS_SOFTWARE: 'true'
+      GALLIUM_DRIVER: llvmpipe
+      ALSOFT_DRIVERS: 'null'
+      SDL_AUDIODRIVER: dummy
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install the headless display and Mesa software drivers
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            xvfb xauth mesa-utils mesa-vulkan-drivers vulkan-tools libgl1-mesa-dri \
+            libasound2t64 libxrandr2 libxi6 libxcursor1 libxinerama1
+      - name: Run the game and assert the selected graphics backend
+        shell: bash
+        run: bash .github/ci/run-fabric-scenario.sh '${{ matrix.backend }}' '${{ matrix.scenario }}'
+      - name: Upload runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fabric-${{ matrix.backend }}-${{ matrix.scenario }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            build/ci/**
+            run/smoke-client/logs/**
+            run/smoke-client/crash-reports/**
+            run/smoke-client/screenshots/**
+            run/smoke-client/options.txt
+            run/smoke-client/hs_err_pid*.log
+            run/smoke-server/logs/**
+            run/smoke-server/crash-reports/**
+            run/smoke-server/hs_err_pid*.log
+            **/build/reports/**
+            **/build/test-results/**
