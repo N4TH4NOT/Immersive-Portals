@@ -15,6 +15,7 @@ import qouteall.imm_ptl.core.render.renderer.*;
 final class PortalRenderingSmoke {
     private static int firstFrame = -1;
     private static int logicalTicks;
+    private static boolean wallComplete;
 
     private static Portal center(Minecraft client) {
         for (var entity : client.level.entitiesForRendering())
@@ -110,7 +111,11 @@ final class PortalRenderingSmoke {
             IPGlobal.renderYourselfInPortal = false;
             require(!camera.isDetached(), "Disabled first-person player policy was ignored");
             IPGlobal.renderYourselfInPortal = true;
-            require(camera.isDetached(), "Enabled first-person portal player was hidden");
+            require(!camera.isDetached(), "The first-person camera exposed its own head interior");
+            ((qouteall.imm_ptl.core.ducks.IECamera) camera)
+                    .portal_setPos(parent.position().add(0, 0, 4));
+            require(camera.isDetached(), "A separate portal camera hid the visible player body");
+            ((qouteall.imm_ptl.core.ducks.IECamera) camera).portal_setPos(parent.position());
             client.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK);
             IPGlobal.renderYourselfInPortal = false;
             require(camera.isDetached(), "Third-person portal player was hidden");
@@ -123,6 +128,15 @@ final class PortalRenderingSmoke {
     }
 
     static void tick(Minecraft client, int realTicks) {
+        // Natural movement must receive each 20 Hz client tick, independently of the
+        // frame-paced static aperture cases and their already completed timeout.
+        if (wallComplete) {
+            if (PortalBodyRenderingSmoke.tick(client, realTicks)) {
+                System.out.println("PORTAL_RENDER_COMPLETE " + NativePortalOcclusion.statistics());
+                client.stop();
+            }
+            return;
+        }
         if (firstFrame < 0) firstFrame = RenderStates.frameIndex;
         require(realTicks < 2400, "Rendering scenario did not finish within two minutes");
         // Shader compilation can stall frames while client ticks catch up. Wait for real
@@ -267,8 +281,7 @@ final class PortalRenderingSmoke {
                             + RenderDiagnostics.sodiumViewports());
         }
         if (ticks >= 300 && PortalWallRenderingSmoke.tick(client, ticks)) {
-            System.out.println("PORTAL_RENDER_COMPLETE " + NativePortalOcclusion.statistics());
-            client.stop();
+            wallComplete = true;
         }
     }
 }

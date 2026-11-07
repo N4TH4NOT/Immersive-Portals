@@ -88,9 +88,12 @@ if scenario == "rendering":
         "PORTAL_RENDER_NO_PREDICTION_OK",
         "PORTAL_RENDER_MODES_OK",
         "PORTAL_RENDER_WALL_STABLE_OK",
+        "PORTAL_RENDER_BODY_REMOTE_OK",
+        "PORTAL_RENDER_BODY_CAMERA_OK",
         "PORTAL_RENDER_COMPLETE",
     ]
     server_markers.append("PORTAL_RENDER_WALL_FIXTURE_READY")
+    server_markers.append("PORTAL_RENDER_BODY_FIXTURE_READY")
     if modset in ("sodium", "iris"):
         client_markers.append("PORTAL_RENDER_SODIUM_COMPAT_OK")
     if modset == "iris":
@@ -145,6 +148,16 @@ if scenario == "rendering":
     import base64
     import io
     from PIL import Image
+
+    for phase, minimum in {"remote_off": 1, "remote_on": 1, "straddle_down": 3,
+                           "exit_down": 3, "stand": 3, "f5_back": 2,
+                           "f5_front": 2, "f5_exit": 2}.items():
+        if len(list(screenshots.glob(f"portal-body-{phase}-*.png"))) < minimum:
+            raise AssertionError(f"The {phase} player-body view has insufficient GPU pictures.")
+    moving_pictures = sum(len(list(screenshots.glob(f"portal-body-{phase}-*.png")))
+                          for phase in ("cross", "return", "final_cross"))
+    if moving_pictures < 2:
+        raise AssertionError("The body probe did not save the natural portal-crossing pictures.")
 
     def fixture_thumbnail(rgb, prefix, name):
         # Only public smoke fixtures may be copied into job logs. Strip metadata and

@@ -86,6 +86,20 @@ class NativePortalDepthTest {
     }
 
     @Test
+    void pitchedAperturesMatchProjectedDepthInBothViewportAxes() {
+        for (boolean zeroToOne : new boolean[] {false, true})
+            for (float distance : new float[] {.9f, .3f, .04f})
+                for (float pitch : new float[] {30, 45, 60, 90}) {
+                    var vertices = triangle(new Matrix4f().translation(0, 0, -distance));
+                    var transform = projection(zeroToOne)
+                            .rotateX((float) Math.toRadians(pitch)).rotateY(.17f);
+                    for (double x : new double[] {-.2, 0, .2})
+                        matchesProjectedPoint(transform, vertices,
+                                new Vector3d(x, -1.4, vertices[2]), zeroToOne);
+                }
+    }
+
+    @Test
     void apertureDepthMatchesTheSodiumEncodedCameraBasis() {
         // Sodium's CameraTransform encodes .04 against a 128-block float basis as
         // this exact value. A block face at world Z=0 uses its negation in the shader.

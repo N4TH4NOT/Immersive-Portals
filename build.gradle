@@ -89,7 +89,7 @@ if (providers.gradleProperty('portalSmoke').isPresent()) {
         runs {
             client {
                 source sourceSets.smokeTest
-                runDir 'run/smoke-client'
+                runDir providers.gradleProperty('portalSmokeClientDir').getOrElse('run/smoke-client')
                 programArgs '--username', providers.gradleProperty('portalSmokeUsername').getOrElse('PortalTest')
                 programArgs '--graphicsBackend', providers.gradleProperty('portalSmokeBackend').getOrElse('opengl')
                 if (!providers.gradleProperty('portalSmokeSingleplayer').isPresent()) {
@@ -102,6 +102,7 @@ if (providers.gradleProperty('portalSmoke').isPresent()) {
                 vmArg '-DportalSmoke.interaction=' + providers.gradleProperty('portalSmokeInteraction').getOrElse('false')
                 vmArg '-DportalSmoke.interactions=' + providers.gradleProperty('portalSmokeInteractions').getOrElse('false')
                 vmArg '-DportalSmoke.rendering=' + providers.gradleProperty('portalRenderSmoke').getOrElse('false')
+                vmArg '-DportalSmoke.optics=' + providers.gradleProperty('portalOpticsSmoke').getOrElse('false')
                 vmArg '-Dimm_ptl.renderDiagnostics=true'
                 if (providers.gradleProperty('portalSmokeSodium').isPresent()) {
                     vmArg '-Dmixin.debug.export=true'

@@ -58,11 +58,23 @@ jobs:
     timeout-minutes: 25
     strategy:
       fail-fast: false
-      max-parallel: 6
+      max-parallel: 8
       matrix:
         # Start the independent compatibility paths early, alongside the dynamic-world
         # and vanilla-rendering scenarios, so each iteration exposes useful failures.
         include:
+          - backend: opengl
+            scenario: optics
+            modset: vanilla
+          - backend: opengl
+            scenario: optics
+            modset: sodium
+          - backend: opengl
+            scenario: optics
+            modset: iris
+          - backend: vulkan
+            scenario: optics
+            modset: vanilla
           - backend: opengl
             scenario: multiplayer
             modset: vanilla

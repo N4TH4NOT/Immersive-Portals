@@ -12,6 +12,30 @@ import qouteall.q_misc_util.my_util.Plane;
 
 class NativeProjectionTest {
     @Test
+    void pitchedDestinationViewsKeepTheCorrectSideOfTheAperture() {
+        for (boolean zeroToOne : new boolean[] {false, true})
+            for (double distance : new double[] {.9, .3, .04})
+                for (double pitch : new double[] {30, 45, 60, 90}) {
+                    var view = new Matrix4f().rotateX((float) Math.toRadians(pitch));
+                    var projection = new Matrix4f().perspective(
+                            (float) Math.toRadians(70), 1.6f, 1024, .05f, zeroToOne);
+                    NativeCamera.clipProjection(projection, view,
+                            new Vec3(0, 0, distance),
+                            new Plane(Vec3.ZERO, new Vec3(0, 0, -1)), zeroToOne);
+                    var transform = projection.mul(view, new Matrix4f());
+                    var on = transform.transform(new Vector4f(0, -1.4f, (float) -distance, 1));
+                    var before = transform.transform(new Vector4f(
+                            0, -1.4f, (float) (.01 - distance), 1));
+                    var beyond = transform.transform(new Vector4f(
+                            0, -1.4f, (float) (-.01 - distance), 1));
+                    assertTrue(on.w > 0 && before.w > 0 && beyond.w > 0);
+                    assertEquals(1, on.z / on.w, 2.0E-5);
+                    assertTrue(before.z / before.w > 1, "Source-side geometry must be clipped");
+                    assertTrue(beyond.z / beyond.w < 1, "Destination-side geometry must remain");
+                }
+    }
+
+    @Test
     void obliqueClippingSupportsBothNativeDepthRanges() {
         for (boolean zeroToOne : new boolean[] {false, true}) {
             // Minecraft uses reverse Z by swapping the near and far parameters.

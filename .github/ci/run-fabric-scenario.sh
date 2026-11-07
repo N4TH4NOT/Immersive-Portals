@@ -8,15 +8,15 @@ if [[ "${GITHUB_ACTIONS:-}" != true ]]; then
 fi
 
 backend="${1:?Expected opengl or vulkan}"
-scenario="${2:?Expected multiplayer, scaled, rendering or singleplayer}"
+scenario="${2:?Expected multiplayer, scaled, rendering, optics or singleplayer}"
 modset="${PORTAL_CI_MODSET:-vanilla}"
 case "$backend" in opengl|vulkan) ;; *) exit 2 ;; esac
-case "$scenario" in multiplayer|scaled|rendering|singleplayer) ;; *) exit 2 ;; esac
+case "$scenario" in multiplayer|scaled|rendering|optics|singleplayer) ;; *) exit 2 ;; esac
 case "$modset" in vanilla|sodium|iris) ;; *) exit 2 ;; esac
 if [[ "$modset" != vanilla && "$backend" != opengl ]] \
-    || [[ "$modset" == iris && "$scenario" != rendering ]] \
-    || [[ "$modset" == sodium && "$scenario" != rendering && "$scenario" != multiplayer ]]; then
-    printf '%s\n' 'Compatibility verification requires OpenGL rendering or Sodium multiplayer.' >&2
+    || [[ "$modset" == iris && "$scenario" != rendering && "$scenario" != optics ]] \
+    || [[ "$modset" == sodium && "$scenario" != rendering && "$scenario" != optics && "$scenario" != multiplayer ]]; then
+    printf '%s\n' 'Compatibility verification requires OpenGL graphics or Sodium multiplayer.' >&2
     exit 2
 fi
 
@@ -124,6 +124,7 @@ case "$scenario" in
     multiplayer) scenario_args+=(-PportalSmokeDynamicDimensions=true) ;;
     scaled) username=ScaledTest ;;
     rendering) username=OcclusionTest; scenario_args+=(-PportalRenderSmoke=true) ;;
+    optics) username=OpticsTest; scenario_args+=(-PportalOpticsSmoke=true) ;;
     singleplayer) scenario_args+=(-PportalSmokeSingleplayer=true) ;;
 esac
 case "$modset" in
@@ -193,7 +194,11 @@ run_client() {
 
 run_client "$evidence/client-console.log"
 
-/usr/bin/python3 .github/ci/assert-fabric-scenario.py "$backend" "$scenario" "$evidence"
+if [[ "$scenario" == optics ]]; then
+    /usr/bin/python3 .github/ci/assert-optics.py "$backend" "$evidence"
+else
+    /usr/bin/python3 .github/ci/assert-fabric-scenario.py "$backend" "$scenario" "$evidence"
+fi
 
 if [[ "$scenario" == multiplayer ]]; then
     stop_server

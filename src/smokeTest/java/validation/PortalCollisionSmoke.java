@@ -126,7 +126,7 @@ final class PortalCollisionSmoke {
         return result;
     }
 
-    private static java.util.List<Portal> createWandFaces(ServerPlayer player, ServerLevel source,
+    static java.util.List<Portal> createWandFaces(ServerPlayer player, ServerLevel source,
             ServerLevel destination, Vec3 center, double width, double height) {
         var previous = portalIds(source, destination);
         double left = center.x - width / 2;

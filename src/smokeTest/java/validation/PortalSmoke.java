@@ -22,6 +22,8 @@ public final class PortalSmoke implements ModInitializer {
     public void onInitialize() {
         DimensionLibrarySmoke.init();
         PortalWallRenderFixture.initialize(scenePortals);
+        PortalOpticsFixture.initialize(scenePortals);
+        PortalBodyRenderFixture.initialize(scenePortals);
         PortalSameWorldSmoke.initialize(scenePortals);
         net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(
                 (dispatcher, access, environment) ->
@@ -95,6 +97,12 @@ public final class PortalSmoke implements ModInitializer {
                                             3);
                             }
                     }
+                    // These are real block lights, outside the legacy portal pixel regions.
+                    // The lighting regression no longer permits an uninitialized white map.
+                    for (int x = -10; x <= 10; x += 5)
+                        for (int z = -10; z <= 10; z += 5)
+                            to.setBlock(new BlockPos(x, 76, z),
+                                    Blocks.SEA_LANTERN.defaultBlockState(), 3);
                     Portal portal = new Portal(Portal.ENTITY_TYPE, from);
                     portal.setOriginPos(new Vec3(0, 72, 0));
                     portal.setOrientationAndSize(new Vec3(1, 0, 0), new Vec3(0, 1, 0), 4, 4);
