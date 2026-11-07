@@ -1,6 +1,8 @@
 package qouteall.imm_ptl.core.render;
 
 import com.mojang.blaze3d.ProjectionType;
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 
@@ -15,6 +17,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 
 import org.joml.Matrix4f;
+import org.joml.Vector4f;
 
 import qouteall.imm_ptl.core.*;
 import qouteall.imm_ptl.core.ducks.IEEntity;
@@ -34,18 +37,51 @@ import java.util.Map;
 public final class NativeEntityPass {
     private NativeEntityPass() {}
 
-    private record Body(
-            EntityRenderState state, Matrix4f transform, Plane clip, boolean projected) {}
+    private record Body(EntityRenderState state, Matrix4f transform, Plane clip, Plane viewClip,
+            boolean projected, int entityId, boolean localPlayer) {}
+
+    public record BodySnapshot(int entityId, boolean projected, boolean localPlayer,
+            Vec3 position, Plane clip, Plane viewClip) {}
+
+    /** Immutable extraction metadata for graphics regression observers. */
+    public static List<BodySnapshot> snapshots(LevelRenderState state) {
+        return BODIES.getOrDefault(state, List.of()).stream().map(body -> new BodySnapshot(
+            body.entityId, body.projected, body.localPlayer,
+            new Vec3(body.state.x, body.state.y, body.state.z), body.clip, body.viewClip
+        )).toList();
+    }
 
     private static final Map<LevelRenderState, List<Body>> BODIES = new IdentityHashMap<>();
     private static final Minecraft CLIENT = Minecraft.getInstance();
 
-    private record Context(
-            net.minecraft.client.renderer.RenderBuffers buffers,
-            net.minecraft.client.renderer.feature.FeatureRenderDispatcher dispatcher)
-            implements AutoCloseable {
+    private static final class Context implements AutoCloseable {
+        final net.minecraft.client.renderer.RenderBuffers buffers;
+        final net.minecraft.client.renderer.feature.FeatureRenderDispatcher dispatcher;
+        private TextureTarget clippedBody;
+
+        Context(net.minecraft.client.renderer.RenderBuffers buffers,
+                net.minecraft.client.renderer.feature.FeatureRenderDispatcher dispatcher) {
+            this.buffers = buffers;
+            this.dispatcher = dispatcher;
+        }
+
+        TextureTarget target(RenderTarget parent) {
+            if (clippedBody != null
+                    && clippedBody.getColorTexture().getFormat() != parent.getColorTexture().getFormat()) {
+                clippedBody.destroyBuffers();
+                clippedBody = null;
+            }
+            if (clippedBody == null)
+                clippedBody = new TextureTarget("Portal body features", parent.width, parent.height,
+                    true, parent.getColorTexture().getFormat());
+            else if (clippedBody.width != parent.width || clippedBody.height != parent.height)
+                clippedBody.resize(parent.width, parent.height);
+            return clippedBody;
+        }
+
         @Override
         public void close() {
+            if (clippedBody != null) clippedBody.destroyBuffers();
             dispatcher.close();
             buffers.close();
         }
@@ -100,14 +136,18 @@ public final class NativeEntityPass {
                     if ((!projected && world != CLIENT.level)
                             || (projected && portal.getDestDim() != CLIENT.level.dimension()))
                         continue;
-                    if (entity instanceof LocalPlayer) {
+                    if (entity instanceof LocalPlayer player) {
                         if (projected
                                 && (!IPGlobal.renderYourselfInPortal
                                         || !portal.getDoRenderPlayer())) continue;
                         if (!projected && entity == camera.entity() && !camera.isDetached())
                             continue;
+                        if (!CrossPortalEntityRenderer.shouldRenderLocalPlayerBody(
+                                player, camera, partial, projected ? portal : null)) continue;
                     }
-                    if (!projected && !CrossPortalEntityRenderer.shouldRenderEntityNow(entity))
+                    if (entity instanceof net.minecraft.world.entity.player.Player
+                            && PortalRendering.isRendering()
+                            && !PortalRendering.getRenderingPortal().getDoRenderPlayer())
                         continue;
                     var box =
                             projected
@@ -148,57 +188,70 @@ public final class NativeEntityPass {
                         clip = portal.getInnerClipping();
                     } else
                         clip = portal.getPortalShape().getOuterClipping(portal.getThisSideState());
-                    if (PortalRendering.isRendering())
-                        clip = PortalRendering.getActiveClippingPlane();
-                    bodies.add(new Body(state, transform, clip, projected));
+                    Plane viewClip = PortalRendering.isRendering()
+                        ? PortalRendering.getActiveClippingPlane() : null;
+                    bodies.add(new Body(state, transform, clip, viewClip, projected,
+                        entity.getId(), entity instanceof LocalPlayer));
                 }
             }
     }
 
     public static void render(LevelRenderState state) {
+        if (qouteall.imm_ptl.core.compat.iris_compatibility.IrisInterface.invoker.isRenderingShadowMap())
+            return;
         List<Body> bodies = BODIES.get(state);
         if (bodies == null || bodies.isEmpty()) return;
         var oldProjection = RenderSystem.getProjectionMatrixBuffer();
         var oldProjectionType = RenderSystem.getProjectionType();
+        var oldColorTarget = RenderSystem.outputColorTextureOverride;
+        var oldDepthTarget = RenderSystem.outputDepthTextureOverride;
         var camera = state.cameraRenderState;
         Matrix4f base = NativeWorldRenderer.projection(CLIENT.gameRenderer);
         try (ProjectionMatrixBuffer buffer = new ProjectionMatrixBuffer("Portal entity clipping")) {
-            for (Body body : bodies) {
-                Matrix4f projection = new Matrix4f(base);
-                if (body.clip != null && !PortalRendering.isRendering()) {
-                    NativeCamera.clipProjection(
-                            projection,
-                            camera.viewRotationMatrix,
-                            camera.pos,
-                            body.clip,
-                            RenderSystem.getDevice().getDeviceInfo().isZZeroToOne());
-                }
-                RenderSystem.setProjectionMatrix(
-                        buffer.getBuffer(projection), ProjectionType.PERSPECTIVE);
-                SubmitNodeStorage storage = new SubmitNodeStorage();
-                PoseStack pose = new PoseStack();
-                double x = body.state.x - camera.pos.x,
-                        y = body.state.y - camera.pos.y,
-                        z = body.state.z - camera.pos.z;
-                pose.translate(x, y, z);
-                pose.mulPose(body.transform);
-                pose.translate(-x, -y, -z);
-                CrossPortalEntityRenderer.isRenderingEntityProjection = body.projected;
-                CrossPortalEntityRenderer.isRenderingEntityNormally = !body.projected;
-                CLIENT.getEntityRenderDispatcher()
-                        .submit(body.state, camera, x, y, z, pose, storage);
-                try (var features = context().dispatcher().prepareFrame(storage)) {
-                    features.executeSolid();
-                    features.executeTranslucent();
-                    features.executeTranslucentAfterTerrain();
-                    features.executeOutline();
-                }
-                context().buffers().endFrame();
-            }
+            qouteall.imm_ptl.core.compat.iris_compatibility.IrisInterface.invoker.withCompositeTarget(
+                CLIENT.gameRenderer.mainRenderTarget(), target -> {
+                    var context = context();
+                    var bodyTarget = context.target(target);
+                    for (Body body : bodies) {
+                        // A near-plane replacement cannot clip a body when the camera lies
+                        // in the half-space being kept, or represent two independent planes.
+                        // Keep native perspective/depth and clip reconstructed fragments instead.
+                        RenderSystem.getDevice().createCommandEncoder()
+                            .clearColorTexture(bodyTarget.getColorTexture(), new Vector4f(0, 0, 0, 0));
+                        bodyTarget.copyDepthFrom(target);
+                        RenderSystem.outputColorTextureOverride = bodyTarget.getColorTextureView();
+                        RenderSystem.outputDepthTextureOverride = bodyTarget.getDepthTextureView();
+                        RenderSystem.setProjectionMatrix(buffer.getBuffer(base), ProjectionType.PERSPECTIVE);
+                        SubmitNodeStorage storage = new SubmitNodeStorage();
+                        PoseStack pose = new PoseStack();
+                        double x = body.state.x - camera.pos.x,
+                            y = body.state.y - camera.pos.y, z = body.state.z - camera.pos.z;
+                        pose.translate(x, y, z);
+                        pose.mulPose(body.transform);
+                        pose.translate(-x, -y, -z);
+                        CrossPortalEntityRenderer.isRenderingEntityProjection = body.projected;
+                        CrossPortalEntityRenderer.isRenderingEntityNormally = !body.projected;
+                        CLIENT.getEntityRenderDispatcher()
+                            .submit(body.state, camera, x, y, z, pose, storage);
+                        try (var features = context.dispatcher.prepareFrame(storage)) {
+                            features.executeSolid();
+                            features.executeTranslucent();
+                            features.executeTranslucentAfterTerrain();
+                            features.executeOutline();
+                        }
+                        context.buffers.endFrame();
+                        RenderSystem.outputColorTextureOverride = oldColorTarget;
+                        RenderSystem.outputDepthTextureOverride = oldDepthTarget;
+                        NativeBodyCompositor.draw(bodyTarget, target, base, camera.viewRotationMatrix,
+                            camera.pos, body.clip, body.viewClip);
+                    }
+                });
         } finally {
             CrossPortalEntityRenderer.isRenderingEntityProjection = false;
             CrossPortalEntityRenderer.isRenderingEntityNormally = false;
             RenderSystem.setProjectionMatrix(oldProjection, oldProjectionType);
+            RenderSystem.outputColorTextureOverride = oldColorTarget;
+            RenderSystem.outputDepthTextureOverride = oldDepthTarget;
         }
     }
 }

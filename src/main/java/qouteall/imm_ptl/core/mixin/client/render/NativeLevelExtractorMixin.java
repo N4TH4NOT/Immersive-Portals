@@ -56,6 +56,7 @@ public abstract class NativeLevelExtractorMixin {
             double z,
             CallbackInfoReturnable<Boolean> cir) {
         if (qouteall.imm_ptl.core.IPGlobal.correctCrossPortalEntityRendering
+                && !qouteall.imm_ptl.core.compat.iris_compatibility.IrisInterface.invoker.isRenderingShadowMap()
                 && ((IEEntity) entity).ip_getCollidingPortal() != null)
             cir.setReturnValue(false);
     }

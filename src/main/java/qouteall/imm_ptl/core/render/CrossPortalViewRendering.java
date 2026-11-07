@@ -24,6 +24,12 @@ import qouteall.imm_ptl.core.teleportation.ClientTeleportationManager;
 //  it will also render cross-portal
 public class CrossPortalViewRendering {
     public static final Minecraft client = Minecraft.getInstance();
+    private static java.util.List<java.util.UUID> cameraPortalPath = java.util.List.of();
+
+    /** Portals crossed by the view camera before its independently moving physical entity. */
+    public static java.util.List<java.util.UUID> getCameraPortalPath() {
+        return cameraPortalPath;
+    }
     
     // if rendered, return true
     public static boolean renderCrossPortalView() {
@@ -83,7 +89,13 @@ public class CrossPortalViewRendering {
             .build();
         
         var destination=client.gameRenderer.mainRenderTarget();
-        IPCGlobal.renderer.invokeWorldRendering(worldRenderInfo);
+        var previousPath = cameraPortalPath;
+        cameraPortalPath = java.util.List.of(portal.getUUID());
+        try {
+            IPCGlobal.renderer.invokeWorldRendering(worldRenderInfo);
+        } finally {
+            cameraPortalPath = previousPath;
+        }
         var source=MyGameRenderer.renderedTarget();
         NativePortalCompositor.drawRectangle(source,destination,0,0,destination.width,destination.height,false,true);
         destination.copyDepthFrom(source);

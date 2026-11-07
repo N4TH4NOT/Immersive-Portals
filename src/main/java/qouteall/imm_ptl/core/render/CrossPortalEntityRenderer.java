@@ -4,6 +4,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.client.Camera;
+import net.minecraft.util.Mth;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.apache.commons.lang3.Validate;
 import qouteall.imm_ptl.core.*;
@@ -12,6 +15,7 @@ import qouteall.imm_ptl.core.portal.*;
 import qouteall.imm_ptl.core.compat.iris_compatibility.IrisInterface;
 import qouteall.imm_ptl.core.render.context_management.*;
 import qouteall.imm_ptl.core.render.renderer.PortalRenderer;
+import qouteall.q_misc_util.Helper;
 
 public final class CrossPortalEntityRenderer {
     private static final Minecraft client = Minecraft.getInstance();
@@ -20,6 +24,10 @@ public final class CrossPortalEntityRenderer {
     public static void init() { NativeEntityPass.init(); }
     public static void onEntityTickClient(Entity entity) { /* Collision state is collected during native extraction. */ }
     public static boolean shouldRenderPlayerDefault() {
+        return shouldRenderPlayerDefault(client.gameRenderer.mainCamera());
+    }
+
+    public static boolean shouldRenderPlayerDefault(Camera camera) {
         if (!IPGlobal.renderYourselfInPortal) {
             return false;
         }
@@ -29,24 +37,28 @@ public final class CrossPortalEntityRenderer {
         LocalPlayer player = client.player;
         assert player != null;
         
-        if (PortalRendering.isRendering()) {
-            Portal renderingPortal = PortalRendering.getRenderingPortal();
-            if (renderingPortal instanceof Mirror) {
-                // if the camera pos is too close to the mirror,
-                // it will show the inside of the player head.
-                // avoid rendering player in this case.
-                float width = player.getBbWidth();
-                if (renderingPortal.getDistanceToNearestPointInPortal(player.getEyePosition()) < width * 0.8) {
-                    return false;
-                }
-            }
+        return client.level == player.level() && shouldRenderLocalPlayerBody(
+            player, camera, RenderStates.getPartialTick(), null
+        );
+    }
+
+    /** Retain remote views of oneself while excluding a model surrounding a first-person eye. */
+    public static boolean shouldRenderLocalPlayerBody(
+        LocalPlayer player, Camera camera, float partial, @org.jetbrains.annotations.Nullable Portal projection
+    ) {
+        if (!client.options.getCameraType().isFirstPerson()) return true;
+        Vec3 position = new Vec3(
+            Mth.lerp(partial, player.xOld, player.getX()),
+            Mth.lerp(partial, player.yOld, player.getY()),
+            Mth.lerp(partial, player.zOld, player.getZ())
+        );
+        AABB box = player.getBoundingBox().move(position.subtract(player.position()));
+        double scale = ScaleUtils.getScale(player);
+        if (projection != null) {
+            box = Helper.transformBox(box, projection::transformPoint);
+            scale *= projection.getScale();
         }
-        
-        if (client.level == player.level()) {
-            return true;
-        }
-        
-        return false;
+        return NativePlayerVisibility.canShowBody(box, camera.position(), .05 * scale);
     }
     
     public static boolean shouldRenderEntityNow(Entity entity) {
@@ -85,19 +97,9 @@ public final class CrossPortalEntityRenderer {
     }
     
     public static boolean shouldRenderPlayerNormally(Entity entity) {
-        if (!client.options.getCameraType().isFirstPerson()) {
-            return true;
-        }
-        
-        if (RenderStates.originalPlayerBoundingBox.contains(CHelper.getCurrentCameraPos())) {
-            return false;
-        }
-        
-        double distanceToCamera =
-            getRenderingCameraPos(entity)
-                .distanceTo(client.gameRenderer.mainCamera().position());
-        //avoid rendering player too near and block view except mirror
-        return distanceToCamera > 1 || PortalRendering.isRenderingOddNumberOfMirrors();
+        return !(entity instanceof LocalPlayer player) || shouldRenderLocalPlayerBody(
+            player, client.gameRenderer.mainCamera(), RenderStates.getPartialTick(), null
+        );
     }
     
     public static Vec3 getRenderingCameraPos(Entity entity) {

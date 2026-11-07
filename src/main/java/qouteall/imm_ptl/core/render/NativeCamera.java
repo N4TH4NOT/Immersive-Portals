@@ -139,7 +139,7 @@ public final class NativeCamera extends Camera {
         // and the near-mirror head guard in shouldRenderPlayerDefault().
         return !net.minecraft.client.Minecraft.getInstance()
                         .options.getCameraType().isFirstPerson()
-                || CrossPortalEntityRenderer.shouldRenderPlayerDefault();
+                || CrossPortalEntityRenderer.shouldRenderPlayerDefault(this);
     }
 
     @Override
