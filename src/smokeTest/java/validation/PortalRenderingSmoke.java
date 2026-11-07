@@ -159,7 +159,7 @@ final class PortalRenderingSmoke {
         }
         if (ticks == 80) {
             require(
-                    client.level.getBlockState(new BlockPos(0, 72, 2)).is(Blocks.STONE),
+                    client.level.getBlockState(new BlockPos(0, 72, 2)).is(Blocks.CONCRETE.blue()),
                     "Occluder has not arrived");
             // Without prediction, a timed-out GPU measurement must conservatively render.
             require(
@@ -175,7 +175,7 @@ final class PortalRenderingSmoke {
         }
         if (ticks == 120) {
             require(
-                    !client.level.getBlockState(new BlockPos(0, 72, 2)).is(Blocks.STONE),
+                    !client.level.getBlockState(new BlockPos(0, 72, 2)).is(Blocks.CONCRETE.blue()),
                     "Occluder was not removed");
             require(
                     PortalRenderInfo.get(center(client)).wasRenderedLastFrame(),
