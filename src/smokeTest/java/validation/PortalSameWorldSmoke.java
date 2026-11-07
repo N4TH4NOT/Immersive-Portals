@@ -63,6 +63,9 @@ final class PortalSameWorldSmoke {
                 if (player == null) continue;
                 require(player.level().dimension() == Level.NETHER,
                         "Same-world traversal changed dimension");
+                var world = (ServerLevel) player.level();
+                requireDryPlayer(world, player);
+                requireOpenings(world);
                 boolean destination = player.getX() > 32;
                 if (destination != probe.destination) {
                     probe.destination = destination;
@@ -74,7 +77,6 @@ final class PortalSameWorldSmoke {
                 }
                 if (!destination || probe.transitions < 3
                         || server.getTickCount() - probe.arrivalTick < 10) continue;
-                var world = (ServerLevel) player.level();
                 require(Math.abs(player.getX() - DESTINATION.x) < .05
                                 && Math.abs(player.getY() - 70) < .025,
                         "The same-world wall portal displaced the stopped player: "
@@ -94,6 +96,17 @@ final class PortalSameWorldSmoke {
         require(player.level().dimension() == Level.NETHER,
                 "The same-world fixture must follow the cross-dimension trajectory");
         var world = (ServerLevel) player.level();
+        // Seal each room before clearing its interior. The generated Nether can contain
+        // fluid sources immediately outside the old clearing, including above its roof.
+        // The trajectory measures portal movement without a fluid current acting on it.
+        for (int centerX : new int[] {0, 64})
+            for (int x = centerX - 5; x <= centerX + 5; x++)
+                for (int z = -14; z <= 3; z++)
+                    for (int y = 69; y <= 77; y++)
+                        if (x == centerX - 5 || x == centerX + 5 || z == -14 || z == 3
+                                || y == 69 || y == 77)
+                            world.setBlock(new BlockPos(x, y, z),
+                                    Blocks.EMERALD_BLOCK.defaultBlockState(), 3);
         for (int centerX : new int[] {0, 64})
             for (int x = centerX - 4; x <= centerX + 4; x++)
                 for (int z = -13; z <= 2; z++) {
@@ -140,6 +153,8 @@ final class PortalSameWorldSmoke {
                 world.setBlock(new BlockPos(x + 64, y, -5), Blocks.STONE.defaultBlockState(), 3);
             }
         requireWalls(world);
+        requireOpenings(world);
+        requireDryPlayer(world, player);
         System.out.println("PORTAL_SMOKE_SAME_WORLD_READY faces=" + created.size()
                 + " translation=64");
         return new Probe(created);
@@ -151,6 +166,33 @@ final class PortalSameWorldSmoke {
                 require(world.getBlockState(new BlockPos(x, y, -6)).is(Blocks.STONE)
                                 && world.getBlockState(new BlockPos(x + 64, y, -5)).is(Blocks.STONE),
                         "Same-world traversal removed a backing wall");
+    }
+
+    private static void requireOpenings(ServerLevel world) {
+        for (int x = -2; x <= 2; x++)
+            for (int y = 70; y <= 73; y++)
+                for (var position : new BlockPos[] {
+                        new BlockPos(x, y, -5), new BlockPos(x + 64, y, -6)})
+                    require(world.getBlockState(position).isAir(),
+                            "The same-world portal opening is obstructed: position=" + position
+                                    + " block=" + world.getBlockState(position));
+    }
+
+    private static void requireDryPlayer(ServerLevel world, ServerPlayer player) {
+        var box = player.getBoundingBox();
+        for (int x = (int) Math.floor(box.minX + 1e-6);
+                x <= (int) Math.floor(box.maxX - 1e-6); x++)
+            for (int y = (int) Math.floor(box.minY + 1e-6);
+                    y <= (int) Math.floor(box.maxY - 1e-6); y++)
+                for (int z = (int) Math.floor(box.minZ + 1e-6);
+                        z <= (int) Math.floor(box.maxZ - 1e-6); z++) {
+                    var position = new BlockPos(x, y, z);
+                    var fluid = world.getFluidState(position);
+                    require(fluid.isEmpty(),
+                            "Fluid entered the dry same-world movement fixture: position="
+                                    + position + " fluid=" + fluid
+                                    + " player=" + player.position());
+                }
     }
 
     private static java.util.List<Portal> portals(ServerLevel world) {

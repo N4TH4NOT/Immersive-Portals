@@ -19,7 +19,7 @@ final class PortalSeamlessSmoke {
     }
 
     private record Sample(int tick, double time, ResourceKey<Level> dimension, boolean destination,
-            Vec3 camera, Vec3 direction, Vec3 eye, Vec3 playerDirection,
+            Vec3 camera, Vec3 direction, Vec3 eye, Vec3 eyeStart, Vec3 eyeEnd, Vec3 playerDirection,
             Vec3 feet, Vec3 velocity) {}
 
     private static Portal portal;
@@ -33,6 +33,8 @@ final class PortalSeamlessSmoke {
     private static int nearPlaneFrames;
     private static int transitions;
     private static int destinationFrames;
+    private static int sameTickFrames;
+    private static int sameTickCrossings;
     private static boolean controlled;
     private static boolean sameWorld;
     private static boolean verified;
@@ -70,18 +72,32 @@ final class PortalSeamlessSmoke {
             }
             float partial = context.deltaTracker().getGameTimeDeltaPartialTick(true);
             var sample = new Sample(ticks,
-                    ticks + partial, client.level.dimension(), destination, camera,
+                    ticks + (double) partial, client.level.dimension(), destination, camera,
                     direction.normalize(), unfold(client.player.getEyePosition(partial), destination),
+                    unfold(client.player.getEyePosition(0), destination),
+                    unfold(client.player.getEyePosition(1), destination),
                     playerDirection.normalize(), feet, velocity);
+            require(horizontal(sample.camera().subtract(sample.eye())) <= 1e-5,
+                    "First-person camera lost the interpolated player eye: " + sample);
             frames++;
             if (destination) destinationFrames++;
             if (Math.abs(portal.getDistanceToPlane(camera)) < .35) nearPlaneFrames++;
             double maximumSpeed = controlled ? .38 : .75;
             require(horizontal(velocity) < maximumSpeed,
                     "Portal added horizontal velocity: " + sample);
-            if (controlled)
+            if (controlled) {
+                for (int y = 70; y <= 71; y++) {
+                    var position = new net.minecraft.core.BlockPos(
+                            (int) Math.floor(client.player.getX()), y,
+                            (int) Math.floor(client.player.getZ()));
+                    var fluid = client.level.getFluidState(position);
+                    require(fluid.isEmpty(),
+                            "Fluid entered the dry movement fixture: position=" + position
+                                    + " fluid=" + fluid + " sample=" + sample);
+                }
                 require(Math.abs(feet.y - 70) < .025,
                         "A flat portal added vertical player movement: " + sample);
+            }
             if (previous != null) {
                 double elapsed = sample.time() - previous.time();
                 require(elapsed >= -.01, "Rendered movement time went backwards");
@@ -102,6 +118,21 @@ final class PortalSeamlessSmoke {
                 require(sample.playerDirection().dot(previous.playerDirection()) > .995,
                         "Portal changed the unfolded player direction: previous=" + previous
                                 + " current=" + sample);
+                if (sample.tick() == previous.tick()) {
+                    sameTickFrames++;
+                    Vec3 feetChange = sample.feet().subtract(previous.feet());
+                    // The scaled fixture animates its portal vertically between frames.
+                    // The two controlled wand fixtures have a fixed affine transformation.
+                    require((controlled ? feetChange.length() : horizontal(feetChange)) <= 1e-5,
+                            "A frame-only portal crossing changed the player tick endpoint: previous="
+                                    + previous + " current=" + sample);
+                    Vec3 expectedEyeChange = sample.eyeEnd().subtract(sample.eyeStart())
+                            .scale(Math.max(0, elapsed));
+                    Vec3 actualEyeChange = sample.eye().subtract(previous.eye());
+                    require(horizontal(actualEyeChange.subtract(expectedEyeChange)) <= 1e-5,
+                            "Portal did not preserve eye interpolation between ticks: previous="
+                                    + previous + " current=" + sample);
+                }
                 if (sample.tick() > previous.tick()) {
                     int elapsedTicks = sample.tick() - previous.tick();
                     // Normal acceleration is at most 0.1 blocks/tick. A portal must not add
@@ -127,10 +158,12 @@ final class PortalSeamlessSmoke {
                                                 && contact.getNormal().dot(expectedNormal) > .99),
                                 "Portal crossing lost its destination collision contact: " + sample);
                     }
-                    if (sample.tick() == previous.tick())
+                    if (sample.tick() == previous.tick()) {
+                        sameTickCrossings++;
                         require(sample.velocity().distanceTo(previous.velocity()) < .025,
                                 "A frame-only portal crossing changed velocity: previous="
                                         + previous + " current=" + sample);
+                    }
                     System.out.println("PORTAL_SMOKE_SEAMLESS_TRANSITION stage=" + stage
                             + " previous=" + previous + " current=" + sample);
                 }
@@ -206,6 +239,7 @@ final class PortalSeamlessSmoke {
             previous = null;
             settledPosition = null;
             frames = nearPlaneFrames = transitions = destinationFrames = 0;
+            sameTickFrames = sameTickCrossings = 0;
             stageFrame = 0;
             maximumCameraStep = 0;
             verified = false;
@@ -317,7 +351,9 @@ final class PortalSeamlessSmoke {
         if (elapsed > 6 && settledPosition != null)
             require(position.distanceTo(settledPosition) < .025,
                     "A stopped player drifted at the portal: stage=" + stage
-                            + " start=" + settledPosition + " current=" + position);
+                            + " start=" + settledPosition + " current=" + position
+                            + " velocity=" + client.player.getDeltaMovement()
+                            + " fluid=" + client.level.getFluidState(client.player.blockPosition()));
     }
 
     static boolean complete() {
@@ -346,6 +382,7 @@ final class PortalSeamlessSmoke {
         verified = true;
         System.out.println("PORTAL_SMOKE_SEAMLESS_CAMERA_OK phase=" + phaseName() + " frames=" + frames
                 + " near=" + nearPlaneFrames + " transitions=" + transitions
+                + " sameTickFrames=" + sameTickFrames + " sameTickCrossings=" + sameTickCrossings
                 + " maximumHorizontalStep=" + maximumCameraStep);
         if (controlled) System.out.println("PORTAL_SMOKE_SEAMLESS_MOVEMENT_OK");
         if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium")) {
