@@ -13,6 +13,8 @@ public final class PortalSmokeClient implements ClientModInitializer {
     private boolean rendered;
     private boolean crossed;
     private boolean singleplayerStarted;
+    private long performanceSampleStartNanos;
+    private Integer previousFramerateLimit;
     private final boolean interaction = Boolean.getBoolean("portalSmoke.interaction");
     private final boolean interactions = Boolean.getBoolean("portalSmoke.interactions");
 
@@ -26,6 +28,24 @@ public final class PortalSmokeClient implements ClientModInitializer {
                 throw new AssertionError("Missing 26.2 item model definition: " + id);
         }
         System.out.println("PORTAL_SMOKE_ITEM_MODELS_OK");
+    }
+
+    private void validatePerformanceSampling(net.minecraft.client.Minecraft client) {
+        if (previousFramerateLimit == null
+                || System.nanoTime() - performanceSampleStartNanos < 4_000_000_000L) return;
+        try {
+            int minimum = qouteall.imm_ptl.core.miscellaneous.ClientPerformanceMonitor.getMinimumFps();
+            if (minimum >= 50)
+                throw new AssertionError(
+                        "Client performance sampling did not observe the temporary 30 FPS limit: "
+                                + minimum);
+            System.out.println("PORTAL_SMOKE_PERFORMANCE_OK minimum=" + minimum
+                    + " average="
+                    + qouteall.imm_ptl.core.miscellaneous.ClientPerformanceMonitor.getAverageFps());
+        } finally {
+            client.options.framerateLimit().set(previousFramerateLimit);
+            previousFramerateLimit = null;
+        }
     }
 
     @Override
@@ -79,9 +99,13 @@ public final class PortalSmokeClient implements ClientModInitializer {
                     }
                     ticks++;
                     if (ticks == 1) {
+                        previousFramerateLimit = client.options.framerateLimit().get();
+                        client.options.framerateLimit().set(30);
+                        performanceSampleStartNanos = System.nanoTime();
                         validateItemModels(client);
                         PortalMigrationSmoke.validate();
                     }
+                    validatePerformanceSampling(client);
                     if (Boolean.getBoolean("portalSmoke.gravity")) {
                         PortalGravitySmoke.tick(client, ticks);
                         return;
