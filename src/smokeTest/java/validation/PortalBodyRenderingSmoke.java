@@ -54,6 +54,7 @@ final class PortalBodyRenderingSmoke {
     private static int thirdPersonPixels;
     private static int remoteOffPixels = -1;
     private static int remoteOnPixels = -1;
+    private static Frame remoteOnFrame;
     private static int lastCaptured = -1;
     private static int normalBodies;
     private static int projectedBodies;
@@ -145,7 +146,8 @@ final class PortalBodyRenderingSmoke {
                     || frame.phase == Phase.FINAL_CROSS;
             if (frame.phase != phase && !moving) return;
             boolean capture = switch (frame.phase) {
-                case REMOTE_OFF, REMOTE_ON -> phaseFrames >= 12 && phaseCaptures < 1;
+                case REMOTE_OFF, REMOTE_ON -> phaseFrames >= 12 && phaseCaptures < 1
+                        && ticks - phaseTick >= 10 && fixtureReady(Minecraft.getInstance(), true);
                 case STRADDLE_DOWN, EXIT_DOWN, STAND -> phaseFrames >= 8 && phaseCaptures < 3;
                 case F5_BACK, F5_FRONT, F5_EXIT -> phaseFrames >= 8 && phaseCaptures < 2;
                 case CROSS, RETURN, FINAL_CROSS -> Math.abs(frame.feet.z) < .35
@@ -189,6 +191,8 @@ final class PortalBodyRenderingSmoke {
             }
             case REMOTE_ON -> {
                 if (remoteOnPixels < 0) return false;
+                if (remoteOnPixels <= Math.max(20, remoteOffPixels + 20))
+                    failureThumbnail(remoteOnFrame);
                 require(remoteOnPixels > Math.max(20, remoteOffPixels + 20),
                         "The genuine distant portal view did not render the player's helmet: off="
                                 + remoteOffPixels + " on=" + remoteOnPixels);
@@ -305,21 +309,30 @@ final class PortalBodyRenderingSmoke {
 
     private static boolean fixtureReady(Minecraft client, boolean remote) {
         if (client.level.dimension() != Level.OVERWORLD
+                || !client.player.isCreative()
                 || Math.abs(client.player.getX() - PortalBodyRenderFixture.SOURCE_X) > .05
-                || Math.abs(client.player.getY() - PortalBodyRenderFixture.FLOOR_Y - 1) > .05)
+                || Math.abs(client.player.getY() - PortalBodyRenderFixture.FLOOR_Y - 1) > .05
+                || Math.abs(client.player.getZ() - (remote ? 5 : 1.5)) > .05
+                || client.gameRenderer.mainCamera().position()
+                        .distanceTo(client.player.getEyePosition()) > .02)
             return false;
         var color = client.player.getItemBySlot(EquipmentSlot.HEAD).get(DataComponents.DYED_COLOR);
         if (color == null || color.rgb() != PortalBodyRenderFixture.MAGENTA) return false;
-        int faces = 0;
+        int faces = 0, destinationFaces = 0;
         for (var entity : client.level.entitiesForRendering())
-            if (entity instanceof Portal portal
-                    && portal.getOriginPos().distanceTo(new Vec3(
+            if (entity instanceof Portal portal) {
+                if (portal.getOriginPos().distanceTo(new Vec3(
                             PortalBodyRenderFixture.SOURCE_X,
                             PortalBodyRenderFixture.FLOOR_Y + 3, 0)) < .01
                     && Math.abs(portal.getDestPos().x
                             - (remote ? PortalBodyRenderFixture.SOURCE_X
                                     : PortalBodyRenderFixture.DESTINATION_X)) < .01) faces++;
-        return faces == 2;
+                if (portal.getOriginPos().distanceTo(new Vec3(
+                            remote ? PortalBodyRenderFixture.SOURCE_X : PortalBodyRenderFixture.DESTINATION_X,
+                            PortalBodyRenderFixture.FLOOR_Y + 3, remote ? 10 : 0)) < .01)
+                    destinationFaces++;
+            }
+        return faces == 2 && destinationFaces == 2;
     }
 
     private static void requireWall(Minecraft client) {
@@ -431,7 +444,10 @@ final class PortalBodyRenderingSmoke {
     private static void validatePixels(Pixels pixels) {
         Phase captured = pixels.frame.phase;
         if (captured == Phase.REMOTE_OFF) remoteOffPixels = pixels.helmet;
-        else if (captured == Phase.REMOTE_ON) remoteOnPixels = pixels.helmet;
+        else if (captured == Phase.REMOTE_ON) {
+            remoteOnPixels = pixels.helmet;
+            remoteOnFrame = pixels.frame;
+        }
         else if (pixels.frame.cameraType == CameraType.FIRST_PERSON) {
             require(pixels.helmetInHeadRegion <= Math.max(2, pixels.headRegionPixels * .002),
                     "The first-person camera saw the inside of its own helmet: " + pixels);

@@ -284,6 +284,18 @@ public class PacketRedirection {
         
         @SuppressWarnings({"unchecked", "rawtypes"})
         @Environment(EnvType.CLIENT)
+        public void handle(ClientboundCustomPayloadPacket wrapper, ClientGamePacketListener listener) {
+            // 26.2 schedules vanilla respawn and batch boundaries on PacketProcessor.
+            // Queue this original wrapper there too: Minecraft.execute uses a separate
+            // task queue and can deliver redirected chunks/entities before respawn.
+            net.minecraft.network.protocol.PacketUtils.ensureRunningOnSameThread(
+                wrapper, listener, net.minecraft.client.Minecraft.getInstance().packetProcessor()
+            );
+            handle(listener);
+        }
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        @Environment(EnvType.CLIENT)
         public void handle(ClientGamePacketListener listener) {
             PacketRedirectionClient.handleRedirectedPacket(
                 dimensionIntId, (Packet) packet, listener

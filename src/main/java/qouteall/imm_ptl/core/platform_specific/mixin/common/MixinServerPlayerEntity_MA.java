@@ -30,7 +30,7 @@ public class MixinServerPlayerEntity_MA {
             // remote dimensions would otherwise suppress their spawn/chunk packets.
             // Send the reset and rebuilt views after the respawn packet, so none
             // of their newly delivered entities is discarded by client cleanup.
-            ImmPtlChunkTracking.removePlayerFromChunkTrackersAndEntityTrackers(result);
+            ImmPtlChunkTracking.resetPlayerViews(result);
             ImmPtlChunkTracking.immediatelyUpdateForPlayer(result);
         }
         return result;

@@ -400,13 +400,39 @@ final class PortalNativeInteractionSmoke {
                 : String.valueOf(hit);
     }
 
+    private static String describeFixture(Minecraft client) {
+        var state = new StringBuilder("world=").append(client.level.dimension().identifier())
+                .append(" position=").append(client.player.position())
+                .append(" hand=").append(client.player.getMainHandItem())
+                .append(" reach=").append(client.player.blockInteractionRange())
+                .append(" ready=").append(ClientWorldLoader.isPrimaryWorldReady())
+                .append(" initialized=").append(ClientWorldLoader.getIsInitialized())
+                .append(" witness=").append(client.level.getBlockState(
+                        PortalNativeInteractionFixture.SOURCE_WITNESS));
+        if (ClientWorldLoader.getIsInitialized() && ClientWorldLoader.isPrimaryWorldReady()) {
+            var destination = ClientWorldLoader.getOptionalWorld(Level.NETHER);
+            state.append(" destination=").append(destination == null ? "missing" :
+                    "wall=" + destination.getBlockState(new BlockPos(128, 71, 64))
+                            + " fluid=" + destination.getFluidState(
+                                    PortalNativeInteractionFixture.BUCKET_SOURCE));
+        }
+        state.append(" sourcePortals=[");
+        for (var entity : client.level.entitiesForRendering())
+            if (entity instanceof qouteall.imm_ptl.core.portal.Portal portal)
+                state.append(portal.getId()).append(':').append(portal.getOriginPos())
+                        .append('/').append(portal.getNormal()).append("→")
+                        .append(portal.getDestDim()).append(';');
+        return state.append(']').toString();
+    }
+
     static void tick(Minecraft client, int ticks) {
         initialize();
         currentTick = ticks;
         if (stage == Stage.FINISHED) return;
         if (ticks < 10) return;
-        require(phaseTick == 0 || ticks - phaseTick < 240,
-                "Native interaction phase did not finish: " + phaseName() + " stage=" + stage);
+        if (phaseTick != 0 && ticks - phaseTick >= 240)
+            throw new AssertionError("Native interaction phase did not finish: " + phaseName()
+                    + " stage=" + stage + " " + describeFixture(client));
         if (stage == Stage.SETUP) {
             releaseKeys(client);
             phaseTick = ticks;
@@ -425,7 +451,12 @@ final class PortalNativeInteractionSmoke {
         switch (stage) {
             case SETTLE -> {
                 if (elapsed < 35 || !ACKNOWLEDGED.contains("PORTAL_NATIVE_SETUP " + phaseName())) return;
-                if (!fixtureDataReady(client)) return;
+                if (!fixtureDataReady(client)) {
+                    if (elapsed == 40 || elapsed == 200)
+                        System.out.println("PORTAL_NATIVE_INTERACTION_WAITING phase=" + phaseName()
+                                + " " + describeFixture(client));
+                    return;
+                }
                 checkTarget(client);
                 if (phaseName().equals("place"))
                     require(client.player.getMainHandItem().is(Items.DIAMOND_BLOCK),

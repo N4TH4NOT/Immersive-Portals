@@ -56,14 +56,30 @@ public class ImmPtlChunkTracking {
     
     // if the player object is recreated, pass in the old player object
     public static void removePlayerFromChunkTrackersAndEntityTrackers(ServerPlayer oldPlayer) {
+        stopTrackingEntitiesForPlayer(oldPlayer);
+        forceRemovePlayer(oldPlayer);
+    }
+
+    /** Rebuild client worlds after native travel without losing connection/API state. */
+    public static void resetPlayerViews(ServerPlayer player) {
+        stopTrackingEntitiesForPlayer(player);
+        PlayerChunkLoading info = getPlayerInfo(player);
+        info.distanceToPendingChunks.clear();
+        info.visibleDimensions.clear();
+        info.loadedChunks = 0;
+        // Keep additional API loaders, performance estimates and in-flight batch
+        // accounting: these belong to the surviving player connection, not its views.
+        removePlayerWatchRecords(player);
+    }
+
+    private static void stopTrackingEntitiesForPlayer(ServerPlayer oldPlayer) {
         for (ServerLevel world : oldPlayer.level().getServer().getAllLevels()) {
             ServerChunkCache chunkManager = world.getChunkSource();
             IEChunkMap storage =
                 (IEChunkMap) chunkManager.chunkMap;
-            storage.ip_onPlayerUnload(oldPlayer);
+            PacketRedirection.withForceRedirect(world, () -> storage.ip_onPlayerUnload(oldPlayer));
         }
         
-        forceRemovePlayer(oldPlayer);
     }
     
     public static void onDimensionRemove(ServerLevel world) {
@@ -499,13 +515,17 @@ public class ImmPtlChunkTracking {
     
     public static void forceRemovePlayer(ServerPlayer oldPlayer) {
         playerInfoMap.remove(oldPlayer);
-        
+        removePlayerWatchRecords(oldPlayer);
+    }
+
+    private static void removePlayerWatchRecords(ServerPlayer oldPlayer) {
         chunkWatchRecords.forEach((dim, dimMap) -> {
             dimMap.long2ObjectEntrySet().removeIf(e -> {
                 long chunkPos = e.getLongKey();
                 Object2ObjectOpenHashMap<ServerPlayer, PlayerWatchRecord> records = e.getValue();
                 PlayerWatchRecord rec = records.remove(oldPlayer);
                 if (rec != null) {
+                    rec.isValid = false;
                     PacketRedirection.sendRedirectedMessage(
                         oldPlayer, dim, new ClientboundForgetLevelChunkPacket(ChunkPos.unpack(chunkPos))
                     );

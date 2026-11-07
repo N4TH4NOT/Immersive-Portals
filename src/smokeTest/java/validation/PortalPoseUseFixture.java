@@ -17,6 +17,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import qouteall.imm_ptl.core.ducks.IEWorld;
@@ -183,9 +184,18 @@ final class PortalPoseUseFixture {
             for (int z = 54; z <= 74; z++)
                 for (int y = 79; y <= 91; y++) {
                     boolean shell = x == center - 6 || x == center + 6 || z == 54 || z == 74 || y == 79 || y == 91;
-                    var block = shell ? Blocks.STONE : water && y <= 83 ? Blocks.WATER : Blocks.AIR;
+                    var block = y == 91 ? Blocks.SEA_LANTERN
+                            : shell ? Blocks.STONE : water && y <= 83 ? Blocks.WATER : Blocks.AIR;
                     world.setBlock(new BlockPos(x, y, z), block.defaultBlockState(), 3);
                 }
+        // The remote room can receive natural spawns before the player arrives.
+        // Keep native mob pushes and projectile knockback out of movement observations.
+        var bounds = new AABB(center - 7, 78, 53, center + 7, 93, 75);
+        var stale = world.getEntities((net.minecraft.world.entity.Entity) null, bounds,
+                entity -> !(entity instanceof ServerPlayer) && !(entity instanceof Portal));
+        for (var entity : stale) entity.discard();
+        System.out.println("PORTAL_POSE_USE_ROOM_ISOLATED dimension=" + world.dimension().identifier()
+                + " centerX=" + center + " removedEntities=" + stale.size());
     }
 
     private static boolean destination(ServerPlayer player) {
