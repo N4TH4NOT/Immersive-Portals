@@ -685,6 +685,28 @@ public class ClientTeleportationManager {
     }
     
     public static class RemoteCallables {
+        public static void updateEntityPortalPos(
+            ResourceKey<Level> dim,
+            int entityId,
+            Vec3 pos,
+            Vec3 lastTickPos,
+            Vec3 worldVelocity
+        ) {
+            ClientLevel world = ClientWorldLoader.getWorld(dim);
+            Entity entity = world.getEntity(entityId);
+            if (entity == null) {
+                Helper.err("cannot find portal entity to update position");
+                return;
+            }
+            entity.setPos(pos);
+            if (entity.getInterpolation() != null) entity.getInterpolation().cancel();
+            McHelper.setPosAndLastTickPos(entity, pos, lastTickPos);
+            McHelper.setWorldVelocity(entity, worldVelocity);
+            PortalCollisionHandler.updateCollidingPortalAfterTeleportation(
+                entity, McHelper.getEyePos(entity), McHelper.getLastTickEyePos(entity), 1
+            );
+        }
+
         // living entities do position interpolation
         // it may interpolate into unloaded chunks and stuck
         // avoid position interpolation

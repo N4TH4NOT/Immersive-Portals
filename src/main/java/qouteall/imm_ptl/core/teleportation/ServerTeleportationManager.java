@@ -546,12 +546,18 @@ public class ServerTeleportationManager {
             return;
         }
         
-        Vec3 velocity = entity.getDeltaMovement();
         Vec3 oldPos = entity.position();
         
         List<Entity> passengerList = entity.getPassengers();
         
-        Vec3 newEyePos = getRegularEntityTeleportedEyePos(entity, portal);
+        Vec3 oldEyePos = McHelper.getEyePos(entity);
+        Vec3 oldLastTickEyePos = McHelper.getLastTickEyePos(entity);
+        boolean predictedProjectile = entity instanceof Projectile
+            && !portal.isMovedThroughPortal(oldLastTickEyePos, oldEyePos);
+        Vec3 newEyePos = predictedProjectile
+            ? getPredictedProjectileExit(entity, portal) : portal.transformPoint(oldEyePos);
+        Vec3 newLastTickEyePos = predictedProjectile
+            ? newEyePos : portal.transformPoint(oldLastTickEyePos);
 
         if (portal.getTeleportChangesGravity()) {
             Direction gravity = GravityChangerInterface.invoker.getBaseGravityDirection(entity);
@@ -575,31 +581,35 @@ public class ServerTeleportationManager {
             });
         }
         
-        McHelper.setEyePos(entity, newEyePos, newEyePos);
+        // Keep the full tick segment. Replacing its endpoint with the intersection
+        // plus a fixed offset loses the movement that has already crossed the plane.
+        McHelper.setEyePos(entity, newEyePos, newLastTickEyePos);
         McHelper.updateBoundingBox(entity);
 
-        // living entities do position interpolation
-        // it may interpolate into unloaded chunks and stuck
-        // avoid position interpolation
+        portal.onEntityTeleportedOnServer(entity);
+        ScaleUtils.onServerEntityTeleported(entity, portal);
+        PortalCollisionHandler.updateCollidingPortalAfterTeleportation(
+            entity, McHelper.getEyePos(entity), McHelper.getLastTickEyePos(entity), 1
+        );
+
+        // Replace both interpolation endpoints in the destination coordinate system.
+        // Canceling the vanilla network lerp must not collapse this tick's motion.
         McHelper.sendToTrackers(
                 entity,
                 McRemoteProcedureCall.createPacketToSendToClient(
-                        "qouteall.imm_ptl.core.teleportation.ClientTeleportationManager.RemoteCallables.updateEntityPos",
+                        "qouteall.imm_ptl.core.teleportation.ClientTeleportationManager.RemoteCallables.updateEntityPortalPos",
                         entity.level().dimension(),
                         entity.getId(),
-                        entity.position()));
-
-        portal.onEntityTeleportedOnServer(entity);
-        
-        ScaleUtils.onServerEntityTeleported(entity, portal);
+                        entity.position(),
+                        McHelper.lastTickPosOf(entity),
+                        McHelper.getWorldVelocity(entity)));
         
         // a new entity may be created
         this.lastTeleportGameTime.put(entity, currGameTime);
     }
     
-    private static Vec3 getRegularEntityTeleportedEyePos(Entity entity, Portal portal) {
-        // the teleportation is delayed by 1 tick
-        // the entity may be behind the portal or in front of the portal at this time
+    private static Vec3 getPredictedProjectileExit(Entity entity, Portal portal) {
+        // Projectile prediction can run before its collision ray reaches the plane.
         
         Vec3 eyePosThisTick = McHelper.getEyePos(entity);
         Vec3 eyePosLastTick = McHelper.getLastTickEyePos(entity);
