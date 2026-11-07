@@ -2,6 +2,8 @@ package qouteall.imm_ptl.core.mixin.client.render;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.*;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
 
 import net.minecraft.client.*;
 import net.minecraft.client.renderer.*;
@@ -73,6 +75,27 @@ public abstract class MixinGameRenderer implements IEGameRenderer {
             PortalRenderer.switchToCorrectRenderer();
             IPCGlobal.renderer.prepareRendering();
         }
+    }
+
+    @WrapOperation(
+            method = "renderLevel",
+            at = @At(value = "INVOKE", target =
+                    "Lnet/minecraft/client/renderer/GameRenderer;bobView(Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;)V"))
+    private void ip_reduceWorldBobbing(
+            GameRenderer renderer,
+            CameraRenderState camera,
+            PoseStack pose,
+            Operation<Void> original) {
+        // Isolate this contribution from hurt-camera transforms already on the stack.
+        // The separate hand-rendering call to bobView keeps its original translation.
+        PoseStack bob = new PoseStack();
+        original.call(renderer, camera, bob);
+        Matrix4f transform = bob.last().pose();
+        float multiplier = (float) RenderStates.getViewBobbingOffsetMultiplier();
+        transform.m30(transform.m30() * multiplier)
+                .m31(transform.m31() * multiplier)
+                .m32(transform.m32() * multiplier);
+        pose.mulPose(transform);
     }
 
     @WrapOperation(

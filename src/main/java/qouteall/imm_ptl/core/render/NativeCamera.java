@@ -143,6 +143,15 @@ public final class NativeCamera extends Camera {
     }
 
     @Override
+    public net.minecraft.world.level.material.FogType getFluidInCamera() {
+        // The virtual camera can lie in fluid behind the destination clipping plane.
+        // Preserve the upstream portal policy instead of fogging the visible remote world.
+        return qouteall.imm_ptl.core.render.context_management.PortalRendering.isRendering()
+                ? net.minecraft.world.level.material.FogType.NONE
+                : super.getFluidInCamera();
+    }
+
+    @Override
     public float getFov() {
         return fov;
     }
