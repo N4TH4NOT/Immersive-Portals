@@ -229,6 +229,17 @@ public final class PortalSmokeClient implements ClientModInitializer {
                     }
                     if (ticks == 240) {
                         if (!crossed) throw new AssertionError("Player did not cross the portal");
+                        if (client.player.getGameProfile().name().equals("PortalTest")) {
+                            var source = ClientWorldLoader.getWorld(
+                                    net.minecraft.world.level.Level.OVERWORLD);
+                            for (int x = -3; x <= 3; x++)
+                                for (int y = 70; y <= 74; y++)
+                                    if (!source.getBlockState(new net.minecraft.core.BlockPos(x, y, -1))
+                                            .is(net.minecraft.world.level.block.Blocks.STONE))
+                                        throw new AssertionError(
+                                                "The player crossed after its source wall was removed");
+                            System.out.println("PORTAL_SMOKE_WALL_PORTAL_OK");
+                        }
                         if (client.player.getGameProfile().name().contains("Scaled")
                                 && Math.abs(
                                                 client.player.getAttributeValue(

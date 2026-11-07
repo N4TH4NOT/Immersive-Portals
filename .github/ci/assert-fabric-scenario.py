@@ -52,6 +52,14 @@ server_markers = [
     "PORTAL_SMOKE_SKYLAND_WORLD_SEED_OK",
     "PORTAL_SMOKE_SERVER_READY",
 ]
+if scenario in ("multiplayer", "singleplayer"):
+    client_markers.append("PORTAL_SMOKE_WALL_PORTAL_OK")
+    server_markers += [
+        "PORTAL_SMOKE_COLLISION_PHYSICS_OK",
+        "PORTAL_SMOKE_WALL_PORTAL_READY",
+        "PORTAL_SMOKE_WAND_CLUSTER_READY",
+        "PORTAL_SMOKE_SERVER_WALL_PORTAL_OK",
+    ]
 if scenario == "multiplayer":
     client_markers.append(
         "PORTAL_SMOKE_DYNAMIC_DIMENSION_RELOAD_OK"
@@ -73,8 +81,10 @@ if scenario == "rendering":
         "PORTAL_RENDER_REVEALED_OK",
         "PORTAL_RENDER_NO_PREDICTION_OK",
         "PORTAL_RENDER_MODES_OK",
+        "PORTAL_RENDER_WALL_STABLE_OK",
         "PORTAL_RENDER_COMPLETE",
     ]
+    server_markers.append("PORTAL_RENDER_WALL_FIXTURE_READY")
     if modset in ("sodium", "iris"):
         client_markers.append("PORTAL_RENDER_SODIUM_COMPAT_OK")
     if modset == "iris":
@@ -114,6 +124,24 @@ if scenario == "rendering":
     import io
     from PIL import Image
 
+    def fixture_thumbnail(rgb, prefix, name):
+        # Only public smoke fixtures may be copied into job logs. Strip metadata and
+        # keep each image small enough for the normal GitHub job-log API.
+        thumbnail = Image.new("RGB", rgb.size)
+        thumbnail.paste(rgb)
+        thumbnail.thumbnail((512, 288), Image.Resampling.LANCZOS)
+        while True:
+            encoded = io.BytesIO()
+            thumbnail.save(encoded, format="PNG", optimize=True)
+            if encoded.tell() <= 28 * 1024:
+                break
+            thumbnail = thumbnail.resize(
+                (max(1, thumbnail.width * 3 // 4), max(1, thumbnail.height * 3 // 4)),
+                Image.Resampling.LANCZOS,
+            )
+        data = base64.b64encode(encoded.getvalue()).decode("ascii")
+        print(f"{prefix} name={name} data={data}", flush=True)
+
     captures = sorted(screenshots.glob("portal-after-reload*.png"))
     if not captures:
         raise AssertionError("The rendering scenario did not capture the reloaded portal scene.")
@@ -134,6 +162,51 @@ if scenario == "rendering":
                 raise AssertionError(f"The {name} fixture region contains no pixels.")
             black_fraction = sum(max(pixel) < 3 for pixel in pixels) / len(pixels)
             metrics[name] = {"box": box, "pixels": len(pixels), "black_fraction": black_fraction}
+
+    # The server leaves stone exactly against the source plane and places an emerald
+    # wall behind its destination. Each consecutive GPU frame must show the green
+    # destination, including at a second angle and through the direct renderer. A
+    # separate wall in front must still cover it, then reveal it again when removed.
+    wall_metrics = {}
+    wall_failures = []
+    phases = ("prediction", "synchronous", "angled", "compatibility", "occluded", "revealed")
+    for phase in phases:
+        frames = re.findall(
+            rf"PORTAL_RENDER_WALL_FRAME phase={phase} sample=(\d+) frame=(\d+)", client)
+        if len(frames) != 12 or [int(sample) for sample, _ in frames] != list(range(12)):
+            raise AssertionError(f"The {phase} wall probe did not capture its twelve frames: {frames}.")
+        indices = [int(frame) for _, frame in frames]
+        if any(second != first + 1 for first, second in zip(indices, indices[1:])):
+            raise AssertionError(f"The {phase} wall probe skipped a rendered frame: {indices}.")
+        measurements = []
+        for sample in range(12):
+            path = screenshots / f"portal-wall-{phase}-frame-{sample:02}.png"
+            if not path.is_file():
+                raise AssertionError(f"The {phase} wall probe did not save frame {sample}.")
+            with Image.open(path) as capture:
+                rgb = capture.convert("RGB")
+                if sample == 0 and phase in ("prediction", "occluded", "revealed"):
+                    fixture_thumbnail(rgb, "PORTAL_WALL_THUMBNAIL", phase)
+                # This upper central patch lies well inside the fixed aperture, away
+                # from the crosshair and from the portal's edges at both camera angles.
+                box = (int(.46 * rgb.width), int(.42 * rgb.height),
+                       int(.54 * rgb.width), int(.48 * rgb.height))
+                pixels = list(rgb.crop(box).getdata())
+            if not pixels:
+                raise AssertionError("The coplanar portal witness contains no pixels.")
+            green = sum(g > r * 1.18 + 8 and g > b * 1.05 + 3 and g >= 30
+                        for r, g, b in pixels) / len(pixels)
+            gray = sum(max(pixel) - min(pixel) < 25 and max(pixel) > 12
+                       for pixel in pixels) / len(pixels)
+            measurement = {"sample": sample, "frame": indices[sample], "box": box,
+                           "green_fraction": green, "gray_fraction": gray}
+            measurements.append(measurement)
+            if phase == "occluded":
+                if green > .05 or gray < .75:
+                    wall_failures.append(f"The foreground wall exposed portal content: {measurement}")
+            elif green < .8:
+                wall_failures.append(f"The {phase} portal flashed its backing wall: {measurement}")
+        wall_metrics[phase] = measurements
 
     source_metrics = {}
     for name in ("triangle", "mirror"):
@@ -160,27 +233,16 @@ if scenario == "rendering":
                 "black_fraction": sum(max(pixel) < 3 for pixel in pixels) / len(pixels),
                 "luminance_grid_8x6": grid,
             }
-            # Only these two public test fixtures may be represented in the job log.
-            # Strip metadata and bound the encoded line to fit normal log readers.
-            thumbnail = Image.new("RGB", rgb.size)
-            thumbnail.paste(rgb)
-            thumbnail.thumbnail((512, 288), Image.Resampling.LANCZOS)
-            while True:
-                encoded = io.BytesIO()
-                thumbnail.save(encoded, format="PNG", optimize=True)
-                if encoded.tell() <= 28 * 1024:
-                    break
-                thumbnail = thumbnail.resize(
-                    (max(1, thumbnail.width * 3 // 4), max(1, thumbnail.height * 3 // 4)),
-                    Image.Resampling.LANCZOS,
-                )
-            data = base64.b64encode(encoded.getvalue()).decode("ascii")
-            print(f"PORTAL_SOURCE_THUMBNAIL name={name} data={data}", flush=True)
-    diagnostics = {"portal_regions": metrics, "native_sources": source_metrics}
+            fixture_thumbnail(rgb, "PORTAL_SOURCE_THUMBNAIL", name)
+    diagnostics = {"portal_regions": metrics, "native_sources": source_metrics,
+                   "coplanar_wall_frames": wall_metrics}
     (evidence / "portal-pixel-metrics.json").write_text(json.dumps(diagnostics, indent=2) + "\n")
     # Emit diagnostics before a failure so the signed artifact download is not needed
     # to distinguish a black native world render from a portal-compositing regression.
     print("PORTAL_RENDER_PIXEL_METRICS " + json.dumps(diagnostics, sort_keys=True), flush=True)
+    if wall_failures:
+        raise AssertionError("\n".join(wall_failures))
+    print("PORTAL_RENDER_WALL_PIXEL_CONTENT_OK phases=6 consecutive_frames_per_phase=12")
     for name, measurement in metrics.items():
         if measurement["black_fraction"] > 0.95:
             raise AssertionError(

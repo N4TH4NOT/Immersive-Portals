@@ -265,6 +265,8 @@ final class PortalRenderingSmoke {
                             + RenderDiagnostics.rejected()
                             + " "
                             + RenderDiagnostics.sodiumViewports());
+        }
+        if (ticks >= 300 && PortalWallRenderingSmoke.tick(client, ticks)) {
             System.out.println("PORTAL_RENDER_COMPLETE " + NativePortalOcclusion.statistics());
             client.stop();
         }

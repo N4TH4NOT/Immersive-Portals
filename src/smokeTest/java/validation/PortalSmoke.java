@@ -21,6 +21,7 @@ public final class PortalSmoke implements ModInitializer {
     @Override
     public void onInitialize() {
         DimensionLibrarySmoke.init();
+        PortalWallRenderFixture.initialize(scenePortals);
         net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(
                 (dispatcher, access, environment) ->
                         dispatcher.register(
@@ -173,6 +174,7 @@ public final class PortalSmoke implements ModInitializer {
         ServerPlayConnectionEvents.JOIN.register(
                 (handler, sender, server) -> {
                     handler.player.setGameMode(GameType.CREATIVE);
+                    PortalCollisionSmoke.prepare(handler.player, scenePortals);
                     boolean scaled = handler.player.getGameProfile().name().contains("Scaled");
                     handler.player
                             .getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.SCALE)
@@ -246,6 +248,7 @@ public final class PortalSmoke implements ModInitializer {
                                             "Server gravity was not transformed: " + state);
                             }
                             pending.remove(entry.getKey());
+                            PortalCollisionSmoke.validatePlayerArrival(player);
                             System.out.println(
                                     entry.getValue()
                                             ? "PORTAL_SMOKE_SERVER_SCALED_TELEPORT_OK"
