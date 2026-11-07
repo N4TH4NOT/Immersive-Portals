@@ -296,8 +296,10 @@ public class PortalCollisionHandler {
             Plane clipping = portal.getPortalShape().getOuterClipping(portal.getThisSideState());
             
             if (clipping != null) {
+                // A portal placed on a wall shares the backing blocks' face. Include
+                // that contact in the exclusion, allowing for collision rounding.
                 boolean boxFullyBehindPlane = CollisionHelper.isBoxFullyBehindPlane(
-                    clipping.pos(), clipping.normal(), shapeBounds
+                    clipping.pos(), clipping.normal(), shapeBounds, 1.0E-7
                 );
                 
                 // it's a workaround for diagonal portals

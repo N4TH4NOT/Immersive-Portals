@@ -83,6 +83,12 @@ public class CollisionHelper {
     
     
     public static boolean isBoxFullyBehindPlane(Vec3 planePos, Vec3 planeNormal, AABB box) {
+        return isBoxFullyBehindPlane(planePos, planeNormal, box, 0);
+    }
+
+    public static boolean isBoxFullyBehindPlane(
+        Vec3 planePos, Vec3 planeNormal, AABB box, double tolerance
+    ) {
         boolean xForward = planeNormal.x > 0;
         boolean yForward = planeNormal.y > 0;
         boolean zForward = planeNormal.z > 0;
@@ -93,7 +99,7 @@ public class CollisionHelper {
             zForward ? box.maxZ : box.minZ
         );
         
-        return testingPos.subtract(planePos).dot(planeNormal) < 0;
+        return testingPos.subtract(planePos).dot(planeNormal) < tolerance;
     }
     
     public static boolean canCollideWithPortal(
