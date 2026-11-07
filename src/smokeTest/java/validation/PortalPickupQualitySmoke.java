@@ -10,6 +10,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 import qouteall.imm_ptl.core.block_manipulation.CrossPortalPickup;
@@ -37,6 +38,11 @@ final class PortalPickupQualitySmoke {
     private static int savedEmeralds;
     private static ItemStack[] inventory;
     private static boolean approachComplete;
+    private static final BlockPos[] APERTURE_POCKET = {
+            new BlockPos(63, 69, 31), new BlockPos(63, 69, 32)
+    };
+    private static BlockState[] apertureFloor;
+    private static Vec3 aperturePosition;
 
     private PortalPickupQualitySmoke() {}
 
@@ -107,10 +113,15 @@ final class PortalPickupQualitySmoke {
 
     private static void requireUncollected(ServerPlayer a, ServerPlayer b, Item type,
             String condition) {
+        String witness = "; item=" + item.getId() + ", position=" + item.position()
+                + ", box=" + item.getBoundingBox() + ", velocity=" + item.getDeltaMovement()
+                + ", removed=" + item.isRemoved() + ", stack=" + item.getItem()
+                + ", countA=" + count(a, type) + ", countB=" + count(b, type)
+                + ", playerA=" + a.position() + ", playerB=" + b.position();
         require(!item.isRemoved() && item.getItem().getCount() == 1,
-                condition + " did not preserve the ground item");
+                condition + " did not preserve the ground item" + witness);
         require(count(a, type) == initialA && count(b, type) == initialB,
-                condition + " changed an inventory");
+                condition + " changed an inventory" + witness);
     }
 
     private static boolean receivedByA(ServerPlayer a, ServerPlayer b, Item type) {
@@ -174,16 +185,15 @@ final class PortalPickupQualitySmoke {
             case OWNER_RELEASE -> {
                 if (!receivedByA(a, b, Items.IRON_INGOT)) return false;
                 System.out.println("PORTAL_QUALITY_PICKUP_OWNERSHIP_OK");
-                begin(Stage.APERTURE_WAIT, a, b, forward, Items.LAPIS_LAZULI,
-                        new Vec3(61.95, 70.15, 31.999999), a.getUUID(), 0);
-                require(CrossPortalPickup.pickupBox(a).intersects(
-                                Helper.transformBox(item.getBoundingBox(), forward::inverseTransformPoint)),
-                        "The aperture rejection witness must remain inside the ordinary pickup range");
+                prepareApertureWitness(a, b, forward);
             }
             case APERTURE_WAIT -> {
                 requireUncollected(a, b, Items.LAPIS_LAZULI, "Pickup outside the aperture");
+                requireApertureWitness(a, forward);
                 if (elapsed < 6) return false;
                 item.discard();
+                for (int i = 0; i < APERTURE_POCKET.length; i++)
+                    forward.getDestWorld().setBlock(APERTURE_POCKET[i], apertureFloor[i], 3);
                 System.out.println("PORTAL_QUALITY_PICKUP_APERTURE_OK");
                 begin(Stage.REACH_WAIT, a, b, forward, Items.NETHERITE_SCRAP,
                         new Vec3(64, 70.15, 28), a.getUUID(), 0);
@@ -219,6 +229,33 @@ final class PortalPickupQualitySmoke {
             case COMPLETE -> { return true; }
         }
         return false;
+    }
+
+    private static void prepareApertureWitness(ServerPlayer a, ServerPlayer b, Portal forward) {
+        var world = forward.getDestWorld();
+        apertureFloor = new BlockState[APERTURE_POCKET.length];
+        for (int i = 0; i < APERTURE_POCKET.length; i++) {
+            apertureFloor[i] = world.getBlockState(APERTURE_POCKET[i]);
+            world.setBlock(APERTURE_POCKET[i], Blocks.AIR.defaultBlockState(), 3);
+        }
+        // The entire item is below the opening but within vanilla's vertical pickup range.
+        // An empty pocket prevents vanilla block ejection from moving it into the aperture.
+        aperturePosition = new Vec3(63.35, 69.6, 31.999999);
+        begin(Stage.APERTURE_WAIT, a, b, forward, Items.LAPIS_LAZULI,
+                aperturePosition, a.getUUID(), 0);
+        requireApertureWitness(a, forward);
+    }
+
+    private static void requireApertureWitness(ServerPlayer a, Portal forward) {
+        var unfolded = Helper.transformBox(item.getBoundingBox(), forward::inverseTransformPoint);
+        require(CrossPortalPickup.pickupBox(a).intersects(unfolded),
+                "The aperture rejection witness must remain inside the ordinary pickup range");
+        require(unfolded.maxY < 70,
+                "The aperture rejection witness must remain wholly below the opening: " + unfolded);
+        require(item.position().distanceToSqr(aperturePosition) < 1e-10,
+                "The aperture rejection witness moved: " + item.position());
+        require(item.level().noBlockCollision(item, item.getBoundingBox()),
+                "The aperture rejection witness overlaps a block: " + item.getBoundingBox());
     }
 
     private static void prepareCrossWorld(ServerPlayer a, ServerPlayer b) {
