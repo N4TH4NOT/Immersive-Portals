@@ -34,6 +34,8 @@ These adjustments preserve the portal's geometric and collision planes. The GitH
 
 ## The player catches near a same-world portal exit
 
+Crossing detection rejects tangent rounding noise using a tolerance based on local floating-point precision. It scales with the aperture, including very small portals, rather than imposing a fixed movement threshold.
+
 After teleportation, the current implementation sets the entity's final eye position and bounding box before discovering destination portals. It notifies that entity directly of its destination contacts instead of rescanning an entity section that can still refer to the source position during a same-world teleport. Contact is retained while either the previous or current eye position remains in front of the portal and the body still overlaps its opening.
 
 This keeps the backing-wall collision clipping associated with the reverse portal during a stop or reversal. For rectangular portals, a movement starting exactly on the plane and continuing inward is also a crossing; stopping on the plane, merely arriving there or moving away is not. It changes contact handoff and does not replace the existing anti-overlap handling. The slow-movement GitHub regression checks the resulting camera and player motion. Use its results and traces for the matching commit to confirm the behavior; compilation alone does not exercise the trajectory.

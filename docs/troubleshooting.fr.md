@@ -34,6 +34,8 @@ Ces ajustements préservent les plans géométriques et de collision du portail.
 
 ## Le joueur accroche près de la sortie d’un portail dans le même monde
 
+La détection de traversée ignore les arrondis numériques d’un mouvement tangent grâce à une tolérance fondée sur la précision flottante locale. Elle suit l’échelle de l’ouverture, y compris pour les très petits portails, au lieu d’imposer un seuil de déplacement fixe.
+
 Après téléportation, l’implémentation actuelle fixe la position finale des yeux et la boîte englobante de l’entité avant de chercher les portails de destination. Elle notifie directement à l’entité ses contacts à destination au lieu de réexaminer une section d’entités qui peut encore désigner la position source pendant une téléportation dans le même monde. Le contact est conservé lorsque la position précédente ou actuelle des yeux reste devant le portail et que le corps chevauche encore son ouverture.
 
 Cela maintient l’exclusion des collisions du mur de support associée au portail inverse pendant un arrêt ou un recul. Pour les portails rectangulaires, un mouvement partant exactement du plan et poursuivant vers l’intérieur compte aussi comme une traversée ; rester sur le plan, simplement l’atteindre ou s’en éloigner ne déclenche pas de téléportation. Ce changement traite le relais des contacts et ne remplace pas le mécanisme existant de correction des chevauchements. Le scénario GitHub de déplacement lent contrôle le mouvement résultant de la caméra et du joueur. Utiliser ses résultats et ses traces pour le commit correspondant afin de confirmer le comportement ; la compilation seule n’exerce pas cette trajectoire.

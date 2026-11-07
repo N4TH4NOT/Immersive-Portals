@@ -62,4 +62,36 @@ class RectangularPortalCrossingTest {
         assertNull(SHAPE.raytracePortalShapeByLocalPos(
                 STATE, new Vec3(0, 0, -.01), new Vec3(0, 0, -.02), 0));
     }
+
+    @Test
+    void aScaledRotatedExitDoesNotEnterAnUnrelatedCoplanarPortalThroughRoundingNoise() {
+        var reversed = new UnilateralPortalState(
+                Level.NETHER, new Vec3(0, 72, 0), new DQuaternion(0, 1, 0, 0), 4, 4);
+        // Captured from a real 90-degree, half-scale portal exit. Travel is tangent
+        // to this reverse portal, but quaternion arithmetic leaves z = 3.6e-18.
+        Vec3 before = new Vec3(-.06843763946823435, 71.63487806145524, 0);
+        Vec3 after = new Vec3(-.09354701219648567, 71.62796419120852,
+                3.585673621075323E-18);
+        assertNull(SHAPE.raytracePortalShape(reversed, before, after, 0));
+
+        // A subsequent deliberate inward move still crosses from that rounded
+        // position, instead of leaving the player stranded behind the plane.
+        var crossing = SHAPE.raytracePortalShape(
+                reversed, after, new Vec3(after.x, after.y, 1e-10), 0);
+        assertNotNull(crossing);
+        assertEquals(0, crossing.t(), 0);
+        assertEquals(0, crossing.hitPos().z, 0);
+    }
+
+    @Test
+    void normalPrecisionScalesWithTheApertureInsteadOfUsingAFixedDeadZone() {
+        assertNotNull(SHAPE.raytracePortalShapeByLocalPos(
+                STATE, Vec3.ZERO, new Vec3(0, 0, -1e-10), 0));
+        var tiny = new UnilateralPortalState(
+                Level.OVERWORLD, Vec3.ZERO, DQuaternion.identity, 2e-12, 3e-12);
+        assertNotNull(SHAPE.raytracePortalShapeByLocalPos(
+                tiny, Vec3.ZERO, new Vec3(0, 0, -1e-18), 0));
+        assertNull(SHAPE.raytracePortalShapeByLocalPos(
+                tiny, Vec3.ZERO, new Vec3(0, 0, -1e-30), 0));
+    }
 }
