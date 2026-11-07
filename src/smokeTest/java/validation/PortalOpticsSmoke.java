@@ -130,6 +130,25 @@ final class PortalOpticsSmoke {
         return true;
     }
 
+    private static String readinessDetails(Minecraft client) {
+        var source = ClientWorldLoader.getWorld(Level.OVERWORLD);
+        var destination = ClientWorldLoader.getWorld(Level.NETHER);
+        int faces = 0;
+        for (var entity : source.entitiesForRendering())
+            if (entity instanceof Portal portal
+                    && portal.getOriginPos().distanceTo(new net.minecraft.world.phys.Vec3(128, 130, 128)) < .01)
+                faces++;
+        return "level=" + client.level.dimension().identifier()
+                + " position=" + client.player.position() + " faces=" + faces
+                + " sourceWall=" + source.getBlockState(new BlockPos(128, 130, 127))
+                + " destinationFloor=" + destination.getBlockState(new BlockPos(128, 125, 128))
+                + " lamp=" + destination.getBlockState(new BlockPos(128, 133, 128))
+                + " blockLight=" + destination.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,
+                        new BlockPos(128, 126, 124))
+                + " sourceOccluder=" + source.getBlockState(new BlockPos(128, 130, 129))
+                + " destinationOccluder=" + destination.getBlockState(new BlockPos(128, 130, 126));
+    }
+
     private static void begin(Minecraft client, int ticks) {
         var view = views.get(index);
         captured = 0;
@@ -147,6 +166,8 @@ final class PortalOpticsSmoke {
         if (!initialized) {
             initialize();
             if (!client.gui.hud.isHidden()) client.gui.hud.toggle();
+            client.getTutorial().setStep(net.minecraft.client.tutorial.TutorialSteps.NONE);
+            client.gui.toastManager().clear();
             client.player.connection.sendCommand("portal_optics_setup");
             started = ticks;
             return;
@@ -183,7 +204,11 @@ final class PortalOpticsSmoke {
             begin(client, ticks);
             return;
         }
-        require(ticks - started < 300, "The optical fixture did not settle: " + views.get(index));
+        if (ticks - started == 100 || ticks - started == 250)
+            System.out.println("PORTAL_OPTICS_READINESS name=" + views.get(index).name()
+                    + " " + readinessDetails(client));
+        require(ticks - started < 300, "The optical fixture did not settle: " + views.get(index)
+                + " " + readinessDetails(client));
         var view = views.get(index);
         if (ticks - started < (view.lighting() ? 60 : 16) || !ready(client, view)) return;
         checkCamera(client, view);

@@ -41,6 +41,7 @@ final class PortalBodyRenderingSmoke {
     private static boolean complete;
     private static boolean originalBobbing;
     private static boolean originalRenderPlayer;
+    private static boolean originalHudHidden;
     private static CameraType originalCamera;
     private static int ticks;
     private static int phaseTick;
@@ -155,6 +156,10 @@ final class PortalBodyRenderingSmoke {
             originalCamera = client.options.getCameraType();
             originalBobbing = client.options.bobView().get();
             originalRenderPlayer = IPGlobal.renderYourselfInPortal;
+            originalHudHidden = client.gui.hud.isHidden();
+            if (!originalHudHidden) client.gui.hud.toggle();
+            client.getTutorial().setStep(net.minecraft.client.tutorial.TutorialSteps.NONE);
+            client.gui.toastManager().clear();
             client.options.bobView().set(false);
             client.options.setCameraType(CameraType.FIRST_PERSON);
             IPGlobal.renderYourselfInPortal = false;
@@ -258,6 +263,7 @@ final class PortalBodyRenderingSmoke {
                 client.options.bobView().set(originalBobbing);
                 client.options.setCameraType(originalCamera);
                 IPGlobal.renderYourselfInPortal = originalRenderPlayer;
+                if (client.gui.hud.isHidden() != originalHudHidden) client.gui.hud.toggle();
                 System.out.println("PORTAL_RENDER_BODY_CAMERA_OK first=" + firstPersonPixels
                         + " moving=" + movingPixels + " third=" + thirdPersonPixels
                         + " captures=" + captures + " normalBodies=" + normalBodies
@@ -374,6 +380,47 @@ final class PortalBodyRenderingSmoke {
     }
 
     private static void validate(Pixels pixels) {
+        try {
+            validatePixels(pixels);
+        } catch (AssertionError failure) {
+            failureThumbnail(pixels.frame);
+            throw failure;
+        }
+    }
+
+    private static void failureThumbnail(Frame frame) {
+        // Only the public fixture image named by this captured frame may enter logs.
+        // The bounded copy contains no original PNG metadata.
+        try {
+            var path = Minecraft.getInstance().gameDirectory.toPath().resolve("screenshots")
+                    .resolve("portal-body-" + frame.phase.name().toLowerCase(java.util.Locale.ROOT)
+                            + "-" + frame.index + ".png");
+            var source = javax.imageio.ImageIO.read(path.toFile());
+            int width = Math.min(320, source.getWidth());
+            int height = Math.max(1, source.getHeight() * width / source.getWidth());
+            byte[] bytes;
+            do {
+                var thumbnail = new java.awt.image.BufferedImage(width, height,
+                        java.awt.image.BufferedImage.TYPE_INT_RGB);
+                var graphics = thumbnail.createGraphics();
+                graphics.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
+                        java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                graphics.drawImage(source, 0, 0, width, height, null);
+                graphics.dispose();
+                var encoded = new java.io.ByteArrayOutputStream();
+                javax.imageio.ImageIO.write(thumbnail, "PNG", encoded);
+                bytes = encoded.toByteArray();
+                width = Math.max(1, width * 3 / 4);
+                height = Math.max(1, height * 3 / 4);
+            } while (bytes.length > 28 * 1024);
+            System.out.println("PORTAL_BODY_THUMBNAIL name=" + frame.phase
+                    + " data=" + java.util.Base64.getEncoder().encodeToString(bytes));
+        } catch (java.io.IOException | RuntimeException exception) {
+            System.out.println("PORTAL_BODY_THUMBNAIL_ERROR " + exception);
+        }
+    }
+
+    private static void validatePixels(Pixels pixels) {
         Phase captured = pixels.frame.phase;
         if (captured == Phase.REMOTE_OFF) remoteOffPixels = pixels.helmet;
         else if (captured == Phase.REMOTE_ON) remoteOnPixels = pixels.helmet;

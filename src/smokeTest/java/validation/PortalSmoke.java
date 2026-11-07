@@ -22,9 +22,12 @@ public final class PortalSmoke implements ModInitializer {
     public void onInitialize() {
         DimensionLibrarySmoke.init();
         PortalWallRenderFixture.initialize(scenePortals);
+        PortalNativeInteractionFixture.initialize(scenePortals);
         PortalOpticsFixture.initialize(scenePortals);
         PortalBodyRenderFixture.initialize(scenePortals);
+        PortalEnvironmentFixture.initialize(scenePortals);
         PortalSameWorldSmoke.initialize(scenePortals);
+        PortalQualitySmoke.initialize(scenePortals);
         net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(
                 (dispatcher, access, environment) ->
                         dispatcher.register(
@@ -81,7 +84,8 @@ public final class PortalSmoke implements ModInitializer {
                     for (var world : new net.minecraft.server.level.ServerLevel[] {from, to}) {
                         var stale = new java.util.ArrayList<Portal>();
                         for (var entity : world.getAllEntities())
-                            if (entity instanceof Portal portal) stale.add(portal);
+                            if (entity instanceof Portal portal && !PortalQualitySmoke.preserve(portal))
+                                stale.add(portal);
                         stale.forEach(Portal::discard);
                         for (int x = -12; x <= 12; x++)
                             for (int z = -12; z <= 12; z++) {
@@ -183,6 +187,7 @@ public final class PortalSmoke implements ModInitializer {
                 });
         ServerPlayConnectionEvents.JOIN.register(
                 (handler, sender, server) -> {
+                    if (PortalQualitySmoke.join(handler.player, scenePortals)) return;
                     handler.player.setGameMode(GameType.CREATIVE);
                     PortalCollisionSmoke.prepare(handler.player, scenePortals);
                     boolean scaled = handler.player.getGameProfile().name().contains("Scaled");

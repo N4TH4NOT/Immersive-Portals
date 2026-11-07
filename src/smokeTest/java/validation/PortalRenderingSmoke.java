@@ -131,7 +131,8 @@ final class PortalRenderingSmoke {
         // Natural movement must receive each 20 Hz client tick, independently of the
         // frame-paced static aperture cases and their already completed timeout.
         if (wallComplete) {
-            if (PortalBodyRenderingSmoke.tick(client, realTicks)) {
+            if (PortalBodyRenderingSmoke.tick(client, realTicks)
+                    && PortalEnvironmentSmoke.tick(client, realTicks)) {
                 System.out.println("PORTAL_RENDER_COMPLETE " + NativePortalOcclusion.statistics());
                 client.stop();
             }

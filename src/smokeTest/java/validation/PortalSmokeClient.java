@@ -53,6 +53,7 @@ public final class PortalSmokeClient implements ClientModInitializer {
     public void onInitializeClient() {
         FabricExtractionSmoke.initialize();
         PortalSeamlessSmoke.initialize();
+        if (Boolean.getBoolean("portalSmoke.quality")) PortalQualityClient.initialize();
         if (interactions) PortalInteractionSmoke.init();
         IPConfig.getConfig().initialScreenShown = true;
         ClientTickEvents.END_CLIENT_TICK.register(
@@ -102,6 +103,10 @@ public final class PortalSmokeClient implements ClientModInitializer {
                         return;
                     }
                     ticks++;
+                    if (Boolean.getBoolean("portalSmoke.quality")) {
+                        PortalQualityClient.tick(client, ticks);
+                        return;
+                    }
                     if (ticks == 1) {
                         previousFramerateLimit = client.options.framerateLimit().get();
                         client.options.framerateLimit().set(30);
@@ -111,6 +116,10 @@ public final class PortalSmokeClient implements ClientModInitializer {
                         PortalOnboardingSmoke.validate(client);
                     }
                     validatePerformanceSampling(client);
+                    if (Boolean.getBoolean("portalSmoke.nativeInteractions")) {
+                        PortalNativeInteractionSmoke.tick(client, ticks);
+                        return;
+                    }
                     if (Boolean.getBoolean("portalSmoke.optics")) {
                         PortalOpticsSmoke.tick(client, ticks);
                         return;

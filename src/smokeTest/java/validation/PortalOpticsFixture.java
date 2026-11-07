@@ -109,7 +109,10 @@ final class PortalOpticsFixture {
                                                                 java.util.Set.of(),
                                                                 BoolArgumentType.getBool(context, "oblique") ? 135 : 180,
                                                                 (float) DoubleArgumentType.getDouble(context, "pitch"), false);
-                                                        System.out.println("PORTAL_OPTICS_VIEW_READY mode=" + mode);
+                                                        System.out.println("PORTAL_OPTICS_VIEW_READY mode=" + mode
+                                                                + " blockLight=" + to.getBrightness(
+                                                                        net.minecraft.world.level.LightLayer.BLOCK,
+                                                                        new BlockPos(128, 126, 124)));
                                                         return 1;
                                                     }))))));
         });
