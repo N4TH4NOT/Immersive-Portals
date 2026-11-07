@@ -39,6 +39,11 @@ final class PortalNativeInteractionFixture {
     private static boolean prepared;
     private static String phase;
     private static ArmorStand stand;
+    private static net.minecraft.world.entity.npc.villager.Villager trader;
+    private static net.minecraft.world.entity.vehicle.boat.Boat boat;
+    private static net.minecraft.world.entity.monster.zombie.Zombie reflectedTarget;
+    private static ServerPlayer tradeClosurePlayer;
+    private static int tradeClosureTicks;
     private static boolean buttonActivated;
     private static final java.util.Set<String> VERIFIED = new java.util.HashSet<>();
 
@@ -74,6 +79,14 @@ final class PortalNativeInteractionFixture {
                             })));
         });
         ServerTickEvents.END_SERVER_TICK.register(server -> {
+            if (tradeClosurePlayer != null && ++tradeClosureTicks >= 6) {
+                var player = tradeClosurePlayer;
+                tradeClosurePlayer = null;
+                require(player.containerMenu == player.inventoryMenu,
+                        "A remote trade remained open after a real source obstruction blocked its path");
+                finishVerification(player, "trade");
+                System.out.println("PORTAL_NATIVE_INTERACTION_TRADE_CLOSED_ON_OBSTRUCTION");
+            }
             if (!prepared || phase == null || !phase.equals("button")) return;
             var world = server.getLevel(Level.NETHER);
             var state = world.getBlockState(TARGET);
@@ -164,8 +177,16 @@ final class PortalNativeInteractionFixture {
         var server = player.level().getServer();
         var source = server.overworld();
         var destination = server.getLevel(Level.NETHER);
+        player.stopRiding();
         if (stand != null) stand.discard();
+        if (trader != null) trader.discard();
+        if (boat != null) boat.discard();
+        if (reflectedTarget != null) reflectedTarget.discard();
         stand = null;
+        trader = null;
+        boat = null;
+        reflectedTarget = null;
+        player.setHealth(player.getMaxHealth());
         destination.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
                         new net.minecraft.world.phys.AABB(123, 69, 54, 134, 78, 70))
                 .forEach(net.minecraft.world.entity.Entity::discard);
@@ -179,6 +200,7 @@ final class PortalNativeInteractionFixture {
         player.getInventory().clearContent();
         player.getInventory().setSelectedSlot(0);
         player.setGameMode(next.equals("mining_cross") || next.equals("projected_use")
+                || next.equals("reflection")
                 ? GameType.SURVIVAL : GameType.CREATIVE);
         player.getAttribute(Attributes.ENTITY_INTERACTION_RANGE)
                 .setBaseValue(next.equals("projected_use") ? .32 : 3);
@@ -229,6 +251,43 @@ final class PortalNativeInteractionFixture {
                 player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(next.equals("projected_use")
                         ? Items.DIAMOND_HELMET : Items.DIAMOND_SWORD));
             }
+            case "trade" -> {
+                trader = net.minecraft.world.entity.EntityTypes.VILLAGER.create(destination,
+                        net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+                require(trader != null, "The native trade fixture could not create its villager");
+                trader.setPos(128.5, 70, 62.5);
+                trader.setNoAi(true);
+                var offers = new net.minecraft.world.item.trading.MerchantOffers();
+                offers.add(new net.minecraft.world.item.trading.MerchantOffer(
+                        new net.minecraft.world.item.trading.ItemCost(Items.EMERALD, 1),
+                        new ItemStack(Items.APPLE), 10, 1, .05f));
+                trader.overrideOffers(offers);
+                destination.addFreshEntity(trader);
+            }
+            case "mount" -> {
+                boat = net.minecraft.world.entity.EntityTypes.OAK_BOAT.create(destination,
+                        net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+                require(boat != null, "The native mount fixture could not create its boat");
+                boat.setPos(128.5, 70, 62.5);
+                destination.addFreshEntity(boat);
+            }
+            case "reflection" -> {
+                reflectedTarget = new net.minecraft.world.entity.monster.zombie.Zombie(destination);
+                reflectedTarget.setPos(128.5, 70, 62.5);
+                reflectedTarget.setNoAi(true);
+                var armor = new ItemStack(Items.DIAMOND_CHESTPLATE);
+                armor.enchant(destination.registryAccess().lookupOrThrow(
+                        net.minecraft.core.registries.Registries.ENCHANTMENT).getOrThrow(
+                                net.minecraft.world.item.enchantment.Enchantments.THORNS), 10);
+                reflectedTarget.setItemSlot(EquipmentSlot.CHEST, armor);
+                destination.addFreshEntity(reflectedTarget);
+                source.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.KEEP_INVENTORY,
+                        false, server);
+                player.setHealth(.5f);
+                player.invulnerableTime = 0;
+                player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WOODEN_SWORD));
+                player.getInventory().setItem(1, new ItemStack(Items.EMERALD, 7));
+            }
             default -> throw new AssertionError("Unknown native interaction phase " + next);
         }
         player.inventoryMenu.broadcastChanges();
@@ -237,7 +296,8 @@ final class PortalNativeInteractionFixture {
             if (next.equals("projected_use"))
                 require(Math.abs(player.entityInteractionRange() - .32) < 1e-6,
                         "The projected use fixture did not limit reach before the portal plane");
-        } else player.teleportTo(source, 64.5, 70, next.equals("mining_cross") ? 64.4 : 66.5,
+        } else player.teleportTo(source, 64.5, 70, next.equals("mining_cross") ? 64.4
+                : next.equals("reflection") ? 65.4 : 66.5,
                 java.util.Set.of(), 180, 0, false);
         phase = next;
         player.sendSystemMessage(Component.literal("PORTAL_NATIVE_SETUP " + next));
@@ -286,8 +346,45 @@ final class PortalNativeInteractionFixture {
                     "Native use of the projected half did not equip its real source-world stand");
             case "projected_attack" -> require(stand != null && stand.level() == source && stand.isRemoved(),
                     "Native attack of the projected half did not remove its real source-world stand");
+            case "trade" -> {
+                require(player.level() == source && player.containerMenu
+                                instanceof net.minecraft.world.inventory.MerchantMenu
+                                && trader != null && trader.getTradingPlayer() == player,
+                        "The native remote trade did not remain open for the real source-world player");
+                require(new net.minecraft.world.entity.ai.goal.TradeWithPlayerGoal(trader).canUse(),
+                        "The native trading goal rejected a reachable cross-portal trading player");
+                source.setBlock(new BlockPos(64, 71, 65), Blocks.NETHERITE_BLOCK.defaultBlockState(), 3);
+                tradeClosurePlayer = player;
+                tradeClosureTicks = 0;
+                return;
+            }
+            case "mount" -> {
+                require(boat != null && player.getVehicle() == boat && player.level() == destination
+                                && boat.getPassengers().stream().allMatch(rider -> rider.level() == boat.level()),
+                        "Native remote mounting left the rider in another world from its real vehicle");
+                System.out.println("PORTAL_NATIVE_INTERACTION_MOUNT_SAME_WORLD");
+            }
+            case "reflection" -> {
+                require(player.isDeadOrDying() && player.level() == source
+                                && reflectedTarget != null && reflectedTarget.getHealth() < 20,
+                        "Lethal native Thorns did not preserve the attacking player's physical world");
+                var search = new net.minecraft.world.phys.AABB(60, 68, 60, 70, 75, 69);
+                int dropped = source.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
+                                search, item -> item.getItem().is(Items.EMERALD))
+                        .stream().mapToInt(item -> item.getItem().getCount()).sum();
+                require(dropped == 7, "Reflected damage dropped the real inventory outside the source world");
+                require(destination.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
+                                new net.minecraft.world.phys.AABB(124, 68, 58, 133, 75, 68),
+                                item -> item.getItem().is(Items.EMERALD)).isEmpty(),
+                        "The temporary remote attack geometry leaked inventory drops into its target world");
+                System.out.println("PORTAL_NATIVE_INTERACTION_REFLECTION_SOURCE_WORLD drops=" + dropped);
+            }
             default -> throw new AssertionError("Unknown native interaction verification " + expected);
         }
+        finishVerification(player, expected);
+    }
+
+    private static void finishVerification(ServerPlayer player, String expected) {
         VERIFIED.add(expected);
         player.sendSystemMessage(Component.literal("PORTAL_NATIVE_VERIFIED " + expected));
         System.out.println("PORTAL_NATIVE_INTERACTION_SERVER_OK phase=" + expected

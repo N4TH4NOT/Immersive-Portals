@@ -28,12 +28,12 @@ if os.environ.get("PORTAL_CI_MODSET") == "sodium" and "PORTAL_NATIVE_INTERACTION
     raise AssertionError("The native interaction scenario did not exercise its installed Sodium adapter.")
 phases = ("chest", "button", "place", "break", "entity_use", "entity_attack",
           "source_occluder", "destination_occluder", "outside", "out_of_reach", "mining_cross",
-          "projected_use", "projected_attack")
+          "projected_use", "projected_attack", "trade", "mount", "reflection")
 for phase in phases:
     for name, log in (("CLIENT", client), ("SERVER", server)):
         if not re.search(rf"PORTAL_NATIVE_INTERACTION_{name}_OK phase={phase}\b", log):
             raise AssertionError(f"Missing native {name.lower()} interaction outcome: {phase}")
-if "PORTAL_NATIVE_INTERACTION_COMPLETE phases=13" not in client:
+if "PORTAL_NATIVE_INTERACTION_COMPLETE phases=16" not in client:
     raise AssertionError("Native interaction input did not complete all phases.")
 if "PORTAL_NATIVE_INTERACTION_FIXTURE_READY faces=4 translation=64" not in server:
     raise AssertionError("Native interactions did not use the real four-face wand fixture.")
@@ -45,6 +45,12 @@ if "PORTAL_NATIVE_INTERACTION_MINING_CROSS" not in client:
 for phase in ("projected_use", "projected_attack"):
     if f"PORTAL_NATIVE_INTERACTION_PROJECTED_BODY phase={phase}" not in client:
         raise AssertionError(f"The interaction did not target an actually projected entity body: {phase}")
+trade = re.search(r"PORTAL_NATIVE_INTERACTION_TRADE_STABLE ticks=(\d+)", client)
+if not trade or int(trade.group(1)) < 25:
+    raise AssertionError("The remote merchant menu did not remain valid through native ticks.")
+for marker in ("TRADE_CLOSED_ON_OBSTRUCTION", "MOUNT_SAME_WORLD", "REFLECTION_SOURCE_WORLD drops=7"):
+    if f"PORTAL_NATIVE_INTERACTION_{marker}" not in server:
+        raise AssertionError(f"Missing native entity action evidence: {marker}")
 
 screenshots = Path("run/smoke-client/screenshots")
 images = {}

@@ -30,7 +30,7 @@ final class PortalNativeInteractionSmoke {
     private static final String[] PHASES = {
         "chest", "button", "place", "break", "entity_use", "entity_attack",
         "source_occluder", "destination_occluder", "outside", "out_of_reach", "mining_cross",
-        "projected_use", "projected_attack"
+        "projected_use", "projected_attack", "trade", "mount", "reflection"
     };
     private static final java.util.Set<String> ACKNOWLEDGED = new java.util.HashSet<>();
     private static int phase;
@@ -131,6 +131,8 @@ final class PortalNativeInteractionSmoke {
         Vec3 point = switch (phaseName()) {
             case "button" -> new Vec3(x, 71.08, 62.5);
             case "entity_use", "entity_attack" -> new Vec3(x, 71.7, 62.5);
+            case "trade", "reflection" -> new Vec3(x, 71.5, 62.5);
+            case "mount" -> new Vec3(x, 70.3, 62.5);
             case "projected_use", "projected_attack" -> new Vec3(128.7, 71.62, 63.9);
             case "outside" -> new Vec3(68.5, 71.5, 64);
             case "out_of_reach" -> new Vec3(x, 71.5, 57);
@@ -187,6 +189,16 @@ final class PortalNativeInteractionSmoke {
                             && BlockManipulationClient.remoteHitResult instanceof EntityHitResult hit
                             && hit.getEntity() instanceof ArmorStand,
                     "Native remote entity was not targeted: " + BlockManipulationClient.remoteHitResult);
+        } else if (phase.equals("trade") || phase.equals("mount") || phase.equals("reflection")) {
+            require(BlockManipulationClient.remotePointedDim == Level.NETHER
+                            && BlockManipulationClient.remoteHitResult instanceof EntityHitResult hit
+                            && (phase.equals("trade")
+                                    ? hit.getEntity() instanceof net.minecraft.world.entity.npc.villager.Villager
+                                    : phase.equals("mount")
+                                            ? hit.getEntity() instanceof net.minecraft.world.entity.vehicle.boat.Boat
+                                            : hit.getEntity() instanceof net.minecraft.world.entity.monster.zombie.Zombie),
+                    "The native scoped entity action targeted the wrong real entity: phase=" + phase
+                            + " target=" + BlockManipulationClient.remoteHitResult);
         } else {
             require(BlockManipulationClient.remotePointedDim == null,
                     "An occluded, out-of-aperture or out-of-reach object was remotely targeted");
@@ -246,6 +258,20 @@ final class PortalNativeInteractionSmoke {
                             .distanceTo(new Vec3(128.5, 70, 62.5)) < .01) present = true;
                 yield present;
             }
+            case "trade", "mount", "reflection" -> {
+                boolean present = false;
+                for (var entity : world.entitiesForRendering())
+                    if (entity.position().distanceTo(new Vec3(128.5, 70, 62.5)) < .1
+                            && (phaseName().equals("trade")
+                                    ? entity instanceof net.minecraft.world.entity.npc.villager.Villager
+                                    : phaseName().equals("mount")
+                                            ? entity instanceof net.minecraft.world.entity.vehicle.boat.Boat
+                                            : entity instanceof net.minecraft.world.entity.monster.zombie.Zombie))
+                        present = true;
+                yield present && (!phaseName().equals("reflection")
+                        || client.player.getMainHandItem().is(Items.WOODEN_SWORD)
+                                && client.player.getHealth() <= .5f);
+            }
             default -> false;
         };
     }
@@ -265,7 +291,8 @@ final class PortalNativeInteractionSmoke {
     private static void action(Minecraft client) {
         checkTarget(client);
         boolean attack = phaseName().equals("break") || phaseName().equals("entity_attack")
-                || phaseName().equals("mining_cross") || phaseName().equals("projected_attack");
+                || phaseName().equals("mining_cross") || phaseName().equals("projected_attack")
+                || phaseName().equals("reflection");
         var key = attack ? client.options.keyAttack : client.options.keyUse;
         KeyMapping.click(key.getDefaultKey());
         key.setDown(true);
@@ -312,6 +339,20 @@ final class PortalNativeInteractionSmoke {
             return true;
         }
         if (elapsed >= 2) releaseKeys(client);
+        if (phaseName().equals("trade")) {
+            if (elapsed < 25) return false;
+            require(client.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.MerchantScreen,
+                    "The real remote merchant menu closed before its ordinary interaction interval");
+            System.out.println("PORTAL_NATIVE_INTERACTION_TRADE_STABLE ticks=" + elapsed);
+            return true;
+        }
+        if (phaseName().equals("mount"))
+            return elapsed >= 12 && client.level.dimension() == Level.NETHER
+                    && client.player.getVehicle() instanceof net.minecraft.world.entity.vehicle.boat.Boat
+                    && client.player.getVehicle().level() == client.player.level();
+        if (phaseName().equals("reflection"))
+            return elapsed >= 8 && client.player.isDeadOrDying()
+                    && client.player.level().dimension() == Level.OVERWORLD;
         if (phaseName().equals("chest"))
             return client.gui.screen() instanceof AbstractContainerScreen;
         return elapsed >= 8;
