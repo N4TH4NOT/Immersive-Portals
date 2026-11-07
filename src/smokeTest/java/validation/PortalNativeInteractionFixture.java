@@ -47,10 +47,17 @@ final class PortalNativeInteractionFixture {
     private static int tradeClosureTicks;
     private static ServerPlayer miningCompletionPlayer;
     private static int miningCompletionTicks;
+    private static ServerPlayer signCompletionPlayer;
+    private static String signCompletionPhase;
+    private static int signCompletionTicks;
     private static boolean buttonActivated;
     private static final java.util.Set<String> VERIFIED = new java.util.HashSet<>();
 
     private PortalNativeInteractionFixture() {}
+
+    static String signMessage(String currentPhase) {
+        return currentPhase.equals("hanging_sign") ? "Portal hang" : "Portal sign";
+    }
 
     private static void require(boolean condition, String message) {
         if (!condition) throw new AssertionError(message);
@@ -82,6 +89,23 @@ final class PortalNativeInteractionFixture {
                             })));
         });
         ServerTickEvents.END_SERVER_TICK.register(server -> {
+            if (signCompletionPlayer != null) {
+                var destination = server.getLevel(Level.NETHER);
+                var entity = destination.getBlockEntity(TARGET);
+                if (entity instanceof net.minecraft.world.level.block.entity.SignBlockEntity sign
+                        && sign.getFrontText().getMessage(0, false).getString()
+                                .equals(signMessage(signCompletionPhase))
+                        && sign.getFrontText().getMessage(1, false).getString().equals("Across")) {
+                    var player = signCompletionPlayer;
+                    String expected = signCompletionPhase;
+                    signCompletionPlayer = null;
+                    verifySign(player, expected);
+                    finishVerification(player, expected);
+                } else if (++signCompletionTicks >= 40) {
+                    throw new AssertionError("The native sign editor did not update destination text: phase="
+                            + signCompletionPhase + " destination=" + entity);
+                }
+            }
             if (miningCompletionPlayer != null) {
                 var player = miningCompletionPlayer;
                 if (server.getLevel(Level.NETHER).getBlockState(TARGET).isAir()) {
@@ -152,6 +176,8 @@ final class PortalNativeInteractionFixture {
                 }
             room(world, world == source ? 64 : 128);
         }
+        source.setChunkForced(TARGET.getX() >> 4, TARGET.getZ() >> 4, true);
+        source.getChunkAt(TARGET);
         for (var world : new ServerLevel[] {source, destination})
             for (var portal : portals(world))
                 if (Math.abs(portal.getZ() - 64) < .01
@@ -213,6 +239,9 @@ final class PortalNativeInteractionFixture {
         source.setBlock(new BlockPos(64, 71, 65), Blocks.AIR.defaultBlockState(), 3);
         source.setBlock(new BlockPos(64, 70, 66), Blocks.AIR.defaultBlockState(), 3);
         source.setBlock(SOURCE_WITNESS, Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
+        source.setBlock(TARGET, Blocks.AIR.defaultBlockState(), 3);
+        source.setBlock(TARGET.above(), Blocks.AIR.defaultBlockState(), 3);
+        source.setBlock(TARGET.below(), Blocks.AIR.defaultBlockState(), 3);
         player.getInventory().clearContent();
         player.getInventory().setSelectedSlot(0);
         player.setGameMode(next.equals("mining_cross") || next.equals("projected_use")
@@ -274,6 +303,7 @@ final class PortalNativeInteractionFixture {
                 require(trader != null, "The native trade fixture could not create its villager");
                 trader.setPos(128.5, 70, 62.5);
                 trader.setNoAi(true);
+                trader.setOnGround(true);
                 var offers = new net.minecraft.world.item.trading.MerchantOffers();
                 offers.add(new net.minecraft.world.item.trading.MerchantOffer(
                         new net.minecraft.world.item.trading.ItemCost(Items.EMERALD, 1),
@@ -297,6 +327,27 @@ final class PortalNativeInteractionFixture {
                 require(boat != null, "The native mount fixture could not create its boat");
                 boat.setPos(128.5, 70, 62.5);
                 destination.addFreshEntity(boat);
+            }
+            case "sign", "hanging_sign" -> {
+                boolean hanging = next.equals("hanging_sign");
+                for (var world : new ServerLevel[] {source, destination}) {
+                    world.setBlock(hanging ? TARGET.above() : TARGET.below(),
+                            Blocks.STONE.defaultBlockState(), 3);
+                    world.setBlock(TARGET, (hanging ? Blocks.OAK_HANGING_SIGN : Blocks.OAK_SIGN)
+                            .defaultBlockState().setValue(BlockStateProperties.ROTATION_16, 0), 3);
+                    require(world.getBlockEntity(TARGET)
+                                    instanceof net.minecraft.world.level.block.entity.SignBlockEntity,
+                            "The native editor fixture did not create a real sign block entity");
+                }
+                var remote = (net.minecraft.world.level.block.entity.SignBlockEntity)
+                        destination.getBlockEntity(TARGET);
+                remote.setText(remote.getBackText().setMessage(0, Component.literal("Back")), false);
+                var duplicate = (net.minecraft.world.level.block.entity.SignBlockEntity)
+                        source.getBlockEntity(TARGET);
+                duplicate.setText(duplicate.getFrontText().setMessage(0,
+                        Component.literal("Source guard")), true);
+                duplicate.setText(duplicate.getBackText().setMessage(0,
+                        Component.literal("Back guard")), false);
             }
             case "reflection" -> {
                 reflectedTarget = new net.minecraft.world.entity.monster.zombie.Zombie(destination);
@@ -389,7 +440,9 @@ final class PortalNativeInteractionFixture {
                                 && trader != null && trader.getTradingPlayer() == player,
                         "The native remote trade did not remain open for the real source-world player");
                 require(new net.minecraft.world.entity.ai.goal.TradeWithPlayerGoal(trader).canUse(),
-                        "The native trading goal rejected a reachable cross-portal trading player");
+                        "The native trading goal rejected a reachable cross-portal trading player: ground="
+                                + trader.onGround() + " water=" + trader.isInWater()
+                                + " hurt=" + trader.hurtMarked);
                 source.setBlock(new BlockPos(64, 71, 65), Blocks.NETHERITE_BLOCK.defaultBlockState(), 3);
                 tradeClosurePlayer = player;
                 tradeClosureTicks = 0;
@@ -414,6 +467,12 @@ final class PortalNativeInteractionFixture {
                                 && boat.getPassengers().stream().allMatch(rider -> rider.level() == boat.level()),
                         "Native remote mounting left the rider in another world from its real vehicle");
                 System.out.println("PORTAL_NATIVE_INTERACTION_MOUNT_SAME_WORLD");
+            }
+            case "sign", "hanging_sign" -> {
+                signCompletionPlayer = player;
+                signCompletionPhase = expected;
+                signCompletionTicks = 0;
+                return;
             }
             case "reflection" -> {
                 require(player.isDeadOrDying() && player.level() == source
@@ -440,6 +499,37 @@ final class PortalNativeInteractionFixture {
         player.sendSystemMessage(Component.literal("PORTAL_NATIVE_VERIFIED " + expected));
         System.out.println("PORTAL_NATIVE_INTERACTION_SERVER_OK phase=" + expected
                 + " completed=" + VERIFIED.size());
+    }
+
+    private static void verifySign(ServerPlayer player, String expected) {
+        var server = player.level().getServer();
+        var destination = server.getLevel(Level.NETHER);
+        var remote = (net.minecraft.world.level.block.entity.SignBlockEntity)
+                destination.getBlockEntity(TARGET);
+        var duplicate = (net.minecraft.world.level.block.entity.SignBlockEntity)
+                server.overworld().getBlockEntity(TARGET);
+        require(player.level() == server.overworld(), "The remote sign editor moved the physical player");
+        require(remote != null && remote.getFrontText().getMessage(0, false).getString()
+                        .equals(signMessage(expected))
+                        && remote.getFrontText().getMessage(1, false).getString().equals("Across")
+                        && remote.getBackText().getMessage(0, false).getString().equals("Back"),
+                "Native editor input changed the wrong destination side or text");
+        require(duplicate != null && duplicate.getFrontText().getMessage(0, false).getString()
+                        .equals("Source guard")
+                        && duplicate.getBackText().getMessage(0, false).getString().equals("Back guard"),
+                "A remote sign update modified the source-coordinate sign instead of its destination");
+        for (int line = 1; line < 4; line++) {
+            require(remote.getBackText().getMessage(line, false).getString().isEmpty()
+                            && duplicate.getFrontText().getMessage(line, false).getString().isEmpty()
+                            && duplicate.getBackText().getMessage(line, false).getString().isEmpty(),
+                    "The remote editor changed untouched sign lines or its source-coordinate sentinel");
+            if (line >= 2)
+                require(remote.getFrontText().getMessage(line, false).getString().isEmpty(),
+                        "The remote editor changed an untouched destination line");
+        }
+        System.out.println("PORTAL_NATIVE_INTERACTION_SIGN_DESTINATION_TEXT phase=" + expected
+                + " front=" + remote.getFrontText().getMessage(0, false).getString()
+                + " source=unchanged");
     }
 
     private static String miningState(ServerPlayer player) {

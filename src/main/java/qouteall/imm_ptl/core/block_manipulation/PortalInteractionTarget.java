@@ -71,6 +71,54 @@ public final class PortalInteractionTarget {
     }
 
     @Nullable
+    public static Target traceBlockPath(Player player, net.minecraft.resources.ResourceKey<Level> dimension,
+            BlockPos expected, java.util.UUID[] ids, Vec3 point, double reach) {
+        if (ids == null || ids.length > MAX_PORTALS || point == null
+                || !Double.isFinite(point.x) || !Double.isFinite(point.y) || !Double.isFinite(point.z))
+            return null;
+        var world = player.level();
+        var portals = new ArrayList<Portal>();
+        if (world.dimension() == dimension) {
+            var direct = trace(player, player.getEyePosition(), point.subtract(player.getEyePosition()),
+                    reach, 0, ClipContext.Fluid.NONE, false);
+            if (direct != null && direct.portals().isEmpty()
+                    && direct.hit() instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK
+                    && hit.getBlockPos().equals(expected)) return direct;
+        }
+        if (ids.length != 0) {
+            for (var id : ids) {
+                Portal found = null;
+                for (Entity entity : ((qouteall.imm_ptl.core.ducks.IEWorld) world)
+                        .portal_getEntityLookup().getAll())
+                    if (entity instanceof Portal portal && portal.getUUID().equals(id)) {
+                        found = portal;
+                        break;
+                    }
+                if (found == null)
+                    found = qouteall.imm_ptl.core.portal.global_portals.GlobalPortalStorage
+                            .getGlobalPortals(world).stream().filter(portal -> portal.getUUID().equals(id))
+                            .findFirst().orElse(null);
+                if (found == null || !found.isInteractableBy(player)) return null;
+                portals.add(found);
+                world = found.getDestinationWorld();
+                if (world == null) return null;
+            }
+        }
+        if (world.dimension() != dimension) return null;
+        Vec3 sourcePoint = point;
+        for (int i = portals.size() - 1; i >= 0; i--)
+            sourcePoint = portals.get(i).inverseTransformPoint(sourcePoint);
+        Vec3 direction = sourcePoint.subtract(player.getEyePosition());
+        if (direction.lengthSqr() < 1e-20) return null;
+        var result = trace(player, player.getEyePosition(), direction, reach, 0, ClipContext.Fluid.NONE, false);
+        if (result == null || result.world().dimension() != dimension
+                || result.portals().size() != portals.size()) return null;
+        for (int i = 0; i < portals.size(); i++)
+            if (!result.portals().get(i).getUUID().equals(portals.get(i).getUUID())) return null;
+        return result;
+    }
+
+    @Nullable
     private static Target trace(Player player, Vec3 start, Vec3 look,
             double blockReach, double entityReach) {
         return trace(player, start, look, blockReach, entityReach, ClipContext.Fluid.NONE, true);

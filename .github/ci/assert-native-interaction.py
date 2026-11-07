@@ -30,12 +30,13 @@ if os.environ.get("PORTAL_CI_MODSET") == "sodium" and "PORTAL_NATIVE_INTERACTION
     raise AssertionError("The native interaction scenario did not exercise its installed Sodium adapter.")
 phases = ("chest", "button", "place", "break", "entity_use", "entity_attack",
           "source_occluder", "destination_occluder", "outside", "out_of_reach", "mining_cross",
-          "projected_use", "projected_attack", "bucket", "bucket_far", "trade", "mount", "reflection")
+          "projected_use", "projected_attack", "bucket", "bucket_far", "trade", "mount",
+          "sign", "hanging_sign", "reflection")
 for phase in phases:
     for name, log in (("CLIENT", client), ("SERVER", server)):
         if not re.search(rf"PORTAL_NATIVE_INTERACTION_{name}_OK phase={phase}\b", log):
             raise AssertionError(f"Missing native {name.lower()} interaction outcome: {phase}")
-if "PORTAL_NATIVE_INTERACTION_COMPLETE phases=18" not in client:
+if "PORTAL_NATIVE_INTERACTION_COMPLETE phases=20" not in client:
     raise AssertionError("Native interaction input did not complete all phases.")
 if "PORTAL_NATIVE_INTERACTION_FIXTURE_READY faces=4 translation=64" not in server:
     raise AssertionError("Native interactions did not use the real four-face wand fixture.")
@@ -56,6 +57,13 @@ for marker in ("TRADE_CLOSED_ON_OBSTRUCTION", "MOUNT_SAME_WORLD", "REFLECTION_SO
         raise AssertionError(f"Missing native entity action evidence: {marker}")
 if "PORTAL_NATIVE_INTERACTION_MINING_SERVER_COMPLETE" not in server:
     raise AssertionError("Held mining did not finish on the authoritative server.")
+for phase in ("sign", "hanging_sign"):
+    if not re.search(rf"PORTAL_NATIVE_INTERACTION_SIGN_EDITOR_INPUT phase={phase}\b.*"
+                     r"lines=2 dimension=minecraft:the_nether", client):
+        raise AssertionError(f"The remote {phase} editor did not receive real keyboard input.")
+    if not re.search(rf"PORTAL_NATIVE_INTERACTION_SIGN_DESTINATION_TEXT phase={phase}\b.*"
+                     r"source=unchanged", server):
+        raise AssertionError(f"The native {phase} update did not preserve its source-world sentinel.")
 
 screenshots = Path("run/smoke-client/screenshots")
 images = {}

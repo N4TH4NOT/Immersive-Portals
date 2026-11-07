@@ -16,6 +16,23 @@ import qouteall.imm_ptl.core.block_manipulation.PortalInteractionServer;
 /** Vanilla entity handlers retain their checks while operating on a validated remote target. */
 @Mixin(ServerGamePacketListenerImpl.class)
 public abstract class MixinServerGamePacketListener_Interaction {
+    @org.spongepowered.asm.mixin.Shadow public ServerPlayer player;
+
+    @com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod(method = "updateSignText")
+    private void ip_filterIntoOriginalSignWorld(
+            net.minecraft.network.protocol.game.ServerboundSignUpdatePacket packet,
+            java.util.List<net.minecraft.server.network.FilteredText> lines, Operation<Void> original) {
+        qouteall.imm_ptl.core.block_manipulation.SignInteractionServer.applyFiltered(player, packet,
+                () -> original.call(packet, lines));
+    }
+
+    @Redirect(method = "updateSignText", at = @At(value = "INVOKE", target =
+            "Lnet/minecraft/server/level/ServerPlayer;level()Lnet/minecraft/server/level/ServerLevel;"))
+    private ServerLevel ip_filteredSignWorld(ServerPlayer player) {
+        var world = qouteall.imm_ptl.core.block_manipulation.SignInteractionServer.applyingWorld();
+        return world == null ? player.level() : world;
+    }
+
     @Redirect(method = {"handleAttack", "handleInteract", "handleUseItemOn"}, at = @At(value = "INVOKE",
             target = "Lnet/minecraft/server/level/ServerPlayer;level()Lnet/minecraft/server/level/ServerLevel;"))
     private ServerLevel ip_targetWorld(ServerPlayer player) {

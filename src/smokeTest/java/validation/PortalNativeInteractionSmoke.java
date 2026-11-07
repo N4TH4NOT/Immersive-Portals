@@ -30,7 +30,8 @@ final class PortalNativeInteractionSmoke {
     private static final String[] PHASES = {
         "chest", "button", "place", "break", "entity_use", "entity_attack",
         "source_occluder", "destination_occluder", "outside", "out_of_reach", "mining_cross",
-        "projected_use", "projected_attack", "bucket", "bucket_far", "trade", "mount", "reflection"
+        "projected_use", "projected_attack", "bucket", "bucket_far", "trade", "mount",
+        "sign", "hanging_sign", "reflection"
     };
     private static final java.util.Set<String> ACKNOWLEDGED = new java.util.HashSet<>();
     private static int phase;
@@ -49,6 +50,8 @@ final class PortalNativeInteractionSmoke {
     private static float miningProgressBeforeCross = -1;
     private static int projectedBodyFrames;
     private static int projectedBodyEntity = -1;
+    private static int signEditorOpenedTick = -1;
+    private static boolean signEditorSubmitted;
 
     private PortalNativeInteractionSmoke() {}
 
@@ -62,7 +65,7 @@ final class PortalNativeInteractionSmoke {
 
     private static BlockPos expectedRemoteBlock() {
         return switch (phaseName()) {
-            case "chest", "button", "place", "break", "mining_cross" ->
+            case "chest", "button", "place", "break", "mining_cross", "sign", "hanging_sign" ->
                     PortalNativeInteractionFixture.TARGET;
             case "destination_occluder" -> PortalNativeInteractionFixture.TARGET.south();
             default -> null;
@@ -133,6 +136,7 @@ final class PortalNativeInteractionSmoke {
             case "entity_use", "entity_attack" -> new Vec3(x, 71.7, 62.5);
             case "trade", "reflection" -> new Vec3(x, 71.5, 62.5);
             case "mount" -> new Vec3(x, 70.3, 62.5);
+            case "hanging_sign" -> new Vec3(x, 71.3, 62.5);
             case "bucket", "bucket_far" -> new Vec3(x, 70.88, 62.5);
             case "projected_use", "projected_attack" -> new Vec3(128.7, 71.62, 63.9);
             case "outside" -> new Vec3(68.5, 71.5, 64);
@@ -264,6 +268,11 @@ final class PortalNativeInteractionSmoke {
                     target.is(Blocks.STONE);
             case "mining_cross" -> target.is(Blocks.IRON_BLOCK)
                     && client.player.getMainHandItem().is(Items.IRON_PICKAXE);
+            case "sign", "hanging_sign" -> target.is(phaseName().equals("sign")
+                            ? Blocks.OAK_SIGN : Blocks.OAK_HANGING_SIGN)
+                    && world.getBlockEntity(PortalNativeInteractionFixture.TARGET)
+                            instanceof net.minecraft.world.level.block.entity.SignBlockEntity
+                    && client.player.getMainHandItem().isEmpty();
             case "out_of_reach" -> world.getBlockState(new BlockPos(128, 71, 56)).is(Blocks.GOLD_BLOCK);
             case "entity_use", "entity_attack" -> {
                 boolean present = false;
@@ -365,6 +374,8 @@ final class PortalNativeInteractionSmoke {
             return true;
         }
         if (elapsed >= 2) releaseKeys(client);
+        if (phaseName().equals("sign") || phaseName().equals("hanging_sign"))
+            return editSign(client, elapsed);
         if (phaseName().equals("trade")) {
             if (elapsed < 25) return false;
             require(client.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.MerchantScreen,
@@ -382,6 +393,83 @@ final class PortalNativeInteractionSmoke {
         if (phaseName().equals("chest"))
             return client.gui.screen() instanceof AbstractContainerScreen;
         return elapsed >= 8;
+    }
+
+    private static boolean editSign(Minecraft client, int elapsed) {
+        if (signEditorSubmitted) {
+            require(!(client.gui.screen()
+                            instanceof net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen),
+                    "Native Done activation did not close the remote sign editor");
+            return true;
+        }
+        if (!(client.gui.screen()
+                instanceof net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen editor)) {
+            require(signEditorOpenedTick < 0 && elapsed < 50,
+                    "The remote sign editor closed before native text input could complete");
+            return false;
+        }
+        require(phaseName().equals("hanging_sign")
+                        ? editor instanceof net.minecraft.client.gui.screens.inventory.HangingSignEditScreen
+                        : editor instanceof net.minecraft.client.gui.screens.inventory.SignEditScreen,
+                "Native sign use opened the wrong editor type");
+        try {
+            var signField = net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen.class
+                    .getDeclaredField("sign");
+            signField.setAccessible(true);
+            var sign = (net.minecraft.world.level.block.entity.SignBlockEntity) signField.get(editor);
+            var frontField = net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen.class
+                    .getDeclaredField("isFrontText");
+            frontField.setAccessible(true);
+            require(sign.getLevel() != null && sign.getLevel().dimension() == Level.NETHER
+                            && sign.getBlockPos().equals(PortalNativeInteractionFixture.TARGET)
+                            && frontField.getBoolean(editor)
+                            && client.player.level().dimension() == Level.OVERWORLD,
+                    "The native editor is attached to the wrong world, sign or side");
+            if (signEditorOpenedTick < 0) signEditorOpenedTick = currentTick;
+            if (currentTick - signEditorOpenedTick < 4) return false;
+            typeIntoEditor(client, PortalNativeInteractionFixture.signMessage(phaseName()));
+            pressEditorKey(client, org.lwjgl.glfw.GLFW.GLFW_KEY_DOWN);
+            typeIntoEditor(client, "Across");
+            var messagesField = net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen.class
+                    .getDeclaredField("messages");
+            messagesField.setAccessible(true);
+            var messages = (String[]) messagesField.get(editor);
+            require(messages[0].equals(PortalNativeInteractionFixture.signMessage(phaseName()))
+                            && messages[1].equals("Across"),
+                    "The native keyboard callback did not type the expected sign text");
+            pressEditorKey(client, org.lwjgl.glfw.GLFW.GLFW_KEY_TAB);
+            require(editor.getFocused() instanceof net.minecraft.client.gui.components.Button button
+                            && button.getMessage().equals(net.minecraft.network.chat.CommonComponents.GUI_DONE),
+                    "Native Tab navigation did not focus the editor's Done button");
+            pressEditorKey(client, org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE);
+            signEditorSubmitted = true;
+            System.out.println("PORTAL_NATIVE_INTERACTION_SIGN_EDITOR_INPUT phase=" + phaseName()
+                    + " lines=2 dimension=minecraft:the_nether");
+            return false;
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Cannot observe the native sign editor or drive its keyboard callbacks",
+                    exception);
+        }
+    }
+
+    private static void typeIntoEditor(Minecraft client, String value)
+            throws ReflectiveOperationException {
+        var callback = net.minecraft.client.KeyboardHandler.class.getDeclaredMethod("charTyped", long.class,
+                net.minecraft.client.input.CharacterEvent.class);
+        callback.setAccessible(true);
+        for (int codepoint : value.codePoints().toArray())
+            callback.invoke(client.keyboardHandler, client.getWindow().handle(),
+                    new net.minecraft.client.input.CharacterEvent(codepoint));
+    }
+
+    private static void pressEditorKey(Minecraft client, int key)
+            throws ReflectiveOperationException {
+        var callback = net.minecraft.client.KeyboardHandler.class.getDeclaredMethod("keyPress", long.class,
+                int.class, net.minecraft.client.input.KeyEvent.class);
+        callback.setAccessible(true);
+        var event = new net.minecraft.client.input.KeyEvent(key, 0, 0);
+        callback.invoke(client.keyboardHandler, client.getWindow().handle(), org.lwjgl.glfw.GLFW.GLFW_PRESS, event);
+        callback.invoke(client.keyboardHandler, client.getWindow().handle(), org.lwjgl.glfw.GLFW.GLFW_RELEASE, event);
     }
 
     private static float miningProgress(Minecraft client) {
@@ -440,6 +528,8 @@ final class PortalNativeInteractionSmoke {
             remoteOutlineFrames = primaryOutlineChecks = 0;
             projectedBodyFrames = 0;
             projectedBodyEntity = -1;
+            signEditorOpenedTick = -1;
+            signEditorSubmitted = false;
             captured = null;
             client.options.highContrastBlockOutline().set(true);
             client.player.connection.sendCommand("portal_native_interaction_setup " + phaseName());
