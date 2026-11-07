@@ -2,6 +2,7 @@ package validation;
 
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Pose;
@@ -10,19 +11,22 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 import qouteall.imm_ptl.core.portal.Portal;
+import qouteall.imm_ptl.core.render.context_management.RenderStates;
 import qouteall.imm_ptl.core.render.context_management.WorldRenderInfo;
 
 /** Actual movement/use keys with independent pose, camera and native consumption observations. */
 final class PortalPoseUseSmoke {
     private enum Stage { SETUP, ARM, MOVE, AFTER, VERIFY, COMPLETE }
-    private record Frame(int tick, double time, Vec3 feet, Vec3 camera, Vec3 eye, Vec3 velocity,
-            Pose pose, boolean destination) {}
+    private record Frame(String stage, int tick, int helperTick, int playerTick, long worldTime,
+            int renderFrame, double time, String dimension, Vec3 rawFeet, Vec3 previousTickFeet,
+            Vec3 feet, Vec3 camera, Vec3 eye, Vec3 velocity, Pose pose, boolean destination) {}
 
     private static final java.util.Set<String> acknowledgements = new java.util.HashSet<>();
     private static Stage stage = Stage.SETUP;
     private static int phase = -1, ticks, started, stageTick, crossingTick;
     private static int sourceFrames, destinationFrames, transitions, sourcePoseTicks, destinationPoseTicks;
     private static int heldBefore, heldAfter, lastUsed = -1, poseSince;
+    private static int gameTicks;
     private static boolean initialized, observing, pressedUse, crossed, released, useStarted;
     private static Frame previous;
     private static Pose lastPose;
@@ -60,6 +64,9 @@ final class PortalPoseUseSmoke {
 
     private static void initialize() {
         initialized = true;
+        // Fixture actions run at END_CLIENT_TICK. Count the simulation boundary
+        // independently so a skipped action callback never looks like a frame-only move.
+        ClientTickEvents.START_CLIENT_TICK.register(client -> gameTicks++);
         ClientReceiveMessageEvents.GAME.register((message, overlay) ->
                 acknowledgements.add(message.getString()));
         LevelExtractionEvents.END_EXTRACTION.register(context -> {
@@ -72,40 +79,53 @@ final class PortalPoseUseSmoke {
                 lastPose = currentPose;
                 poseSince = ticks;
             }
-            var frame = new Frame(ticks, ticks + (double) partial,
+            var frame = new Frame(stage.name(), gameTicks, ticks, client.player.tickCount,
+                    context.level().getGameTime(), RenderStates.frameIndex,
+                    gameTicks + (double) partial, context.level().dimension().identifier().toString(),
+                    client.player.position(),
+                    unfold(new Vec3(client.player.xo, client.player.yo, client.player.zo), destination),
                     unfold(client.player.position(), destination),
                     unfold(context.camera().position(), destination),
                     unfold(client.player.getEyePosition(partial), destination),
                     client.player.getDeltaMovement(), currentPose, destination);
             var cameraOffset = frame.camera.subtract(frame.eye);
             require(Math.hypot(cameraOffset.x, cameraOffset.z) < 1.0E-5,
-                    "A pose/use crossing detached the camera horizontally from its interpolated eye: " + name());
+                    "A pose/use crossing detached the camera horizontally from its interpolated eye: "
+                            + name() + " current=" + frame);
             // Vanilla eases eye height when crouch/swim begins. After that ordinary
             // transition settles, the camera must again match the actual eye in 3D.
             if (ticks - poseSince >= 12)
                 require(Math.abs(cameraOffset.y) < .025,
-                        "The settled pose camera did not follow the interpolated eye: " + name() + " " + cameraOffset);
+                        "The settled pose camera did not follow the interpolated eye: " + name()
+                                + " offset=" + cameraOffset + " current=" + frame);
             if (previous != null) {
                 double elapsed = frame.time - previous.time;
-                require(elapsed >= -.01, "Pose/use simulation time moved backwards");
+                require(elapsed >= -.01, "Pose/use simulation time moved backwards: previous="
+                        + previous + " current=" + frame);
                 Vec3 displacement = frame.camera.subtract(previous.camera);
                 require(Math.hypot(displacement.x, displacement.z) <= .8 * Math.max(0, elapsed) + .055,
-                        "A pose/use camera gained horizontal travel at its portal: " + name() + " " + displacement);
+                        "A pose/use camera gained horizontal travel at its portal: " + name()
+                                + " displacement=" + displacement + " previous=" + previous + " current=" + frame);
                 if (frame.tick == previous.tick && frame.pose == previous.pose) {
                     require(frame.feet.distanceTo(previous.feet) < 1.0E-5,
-                            "A frame-only pose/use crossing changed the player's movement endpoint");
+                            "A frame-only pose/use crossing changed the player's movement endpoint: case="
+                                    + name() + " previous=" + previous + " current=" + frame);
                     require(frame.velocity.distanceTo(previous.velocity) < .025,
-                            "A frame-only pose/use crossing changed native velocity");
+                            "A frame-only pose/use crossing changed native velocity: case=" + name()
+                                    + " previous=" + previous + " current=" + frame);
                 } else if (frame.tick - previous.tick == 1) {
                     var step = frame.feet.subtract(previous.feet);
                     require(Math.hypot(step.x, step.z) <= Math.hypot(previous.velocity.x,
                                     previous.velocity.z) + .16,
-                            "The pose/use portal added horizontal travel beyond native acceleration");
+                            "The pose/use portal added horizontal travel beyond native acceleration: case="
+                                    + name() + " previous=" + previous + " current=" + frame);
                 }
                 if (frame.destination != previous.destination) {
                     require(destination && correctPose(client),
                             "The active pose/item use was not preserved at the actual rendered crossing: " + name());
                     transitions++;
+                    System.out.println("PORTAL_POSE_USE_FRAME_CROSS case=" + name()
+                            + " previous=" + previous + " current=" + frame);
                 }
             }
             if (destination) destinationFrames++; else sourceFrames++;
@@ -144,6 +164,13 @@ final class PortalPoseUseSmoke {
         releaseKeys(client);
         client.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);
         client.player.connection.sendCommand("portal_pose_use_setup " + name());
+        logStage(client);
+    }
+
+    private static void logStage(Minecraft client) {
+        System.out.println("PORTAL_POSE_USE_STAGE case=" + name() + " stage=" + stage
+                + " helperTick=" + ticks + " gameTick=" + gameTicks
+                + " playerTick=" + client.player.tickCount + " position=" + client.player.position());
     }
 
     private static boolean ready(Minecraft client) {
@@ -222,6 +249,7 @@ final class PortalPoseUseSmoke {
                 stageTick = ticks;
                 poseSince = ticks;
                 observing = true;
+                logStage(client);
             }
             case ARM -> {
                 movement(client, false);
@@ -231,6 +259,7 @@ final class PortalPoseUseSmoke {
                         && (!client.player.isUsingItem() || lastUsed < warmup))) return false;
                 stage = Stage.MOVE;
                 stageTick = ticks;
+                logStage(client);
             }
             case MOVE -> {
                 heldUse(client);
@@ -246,6 +275,7 @@ final class PortalPoseUseSmoke {
                 crossingTick = ticks;
                 stage = Stage.AFTER;
                 stageTick = ticks;
+                logStage(client);
             }
             case AFTER -> {
                 heldUse(client);
@@ -270,6 +300,7 @@ final class PortalPoseUseSmoke {
                 client.player.connection.sendCommand("portal_pose_use_verify " + name());
                 stage = Stage.VERIFY;
                 stageTick = ticks;
+                logStage(client);
             }
             case VERIFY -> {
                 releaseKeys(client);
