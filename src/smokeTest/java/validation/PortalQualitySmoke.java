@@ -28,6 +28,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.hurtingprojectile.SmallFireball;
+import net.minecraft.world.entity.projectile.throwableitemprojectile.Snowball;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ChunkPos;
@@ -36,6 +37,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 
 import qouteall.imm_ptl.core.ducks.IEWorld;
 import qouteall.imm_ptl.core.mixin.common.mc_util.IELevelEntityGetterAdapter;
@@ -95,6 +98,7 @@ final class PortalQualitySmoke {
     private static final Set<UUID> crossedEntities = new HashSet<>();
     private static final Set<UUID> blockedProjectiles = new HashSet<>();
     private static final Set<UUID> resolvedHurtingProjectiles = new HashSet<>();
+    private static final Set<UUID> resolvedThrowableProjectiles = new HashSet<>();
     private static final Set<UUID> faceIds = new HashSet<>();
     private static final List<Long> tickDurations = new ArrayList<>();
     private static Portal forward;
@@ -134,6 +138,7 @@ final class PortalQualitySmoke {
             crossedEntities.clear();
             blockedProjectiles.clear();
             resolvedHurtingProjectiles.clear();
+            resolvedThrowableProjectiles.clear();
             faceIds.clear();
             tickDurations.clear();
             phase = WAIT;
@@ -375,9 +380,11 @@ final class PortalQualitySmoke {
 
     private static boolean observeEntities(ServerLevel world) {
         require(world.getServer().getTickCount() - phaseTick < 120,
-                "A natural entity/projectile failed to traverse its intact backing wall");
+                "A natural entity/projectile failed to traverse its intact backing wall: "
+                        + entities.values() + " crossed=" + crossedEntities);
         for (var previous : List.copyOf(entities.values())) {
-            if (resolvedHurtingProjectiles.contains(previous.id())) continue;
+            if (resolvedHurtingProjectiles.contains(previous.id())
+                    || resolvedThrowableProjectiles.contains(previous.id())) continue;
             Entity entity = null;
             for (var level : world.getServer().getAllLevels()) {
                 var candidate = level.getEntity(previous.id());
@@ -422,7 +429,9 @@ final class PortalQualitySmoke {
                     "Portal traversal added entity displacement: " + previous.name()
                             + " previous=" + previous + " current=" + position + " velocity=" + velocity);
             require(horizontal(velocity) <= horizontal(expectedMovement) + .01,
-                    "Portal traversal accelerated the unpowered quality " + previous.name());
+                    "Portal traversal accelerated the unpowered quality " + previous.name()
+                            + " previous=" + previous + " current=" + position + " velocity=" + velocity
+                            + " noPhysics=" + entity.noPhysics + " age=" + entity.tickCount);
             if (entity instanceof AbstractArrow arrow) {
                 if (arrow.shakeTime > 0) {
                     require(destination(entity) && entity.getZ() >= 29.95 && entity.getZ() <= 30.08,
@@ -471,9 +480,14 @@ final class PortalQualitySmoke {
             }
             entities.put(previous.id(), new Tracked(previous.name(), previous.id(), previous.type(),
                     position, velocity, entity.tickCount));
+            if (world.getServer().getTickCount() - phaseTick == 8
+                    && !crossedEntities.contains(entity.getUUID()))
+                System.out.println("PORTAL_QUALITY_ENTITY_PENDING type=" + previous.name()
+                        + " position=" + entity.position() + " velocity=" + velocity
+                        + " age=" + entity.tickCount);
         }
         return crossedEntities.size() == 7 && blockedProjectiles.size() == 2
-                && resolvedHurtingProjectiles.size() == 1;
+                && resolvedHurtingProjectiles.size() == 1 && resolvedThrowableProjectiles.size() == 1;
     }
 
     private static void prepareCrossWorldEntity(ServerLevel source) {
@@ -513,20 +527,42 @@ final class PortalQualitySmoke {
         chicken.setPersistenceRequired();
         chicken.setCustomName(Component.literal("Quality UUID witness"));
         spawn(source, "cross_world_mob", chicken, new Vec3(2.5, 70, 40.2), new Vec3(0, 0, -.35));
-        var snowball = EntityTypes.SNOWBALL.create(source, EntitySpawnReason.COMMAND);
-        require(snowball != null, "Could not create the cross-dimension projectile witness");
+        var snowball = new QualitySnowball(source);
         snowball.setCustomName(Component.literal("Quality UUID witness"));
         spawn(source, "cross_world_projectile", snowball,
                 new Vec3(2.5, 72.5, 40.2), new Vec3(0, 0, -.6));
         // A fireball must retain its normal acceleration and drag, then run its
         // actual block-impact callback after crossing into the Nether.
         target.setBlock(new BlockPos(191, 73, 38), Blocks.STONE.defaultBlockState(), 3);
+        target.setBlock(new BlockPos(192, 72, 38), Blocks.STONE.defaultBlockState(), 3);
         target.setBlock(new BlockPos(191, 72, 39), Blocks.STONE.defaultBlockState(), 3);
         var fireball = EntityTypes.SMALL_FIREBALL.create(source, EntitySpawnReason.COMMAND);
         require(fireball != null, "Could not create the damaging-projectile witness");
         fireball.setCustomName(Component.literal("Quality UUID witness"));
         spawn(source, "cross_world_fireball", fireball,
                 new Vec3(2.2, 73.3, 40.2), new Vec3(0, 0, -.6));
+    }
+
+    /** Observes the actual native impact; it does not move or teleport the projectile. */
+    private static final class QualitySnowball extends Snowball {
+        private QualitySnowball(Level world) {
+            super(EntityTypes.SNOWBALL, world);
+        }
+
+        @Override
+        protected void onHit(HitResult hit) {
+            super.onHit(hit);
+            require(level().dimension() == Level.NETHER
+                            && hit instanceof BlockHitResult blockHit
+                            && blockHit.getBlockPos().equals(new BlockPos(192, 72, 38))
+                            && Math.abs(hit.getLocation().z - 39) < 1e-6
+                            && isRemoved() && crossedEntities.contains(getUUID()),
+                    "The snowball did not execute its native destination impact: hit="
+                            + hit.getLocation() + " world=" + level().dimension());
+            resolvedThrowableProjectiles.add(getUUID());
+            System.out.println("PORTAL_QUALITY_THROWABLE_PROJECTILE_OK uuid=" + getUUID()
+                    + " hit=" + hit.getLocation());
+        }
     }
 
     private static double horizontal(Vec3 vector) {

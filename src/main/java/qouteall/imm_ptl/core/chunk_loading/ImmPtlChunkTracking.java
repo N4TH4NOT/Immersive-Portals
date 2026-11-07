@@ -492,12 +492,16 @@ public class ImmPtlChunkTracking {
             return Collections.emptyList();
         }
         
-        // the boundaryOnly parameter is only true when sending light update packets
-        // the client can calculate the light by the block data, but not accurate on loading boundary
+        // Vanilla requests boundary-only light corrections for the primary world.
+        // A remote chunk snapshot can precede asynchronous server relighting, and
+        // loading that snapshot does not seed block-light emission on the client.
+        // Send authoritative corrections to every loaded remote view so a native
+        // dimension change cannot leave its newly recreated worlds permanently dark.
         
         ArrayList<ServerPlayer> result = new ArrayList<>();
         for (ImmPtlChunkTracking.PlayerWatchRecord rec : recs.values()) {
-            if (rec.isLoadedToPlayer && (!boundaryOnly || rec.isBoundary)) {
+            if (rec.isLoadedToPlayer && (!boundaryOnly || rec.isBoundary
+                    || rec.player.level().dimension() != dimension)) {
                 result.add(rec.player);
             }
         }

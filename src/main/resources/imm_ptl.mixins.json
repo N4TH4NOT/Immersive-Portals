@@ -29,6 +29,7 @@
     "common.collision.EntityFluidInteractionAccess",
     "common.collision.EntityFluidTrackerAccess",
     "common.collision.MixinPlayer_Collision",
+    "common.collision.MixinItemEntity_Collision",
     "common.collision.MixinThrowableProjectile",
     "common.container_gui.MixinAbstractContainerMenu",
     "common.container_gui.MixinContainer",

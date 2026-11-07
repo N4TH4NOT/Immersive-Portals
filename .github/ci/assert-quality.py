@@ -24,7 +24,8 @@ else:
     required += ["FIXTURE_READY", "CONCURRENT_CROSSING_OK phase=4",
                  "CONCURRENT_CROSSING_OK phase=5", "SERVER_PERFORMANCE_OK",
                  "PERSISTENCE_SAVED", "ENTITY_UUID_OK", "PROJECTILE_WORLD_OK",
-                 "HURTING_PROJECTILE_OK", "ENTITY_PHYSICS_OK count=7 destinationHits=2"]
+                 "HURTING_PROJECTILE_OK", "THROWABLE_PROJECTILE_OK",
+                 "ENTITY_PHYSICS_OK count=7 destinationHits=2"]
     required += [f"PICKUP_{phase}_OK" for phase in
                  ("APPROACH", "DELAY", "CAPACITY", "OWNERSHIP", "APERTURE", "REACH", "RACE", "CROSS_WORLD")]
     required.append("PICKUP_OK")
