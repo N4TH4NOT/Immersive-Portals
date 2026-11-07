@@ -3,6 +3,8 @@ package qouteall.imm_ptl.core.collision;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityFluidInteraction;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.attribute.EnvironmentAttributes;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -139,7 +141,17 @@ public final class PortalFluidInteraction {
             var into = (EntityFluidTrackerAccess) value;
             into.ip_height(Math.max(into.ip_height(), from.ip_height() / portal.getScaling()));
             into.ip_eyesInside(into.ip_eyesInside() || from.ip_eyesInside());
-            into.ip_current(into.ip_current().add(portal.inverseTransformLocalVec(from.ip_current())));
+            Vec3 current = from.ip_current();
+            if (entry.getKey().equals(FluidTags.LAVA)) {
+                // Entity applies lava strength later using its physical world. Express
+                // the destination's native FAST_LAVA strength in that same base first.
+                double sourceStrength = portal.level().environmentAttributes()
+                        .getDimensionValue(EnvironmentAttributes.FAST_LAVA) ? .007 : .007 / 3;
+                double destinationStrength = portal.getDestinationWorld().environmentAttributes()
+                        .getDimensionValue(EnvironmentAttributes.FAST_LAVA) ? .007 : .007 / 3;
+                current = current.scale(destinationStrength / sourceStrength);
+            }
+            into.ip_current(into.ip_current().add(portal.inverseTransformLocalVec(current)));
             into.ip_currentCount(into.ip_currentCount() + from.ip_currentCount());
         }
     }

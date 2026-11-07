@@ -16,6 +16,7 @@ final class PortalFluidSmoke {
     private static int phase = -1, ticks, started, stageTick, sourceSamples, destinationSamples;
     private static Stage stage;
     private static Vec3 settled;
+    private static double projectedLavaCurrent, destinationLavaCurrent;
 
     private PortalFluidSmoke() {}
 
@@ -41,6 +42,7 @@ final class PortalFluidSmoke {
         phase++;
         sourceSamples = destinationSamples = 0;
         settled = null;
+        projectedLavaCurrent = destinationLavaCurrent = 0;
         stop(client);
         started = stageTick = ticks;
         if (phase == PortalFluidFixture.CASES.length) {
@@ -55,7 +57,12 @@ final class PortalFluidSmoke {
     private static boolean ready(Minecraft client) {
         if (!messages.contains("PORTAL_FLUID_SETUP " + name())
                 || client.level.dimension() != Level.OVERWORLD
-                || client.player.position().distanceTo(PortalFluidFixture.START) > .08
+                || (!name().equals("destination_lava")
+                    && client.player.position().distanceTo(PortalFluidFixture.START) > .08)
+                || (name().equals("destination_lava")
+                    && (Math.abs(client.player.getX() - PortalFluidFixture.START.x) > 2.5
+                        || Math.abs(client.player.getY() - PortalFluidFixture.START.y) > .08
+                        || Math.abs(client.player.getZ() - PortalFluidFixture.START.z) > .08))
                 || Math.abs(ScaleUtils.getScale(client.player) - PortalFluidFixture.scale(name())) > .001)
             return false;
         if (PortalFluidFixture.physicalFluid(client.player)
@@ -81,7 +88,8 @@ final class PortalFluidSmoke {
         switch (stage) {
             case SETUP -> {
                 stop(client);
-                if (ticks - started < 30 || !ready(client)) return false;
+                if (ticks - started < (name().equals("destination_lava") ? 220 : 30)
+                        || !ready(client)) return false;
                 stage = Stage.SOURCE;
                 stageTick = ticks;
             }
@@ -104,6 +112,18 @@ final class PortalFluidSmoke {
                     if (settled == null) settled = client.player.position();
                     require(client.player.position().distanceTo(settled) < .025,
                             "An invisible fluid pushed the stopped actual client");
+                } else if (name().equals("destination_lava")) {
+                    require(client.player.isInLava() && !client.player.isInWater()
+                                    && client.player.getFluidHeight(FluidTags.LAVA) > 0
+                                    && !PortalFluidFixture.physicalFluid(client.player)
+                                    && client.player.hasEffect(net.minecraft.world.effect.MobEffects.FIRE_RESISTANCE),
+                            "Projected Nether lava lost its real current/state or gained source fluid");
+                    if (sourceSamples >= 12)
+                        require(client.player.getDeltaMovement().x >= .006
+                                        && client.player.getDeltaMovement().x <= .0085,
+                                "The projected lava current did not preserve Nether strength: "
+                                        + client.player.getDeltaMovement());
+                    projectedLavaCurrent = client.player.getDeltaMovement().x;
                 } else {
                     require(client.player.isInWater() && !client.player.isInLava()
                                     && client.player.getFluidHeight(FluidTags.WATER) > 0,
@@ -131,10 +151,18 @@ final class PortalFluidSmoke {
             }
             case DESTINATION -> {
                 stop(client);
+                boolean lava = name().equals("destination_lava");
                 require(client.level.dimension() == Level.NETHER
-                                && client.player.isInWater() && !client.player.isInLava()
-                                && client.player.isEyeInFluid(FluidTags.WATER),
+                                && (lava ? client.player.isInLava() && !client.player.isInWater()
+                                        : client.player.isInWater() && !client.player.isInLava()
+                                                && client.player.isEyeInFluid(FluidTags.WATER)),
                         "A real destination crossing lost native water/eye state: " + name());
+                if (lava && destinationSamples >= 12)
+                    require(client.player.getDeltaMovement().x >= .006
+                                    && client.player.getDeltaMovement().x <= .0085,
+                            "The actual Nether lava current changed after crossing: "
+                                    + client.player.getDeltaMovement());
+                if (lava) destinationLavaCurrent = client.player.getDeltaMovement().x;
                 destinationSamples++;
                 if (destinationSamples >= 70) verify(client);
             }
@@ -143,12 +171,16 @@ final class PortalFluidSmoke {
                 if (!messages.contains("PORTAL_FLUID_VERIFIED " + name())) return false;
                 System.out.println("PORTAL_FLUID_CLIENT_OK case=" + name() + " source="
                         + sourceSamples + " destination=" + destinationSamples);
+                if (name().equals("destination_lava"))
+                    System.out.println("PORTAL_FLUID_LAVA_CURRENT_OK projected=" + projectedLavaCurrent
+                            + " destination=" + destinationLavaCurrent + " nativeNetherStrength=0.007");
                 begin(client);
             }
             case RESTORE -> {
                 stop(client);
                 if (messages.contains("PORTAL_FLUID_RESTORED")
-                        && Math.abs(ScaleUtils.getScale(client.player) - 1) < .001) {
+                        && Math.abs(ScaleUtils.getScale(client.player) - 1) < .001
+                        && !client.player.isInWater() && !client.player.isInLava()) {
                     stage = Stage.COMPLETE;
                     System.out.println("PORTAL_FLUID_COMPLETE cases=" + PortalFluidFixture.CASES.length);
                 }

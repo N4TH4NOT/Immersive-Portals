@@ -22,7 +22,7 @@ import qouteall.imm_ptl.peripheral.wand.ProtoPortalSide;
 /** Sealed source/destination fluid chambers observed through actual native player ticks. */
 final class PortalFluidFixture {
     static final String[] CASES = {"hidden_water", "hidden_lava", "visible_water",
-            "destination_water", "scaled_water", "rotated_water"};
+            "destination_water", "scaled_water", "rotated_water", "destination_lava"};
     static final Vec3 SOURCE = new Vec3(512, 86, 64);
     static final Vec3 DESTINATION = new Vec3(576, 86, 64);
     static final Vec3 START = new Vec3(512, 80, 64.1);
@@ -47,7 +47,8 @@ final class PortalFluidFixture {
     private PortalFluidFixture() {}
 
     static boolean destinationCase(String name) {
-        return name.endsWith("water") && !name.equals("hidden_water") && !name.equals("visible_water");
+        return name.equals("destination_lava")
+                || name.endsWith("water") && !name.equals("hidden_water") && !name.equals("visible_water");
     }
 
     static double scale(String name) { return name.equals("scaled_water") ? 1 : 4; }
@@ -89,8 +90,11 @@ final class PortalFluidFixture {
                                 "The source fluid body did not receive enough authoritative native ticks");
                         if (destinationCase(name)) require(probe.destinationSamples >= 30,
                                 "The destination fluid was not observed after natural traversal");
-                        require(player.getAirSupply() < 290 || name.startsWith("hidden_"),
+                        require(player.getAirSupply() < 290 || name.startsWith("hidden_")
+                                        || name.equals("destination_lava"),
                                 "Visible physical water did not retain normal air depletion");
+                        if (name.equals("destination_lava")) require(player.getHealth() == player.getMaxHealth(),
+                                "The fire-resistant lava observer took damage");
                         probe.verified = true;
                         player.sendSystemMessage(Component.literal("PORTAL_FLUID_VERIFIED " + name));
                         System.out.println("PORTAL_FLUID_SERVER_OK case=" + name + " source="
@@ -103,6 +107,10 @@ final class PortalFluidFixture {
                         require(probe != null && probe.verified, "Fluid restoration preceded verification");
                         ScaleUtils.setIPortalScaling(player, 1);
                         ScaleUtils.setBaseScale(player, 1);
+                        player.teleportTo((ServerLevel) player.level(), 576, 80, 69,
+                                java.util.Set.of(), 180, 0, false);
+                        player.removeEffect(net.minecraft.world.effect.MobEffects.FIRE_RESISTANCE);
+                        player.clearFire();
                         player.setAirSupply(player.getMaxAirSupply());
                         player.sendSystemMessage(Component.literal("PORTAL_FLUID_RESTORED"));
                         return 1;
@@ -141,7 +149,15 @@ final class PortalFluidFixture {
         if (name.startsWith("hidden_"))
             fill(source, 505, 519, 57, 62, name.equals("hidden_lava") ? Blocks.LAVA : Blocks.WATER);
         if (name.equals("visible_water")) fill(source, 505, 519, 64, 71, Blocks.WATER);
-        if (destinationCase(name)) {
+        if (name.equals("destination_lava")) {
+            // A permanent source strip feeds a genuine horizontal Nether lava flow.
+            // Its positive-X current is tangential to the portal plane, so it cannot
+            // substitute for the later ordinary movement key used to cross it.
+            // A single layer keeps the stream horizontal instead of creating a
+            // falling-fluid column whose native downward current changes direction.
+            for (int z = 57; z <= 63; z++)
+                destination.setBlock(new BlockPos(573, 80, z), Blocks.LAVA.defaultBlockState(), 3);
+        } else if (destinationCase(name)) {
             if (rotated) fill(destination, 569, 575, 57, 71, Blocks.WATER);
             else fill(destination, 569, 583, 57, 63, Blocks.WATER);
         }
@@ -182,6 +198,9 @@ final class PortalFluidFixture {
         player.getFoodData().setFoodLevel(20);
         player.getInventory().clearContent();
         player.teleportTo(source, START.x, START.y, START.z, java.util.Set.of(), 180, 0, false);
+        if (name.equals("destination_lava"))
+            player.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                    net.minecraft.world.effect.MobEffects.FIRE_RESISTANCE, 2000, 0, false, false));
         qouteall.imm_ptl.core.collision.PortalCollisionHandler.updateCollidingPortalAfterTeleportation(
                 player, player.getEyePosition(), player.getEyePosition(), 1);
         player.setDeltaMovement(Vec3.ZERO);
@@ -218,7 +237,7 @@ final class PortalFluidFixture {
     private static void observe(ServerPlayer player) {
         int elapsed = player.level().getServer().getTickCount() - probe.started;
         require(elapsed < 600, "The server native fluid fixture stalled: " + probe.name);
-        if (elapsed < 25) return;
+        if (elapsed < (probe.name.equals("destination_lava") ? 220 : 25)) return;
         if (probe.name.startsWith("hidden_")) {
             require(physicalFluid(player), "The hidden-fluid chamber does not intersect the raw player body");
             require(player.level().dimension() == Level.OVERWORLD && !player.isInWater()
@@ -233,6 +252,22 @@ final class PortalFluidFixture {
             require(player.position().distanceTo(probe.settled) < .025,
                     "An invisible source fluid pushed the stopped authoritative player");
             probe.sourceSamples++;
+            return;
+        }
+        if (probe.name.equals("destination_lava")) {
+            require(player.isInLava() && !player.isInWater()
+                            && player.getFluidHeight(FluidTags.LAVA) > 0
+                            && player.hasEffect(net.minecraft.world.effect.MobEffects.FIRE_RESISTANCE),
+                    "Visible destination lava lost its native fluid state or observer protection");
+            require(player.getHealth() == player.getMaxHealth(), "The protected lava observer took damage");
+            if (player.level().dimension() == Level.OVERWORLD) {
+                require(!physicalFluid(player), "The projected lava probe no longer has a dry source");
+                probe.sourceSamples++;
+            } else {
+                require(player.level().dimension() == Level.NETHER,
+                        "The lava observer entered an unrelated dimension");
+                probe.destinationSamples++;
+            }
             return;
         }
         require(player.isInWater() && !player.isInLava()
