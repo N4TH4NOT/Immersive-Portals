@@ -30,7 +30,7 @@ final class PortalNativeInteractionSmoke {
     private static final String[] PHASES = {
         "chest", "button", "place", "break", "entity_use", "entity_attack",
         "source_occluder", "destination_occluder", "outside", "out_of_reach", "mining_cross",
-        "projected_use", "projected_attack", "trade", "mount", "reflection"
+        "projected_use", "projected_attack", "bucket", "bucket_far", "trade", "mount", "reflection"
     };
     private static final java.util.Set<String> ACKNOWLEDGED = new java.util.HashSet<>();
     private static int phase;
@@ -133,6 +133,7 @@ final class PortalNativeInteractionSmoke {
             case "entity_use", "entity_attack" -> new Vec3(x, 71.7, 62.5);
             case "trade", "reflection" -> new Vec3(x, 71.5, 62.5);
             case "mount" -> new Vec3(x, 70.3, 62.5);
+            case "bucket", "bucket_far" -> new Vec3(x, 70.88, 62.5);
             case "projected_use", "projected_attack" -> new Vec3(128.7, 71.62, 63.9);
             case "outside" -> new Vec3(68.5, 71.5, 64);
             case "out_of_reach" -> new Vec3(x, 71.5, 57);
@@ -189,6 +190,19 @@ final class PortalNativeInteractionSmoke {
                             && BlockManipulationClient.remoteHitResult instanceof EntityHitResult hit
                             && hit.getEntity() instanceof ArmorStand,
                     "Native remote entity was not targeted: " + BlockManipulationClient.remoteHitResult);
+        } else if (phase.startsWith("bucket")) {
+            var target = qouteall.imm_ptl.core.block_manipulation.PortalInteractionTarget.traceBlocks(
+                    client.player, net.minecraft.world.level.ClipContext.Fluid.SOURCE_ONLY);
+            require(target != null, "The shared bucket ray did not return a bounded result");
+            if (phase.equals("bucket"))
+                require(target.world().dimension() == Level.NETHER
+                                && target.hit() instanceof BlockHitResult hit
+                                && hit.getType() == HitResult.Type.BLOCK
+                                && hit.getBlockPos().equals(PortalNativeInteractionFixture.BUCKET_SOURCE),
+                        "The native bucket input did not aim at the visible destination fluid");
+            else require(target.hit().getType() == HitResult.Type.MISS
+                            && Math.abs(client.player.blockInteractionRange() - 4.5) < 1e-6,
+                    "The native bucket reach witness did not end before the fluid");
         } else if (phase.equals("trade") || phase.equals("mount") || phase.equals("reflection")) {
             require(BlockManipulationClient.remotePointedDim == Level.NETHER
                             && BlockManipulationClient.remoteHitResult instanceof EntityHitResult hit
@@ -258,6 +272,13 @@ final class PortalNativeInteractionSmoke {
                             .distanceTo(new Vec3(128.5, 70, 62.5)) < .01) present = true;
                 yield present;
             }
+            case "bucket", "bucket_far" -> world.getFluidState(
+                    PortalNativeInteractionFixture.BUCKET_SOURCE).isSource()
+                    && client.player.getMainHandItem().is(Items.BUCKET)
+                    && Math.abs(client.player.blockInteractionRange() - 4.5) < 1e-6
+                    && (!phaseName().equals("bucket_far")
+                            || Math.abs(client.player.getY() - 71) < .01
+                                    && Math.abs(client.player.getZ() - 66.8) < .01);
             case "trade", "mount", "reflection" -> {
                 boolean present = false;
                 for (var entity : world.entitiesForRendering())

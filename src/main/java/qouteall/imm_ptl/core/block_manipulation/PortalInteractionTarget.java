@@ -72,6 +72,19 @@ public final class PortalInteractionTarget {
     @Nullable
     private static Target trace(Player player, Vec3 start, Vec3 look,
             double blockReach, double entityReach) {
+        return trace(player, start, look, blockReach, entityReach, ClipContext.Fluid.NONE, true);
+    }
+
+    /** Native fluid items use the same portal geometry and normal block reach as the picker. */
+    @Nullable
+    public static Target traceBlocks(Player player, ClipContext.Fluid fluid) {
+        return trace(player, player.getEyePosition(), player.getViewVector(1),
+                player.blockInteractionRange(), 0, fluid, false);
+    }
+
+    @Nullable
+    private static Target trace(Player player, Vec3 start, Vec3 look,
+            double blockReach, double entityReach, ClipContext.Fluid fluid, boolean remoteOnly) {
         Level world = player.level();
         Vec3 from = start;
         Vec3 direction = look.normalize();
@@ -82,7 +95,7 @@ public final class PortalInteractionTarget {
         while (travelled < reach) {
             double length = Math.min(4096, (reach - travelled) * scale);
             Vec3 end = from.add(direction.scale(length));
-            BlockHitResult block = clipBlocks(world, player, from, end);
+            BlockHitResult block = clipBlocks(world, player, from, end, fluid);
             double blockDistance = block.getType() == HitResult.Type.BLOCK
                     ? from.distanceTo(block.getLocation()) : Double.POSITIVE_INFINITY;
             var entity = PortalInteractionEntities.pick(world, player, from, direction,
@@ -90,7 +103,9 @@ public final class PortalInteractionTarget {
             double entityDistance = entity == null
                     ? Double.POSITIVE_INFINITY : from.distanceTo(entity.visualHit());
             var portalHit = PortalUtils.lenientRayTracePortals(world, from, end, true,
-                    portal -> !(portal instanceof Mirror) && portal.isInteractableBy(player), 0);
+                    portal -> !(portal instanceof Mirror) && portal.isInteractableBy(player)
+                            && BlockManipulationServer.canDoCrossPortalInteractionEvent.invoker()
+                                    .test(player), 0);
             double portalDistance = portalHit.isEmpty() ? Double.POSITIVE_INFINITY
                     : from.distanceTo(portalHit.get().getSecond().hitPos());
             if (portalHit.isPresent()
@@ -118,13 +133,13 @@ public final class PortalInteractionTarget {
                 continue;
             }
             if (entity != null && entityDistance < blockDistance) {
-                if (path.isEmpty() && entity.projectionPortal() == null) return null;
+                if (remoteOnly && path.isEmpty() && entity.projectionPortal() == null) return null;
                 return new Target(entity.actualHit().getEntity().level(), entity.actualHit(),
                         List.copyOf(path), travelled + entityDistance / scale, scale,
                         firstPortalHit == null ? entity.visualHit() : firstPortalHit,
                         entity.projectionPortal());
             }
-            if (path.isEmpty()) return null;
+            if (remoteOnly && path.isEmpty()) return null;
             HitResult hit = blockDistance / scale + travelled <= blockReach + 1e-6 ? block
                     : BlockHitResult.miss(end, Direction.getApproximateNearest(
                             direction.x, direction.y, direction.z), BlockPos.containing(end));
@@ -132,19 +147,29 @@ public final class PortalInteractionTarget {
                     : travelled + from.distanceTo(hit.getLocation()) / scale;
             return new Target(world, hit, List.copyOf(path), distance, scale, firstPortalHit);
         }
-        return path.isEmpty() ? null : new Target(world, BlockHitResult.miss(from,
+        return remoteOnly && path.isEmpty() ? null : new Target(world, BlockHitResult.miss(from,
                 Direction.getApproximateNearest(direction.x, direction.y, direction.z),
                 BlockPos.containing(from)), List.copyOf(path), reach, scale, firstPortalHit);
     }
 
     static BlockHitResult clipBlocks(Level world, Entity player, Vec3 from, Vec3 to) {
+        return clipBlocks(world, player, from, to, ClipContext.Fluid.NONE);
+    }
+
+    private static BlockHitResult clipBlocks(Level world, Entity player, Vec3 from, Vec3 to,
+            ClipContext.Fluid fluid) {
         Vec3 direction = to.subtract(from);
-        var context = new ClipContext(from, to, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player);
+        var context = new ClipContext(from, to, ClipContext.Block.OUTLINE, fluid, player);
         return BlockGetter.traverseBlocks(from, to, context, (ray, position) -> {
             BlockState state = world.getBlockState(position);
             if (state.getBlock() == PortalPlaceholderBlock.instance) return null;
-            return world.clipWithInteractionOverride(ray.getFrom(), ray.getTo(), position,
+            var block = world.clipWithInteractionOverride(ray.getFrom(), ray.getTo(), position,
                     ray.getBlockShape(state, world, position), state);
+            var liquid = ray.getFluidShape(world.getFluidState(position), world, position)
+                    .clip(ray.getFrom(), ray.getTo(), position);
+            if (block == null) return liquid;
+            return liquid == null || from.distanceToSqr(block.getLocation())
+                    <= from.distanceToSqr(liquid.getLocation()) ? block : liquid;
         }, ray -> BlockHitResult.miss(ray.getTo(), Direction.getApproximateNearest(
                 direction.x, direction.y, direction.z), BlockPos.containing(ray.getTo())));
     }

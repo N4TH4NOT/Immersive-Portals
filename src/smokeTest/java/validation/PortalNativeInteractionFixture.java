@@ -36,6 +36,7 @@ import qouteall.imm_ptl.peripheral.wand.ProtoPortalSide;
 final class PortalNativeInteractionFixture {
     static final BlockPos TARGET = new BlockPos(128, 71, 62);
     static final BlockPos SOURCE_WITNESS = new BlockPos(64, 71, 62);
+    static final BlockPos BUCKET_SOURCE = new BlockPos(128, 70, 62);
     private static boolean prepared;
     private static String phase;
     private static ArmorStand stand;
@@ -210,11 +211,13 @@ final class PortalNativeInteractionFixture {
                 for (int y = 70; y <= 74; y++)
                     destination.setBlock(new BlockPos(x, y, z), Blocks.AIR.defaultBlockState(), 3);
         source.setBlock(new BlockPos(64, 71, 65), Blocks.AIR.defaultBlockState(), 3);
+        source.setBlock(new BlockPos(64, 70, 66), Blocks.AIR.defaultBlockState(), 3);
         source.setBlock(SOURCE_WITNESS, Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
         player.getInventory().clearContent();
         player.getInventory().setSelectedSlot(0);
         player.setGameMode(next.equals("mining_cross") || next.equals("projected_use")
                 || next.equals("reflection")
+                || next.startsWith("bucket")
                 ? GameType.SURVIVAL : GameType.CREATIVE);
         player.getAttribute(Attributes.ENTITY_INTERACTION_RANGE)
                 .setBaseValue(next.equals("projected_use") ? .32 : 3);
@@ -278,6 +281,14 @@ final class PortalNativeInteractionFixture {
                 trader.overrideOffers(offers);
                 destination.addFreshEntity(trader);
             }
+            case "bucket", "bucket_far" -> {
+                destination.setBlock(BUCKET_SOURCE, Blocks.LAVA.defaultBlockState(), 3);
+                for (Direction side : Direction.Plane.HORIZONTAL)
+                    destination.setBlock(BUCKET_SOURCE.relative(side), Blocks.STONE.defaultBlockState(), 3);
+                player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.BUCKET));
+                if (next.equals("bucket_far"))
+                    source.setBlock(new BlockPos(64, 70, 66), Blocks.STONE.defaultBlockState(), 3);
+            }
             case "mount" -> {
                 boat = net.minecraft.world.entity.EntityTypes.OAK_BOAT.create(destination,
                         net.minecraft.world.entity.EntitySpawnReason.COMMAND);
@@ -310,7 +321,13 @@ final class PortalNativeInteractionFixture {
             if (next.equals("projected_use"))
                 require(Math.abs(player.entityInteractionRange() - .32) < 1e-6,
                         "The projected use fixture did not limit reach before the portal plane");
-        } else player.teleportTo(source, 64.5, 70, next.equals("mining_cross") ? 64.4
+        } else if (next.equals("bucket_far")) {
+            player.teleportTo(source, 64.5, 71, 66.8, java.util.Set.of(), 180, 0, false);
+            double distance = player.getEyePosition().distanceTo(new Vec3(64.5, 70.8888889, 62.5));
+            require(player.blockInteractionRange() < distance && distance < 5,
+                    "The bucket reach witness did not distinguish the native range from the old fixed range");
+        } else player.teleportTo(source, 64.5, 70,
+                next.equals("mining_cross") || next.equals("bucket") ? 64.4
                 : next.equals("reflection") ? 65.4 : 66.5,
                 java.util.Set.of(), 180, 0, false);
         phase = next;
@@ -375,6 +392,20 @@ final class PortalNativeInteractionFixture {
                 tradeClosurePlayer = player;
                 tradeClosureTicks = 0;
                 return;
+            }
+            case "bucket" -> {
+                require(player.getMainHandItem().is(Items.LAVA_BUCKET)
+                                && destination.getFluidState(BUCKET_SOURCE).isEmpty(),
+                        "Native bucket use did not collect the real destination fluid");
+                require(player.level() == source, "Remote bucket use moved the physical player");
+                System.out.println("PORTAL_NATIVE_INTERACTION_BUCKET_SOURCE_COLLECTED");
+            }
+            case "bucket_far" -> {
+                require(player.getMainHandItem().is(Items.BUCKET)
+                                && destination.getFluidState(BUCKET_SOURCE).isSource(),
+                        "The bucket still used its old fixed five-block reach through the portal");
+                System.out.println("PORTAL_NATIVE_INTERACTION_BUCKET_NORMAL_REACH range="
+                        + player.blockInteractionRange());
             }
             case "mount" -> {
                 require(boat != null && player.getVehicle() == boat && player.level() == destination
