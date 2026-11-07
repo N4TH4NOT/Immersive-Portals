@@ -8,14 +8,14 @@ if [[ "${GITHUB_ACTIONS:-}" != true ]]; then
 fi
 
 backend="${1:?Expected opengl or vulkan}"
-scenario="${2:?Expected multiplayer, scaled, rendering, optics or singleplayer}"
+scenario="${2:?Expected multiplayer, scaled, rendering, optics, interaction, quality or singleplayer}"
 modset="${PORTAL_CI_MODSET:-vanilla}"
 case "$backend" in opengl|vulkan) ;; *) exit 2 ;; esac
-case "$scenario" in multiplayer|scaled|rendering|optics|singleplayer) ;; *) exit 2 ;; esac
+case "$scenario" in multiplayer|scaled|rendering|optics|interaction|quality|singleplayer) ;; *) exit 2 ;; esac
 case "$modset" in vanilla|sodium|iris) ;; *) exit 2 ;; esac
 if [[ "$modset" != vanilla && "$backend" != opengl ]] \
     || [[ "$modset" == iris && "$scenario" != rendering && "$scenario" != optics ]] \
-    || [[ "$modset" == sodium && "$scenario" != rendering && "$scenario" != optics && "$scenario" != multiplayer ]]; then
+    || [[ "$modset" == sodium && "$scenario" != rendering && "$scenario" != optics && "$scenario" != multiplayer && "$scenario" != interaction && "$scenario" != quality ]]; then
     printf '%s\n' 'Compatibility verification requires OpenGL graphics or Sodium multiplayer.' >&2
     exit 2
 fi
@@ -43,9 +43,15 @@ if [[ "${3:-}" != --display-ready ]]; then
 fi
 
 server_pid=''
+client_pids=()
 cleanup() {
     status=$?
     trap - EXIT INT TERM
+    for client_pid in "${client_pids[@]}"; do
+        pkill -TERM -P "$client_pid" 2>/dev/null || true
+        kill -TERM "$client_pid" 2>/dev/null || true
+        wait "$client_pid" 2>/dev/null || true
+    done
     if [[ -n "$server_pid" ]]; then
         # GNU timeout forwards TERM to the complete Gradle/game process group.
         kill -TERM "$server_pid" 2>/dev/null || true
@@ -125,6 +131,8 @@ case "$scenario" in
     scaled) username=ScaledTest ;;
     rendering) username=OcclusionTest; scenario_args+=(-PportalRenderSmoke=true) ;;
     optics) username=OpticsTest; scenario_args+=(-PportalOpticsSmoke=true) ;;
+    interaction) username=InteractionTest; scenario_args+=(-PportalSmokeNativeInteractions=true) ;;
+    quality) scenario_args+=(-PportalQualitySmoke=true) ;;
     singleplayer) scenario_args+=(-PportalSmokeSingleplayer=true) ;;
 esac
 case "$modset" in
@@ -179,23 +187,69 @@ stop_server() {
 }
 
 if [[ "$scenario" != singleplayer ]]; then
-    start_server "$evidence/server-console.log"
+    if [[ "$scenario" == quality ]]; then
+        start_server "$evidence/server-console.log" -PportalQualitySmoke=true
+    else
+        start_server "$evidence/server-console.log"
+    fi
 fi
 
 run_client() {
-    client_log="$1"
+    local client_log="$1"
     shift
+    local client_task=runClient
+    if [[ "$scenario" == quality ]]; then
+        # --project-cache-dir isolates launch.cfg, but Loom also writes a
+        # classpath argfile under build/loom-cache/argFiles/<task name>.
+        case "$username" in
+            QualityA) client_task=runQualityA ;;
+            QualityB) client_task=runQualityB ;;
+            *) printf '%s\n' 'The quality client has no isolated Loom run task.' >&2; return 2 ;;
+        esac
+    fi
     timeout --signal=TERM --kill-after=30s 600s \
         ./gradlew -PportalSmoke "-PportalSmokeBackend=$backend" \
             "-PportalSmokeUsername=$username" "${scenario_args[@]}" "$@" \
-            runClient --no-daemon --stacktrace --console=plain \
+            "$client_task" --no-daemon --stacktrace --console=plain \
         2>&1 | tee "$client_log"
 }
+
+run_quality_clients() {
+    quality_prefix="$1"
+    shift
+    client_pids=()
+    for quality_role in a b; do
+        quality_directory="run/smoke-client-$quality_role"
+        mkdir -p "$quality_directory"
+        cp run/smoke-client/options.txt "$quality_directory/options.txt"
+        if [[ "$quality_role" == a ]]; then username=QualityA; else username=QualityB; fi
+        run_client "$evidence/${quality_prefix}client-$quality_role-console.log" \
+            "-PportalSmokeClientDir=$quality_directory" \
+            --project-cache-dir "${RUNNER_TEMP:?}/portal-quality-$quality_role-gradle" "$@" &
+        client_pids+=("$!")
+    done
+    for client_pid in "${client_pids[@]}"; do wait "$client_pid"; done
+    client_pids=()
+    /usr/bin/python3 .github/ci/assert-quality.py "$backend" "$evidence" "$quality_prefix"
+}
+
+if [[ "$scenario" == quality ]]; then
+    run_quality_clients ''
+    stop_server
+    start_server "$evidence/reload-server-console.log" \
+        -PportalQualitySmoke=true -PportalQualityReload=true
+    run_quality_clients 'reload-' -PportalQualityReload=true
+    stop_server
+    printf '%s\n' 'FABRIC_QUALITY_RESTART_VERIFIED'
+    exit 0
+fi
 
 run_client "$evidence/client-console.log"
 
 if [[ "$scenario" == optics ]]; then
     /usr/bin/python3 .github/ci/assert-optics.py "$backend" "$evidence"
+elif [[ "$scenario" == interaction ]]; then
+    /usr/bin/python3 .github/ci/assert-native-interaction.py "$backend" "$evidence"
 else
     /usr/bin/python3 .github/ci/assert-fabric-scenario.py "$backend" "$scenario" "$evidence"
 fi

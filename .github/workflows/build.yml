@@ -64,6 +64,21 @@ jobs:
         # and vanilla-rendering scenarios, so each iteration exposes useful failures.
         include:
           - backend: opengl
+            scenario: interaction
+            modset: vanilla
+          - backend: opengl
+            scenario: interaction
+            modset: sodium
+          - backend: vulkan
+            scenario: interaction
+            modset: vanilla
+          - backend: opengl
+            scenario: quality
+            modset: vanilla
+          - backend: opengl
+            scenario: quality
+            modset: sodium
+          - backend: opengl
             scenario: optics
             modset: vanilla
           - backend: opengl
@@ -148,10 +163,17 @@ jobs:
             run/smoke-client/saves/**/portal-smoke-dimensions.json
             run/smoke-client/saves/**/portal-smoke-dynamic-dimensions.json
             run/smoke-client/hs_err_pid*.log
+            run/smoke-client-*/logs/**
+            run/smoke-client-*/crash-reports/**
+            run/smoke-client-*/screenshots/**
+            run/smoke-client-*/options.txt
+            run/smoke-client-*/hs_err_pid*.log
             run/smoke-server/logs/**
             run/smoke-server/crash-reports/**
             run/smoke-server/hs_err_pid*.log
             run/smoke-server/**/portal-smoke-dimensions.json
             run/smoke-server/**/portal-smoke-dynamic-dimensions.json
+            run/smoke-server/**/portal-quality-*.json
+            run/smoke-server/**/portal-smoke-quality.json
             **/build/reports/**
             **/build/test-results/**

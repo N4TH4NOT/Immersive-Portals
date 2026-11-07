@@ -90,6 +90,9 @@ if scenario == "rendering":
         "PORTAL_RENDER_WALL_STABLE_OK",
         "PORTAL_RENDER_BODY_REMOTE_OK",
         "PORTAL_RENDER_BODY_CAMERA_OK",
+        "PORTAL_SOUND_NATIVE_OK",
+        "PORTAL_REMOTE_PARTICLE_RATE_OK",
+        "PORTAL_REMOTE_ENVIRONMENT_OK",
         "PORTAL_RENDER_COMPLETE",
     ]
     server_markers.append("PORTAL_RENDER_WALL_FIXTURE_READY")

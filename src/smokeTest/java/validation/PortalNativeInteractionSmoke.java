@@ -386,6 +386,13 @@ final class PortalNativeInteractionSmoke {
                 if (elapsed < 5) return;
                 System.out.println("PORTAL_NATIVE_INTERACTION_CLIENT_OK phase=" + phaseName());
                 if (++phase == PHASES.length) {
+                    if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium")) {
+                        require(qouteall.imm_ptl.core.compat.sodium_compatibility.SodiumInterface.invoker
+                                        .isSodiumPresent()
+                                        && qouteall.imm_ptl.core.render.RenderDiagnostics.sodiumViewports() > 0,
+                                "The native interaction scenario did not exercise Sodium's portal viewports");
+                        System.out.println("PORTAL_NATIVE_INTERACTION_SODIUM_COMPAT_OK");
+                    }
                     Screenshot.grab(client.gameDirectory, "portal-native-interactions-complete.png",
                             client.gameRenderer.mainRenderTarget(), 1, message -> {});
                     System.out.println("PORTAL_NATIVE_INTERACTION_COMPLETE phases=" + PHASES.length);

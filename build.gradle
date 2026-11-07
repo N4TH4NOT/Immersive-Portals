@@ -103,6 +103,9 @@ if (providers.gradleProperty('portalSmoke').isPresent()) {
                 vmArg '-DportalSmoke.interactions=' + providers.gradleProperty('portalSmokeInteractions').getOrElse('false')
                 vmArg '-DportalSmoke.rendering=' + providers.gradleProperty('portalRenderSmoke').getOrElse('false')
                 vmArg '-DportalSmoke.optics=' + providers.gradleProperty('portalOpticsSmoke').getOrElse('false')
+                vmArg '-DportalSmoke.nativeInteractions=' + providers.gradleProperty('portalSmokeNativeInteractions').getOrElse('false')
+                vmArg '-DportalSmoke.quality=' + providers.gradleProperty('portalQualitySmoke').getOrElse('false')
+                vmArg '-DportalSmoke.qualityReload=' + providers.gradleProperty('portalQualityReload').getOrElse('false')
                 vmArg '-Dimm_ptl.renderDiagnostics=true'
                 if (providers.gradleProperty('portalSmokeSodium').isPresent()) {
                     vmArg '-Dmixin.debug.export=true'
@@ -112,10 +115,27 @@ if (providers.gradleProperty('portalSmoke').isPresent()) {
                 vmArg '-DportalSmoke.dynamicDimensions=' + providers.gradleProperty('portalSmokeDynamicDimensions').getOrElse('false')
                 vmArg '-DportalSmoke.dimensionReload=' + providers.gradleProperty('portalSmokeDimensionReload').getOrElse('false')
             }
+            if (providers.gradleProperty('portalQualitySmoke').isPresent()) {
+                // Loom's JVM classpath argfile is keyed by task name under build/,
+                // independently of --project-cache-dir. Give concurrent clients
+                // separate run tasks while retaining the common client options.
+                qualityA {
+                    inherit client
+                    runDir providers.gradleProperty('portalSmokeClientDir').getOrElse('run/smoke-client')
+                    ideConfigGenerated false
+                }
+                qualityB {
+                    inherit client
+                    runDir providers.gradleProperty('portalSmokeClientDir').getOrElse('run/smoke-client')
+                    ideConfigGenerated false
+                }
+            }
             server {
                 source sourceSets.smokeTest
                 runDir 'run/smoke-server'
                 vmArg '-DportalSmoke.dimensionReload=' + providers.gradleProperty('portalSmokeDimensionReload').getOrElse('false')
+                vmArg '-DportalSmoke.quality=' + providers.gradleProperty('portalQualitySmoke').getOrElse('false')
+                vmArg '-DportalSmoke.qualityReload=' + providers.gradleProperty('portalQualityReload').getOrElse('false')
             }
         }
     }
