@@ -96,7 +96,7 @@ def expected_color(record, ray):
            abs(point[1] - 126), abs(point[1] - 134)) < .12:
         return None
     if plane <= first + 1e-5 and 124 < point[0] < 132 and 126 < point[1] < 134:
-        boxes = destination + ([((124, 126, 126, 133, 134, 127), "gray")]
+        boxes = destination + ([((124, 126, 126, 133, 134, 127), "blue")]
                                if record["mode"] == "destination" else [])
         return nearest(add(point, ray, 1e-6), ray, boxes)[1]
     return color
@@ -106,6 +106,8 @@ def pixel_color(pixel, expected_color):
     r, g, b = pixel
     if expected_color == "green":
         return g > r * 1.12 + 6 and g > b * 1.03 + 3 and g >= 20
+    if expected_color == "blue":
+        return b > r * 1.25 + 6 and b > g * 1.15 + 4 and b >= 15
     return max(pixel) - min(pixel) < 30 and max(pixel) > 8
 
 
@@ -151,7 +153,7 @@ for name in expected:
                             for r, g, b in patch.getdata()) / (patch.width * patch.height)
             values.append({"frame": record["frame"], "mean_luminance": luminance})
             continue
-        counts = {"green": [0, 0], "gray": [0, 0]}
+        counts = {"green": [0, 0], "gray": [0, 0], "blue": [0, 0]}
         for y in range(int(.2 * rgb.height), int(.8 * rgb.height), 12):
             for x in range(int(.15 * rgb.width), int(.85 * rgb.width), 12):
                 sx, sy = 2 * (x + .5) / rgb.width - 1, 1 - 2 * (y + .5) / rgb.height

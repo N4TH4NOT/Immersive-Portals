@@ -118,7 +118,7 @@ final class PortalOpticsSmoke {
         boolean sourceClosed = view.mode().equals("source");
         boolean destinationClosed = view.mode().equals("destination");
         if (source.getBlockState(new BlockPos(128, 130, 129)).is(Blocks.STONE) != sourceClosed
-                || destination.getBlockState(new BlockPos(128, 130, 126)).is(Blocks.STONE) != destinationClosed)
+                || destination.getBlockState(new BlockPos(128, 130, 126)).is(Blocks.CONCRETE.blue()) != destinationClosed)
             return false;
         if (!view.reference()) {
             int faces = 0;
@@ -211,7 +211,11 @@ final class PortalOpticsSmoke {
         require(ticks - started < 300, "The optical fixture did not settle: " + views.get(index)
                 + " " + readinessDetails(client));
         var view = views.get(index);
-        if (ticks - started < (view.lighting() ? 60 : 16) || !ready(client, view)) return;
+        // The first view creates the native remote renderer and its initial section
+        // meshes. Block/light packets can be ready before those meshes finish uploading.
+        // Subsequent views reuse that scene; every captured series remains consecutive.
+        int settleTicks = index == 0 || view.lighting() ? 60 : 16;
+        if (ticks - started < settleTicks || !ready(client, view)) return;
         checkCamera(client, view);
         capturing = true;
     }

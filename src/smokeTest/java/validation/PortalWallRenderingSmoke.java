@@ -187,6 +187,10 @@ final class PortalWallRenderingSmoke {
         require(client.level.getBlockState(new BlockPos(0, 72, 2)).is(Blocks.STONE) == occluded,
                 "The wall probe's foreground occluder is stale");
         if (occluded)
+            require(client.level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,
+                            new BlockPos(0, 72, 3)) >= 5,
+                    "The foreground stone witness has no real source illumination");
+        if (occluded)
             require(!PortalRenderInfo.get(front(client)).wasRenderedLastFrame(),
                     "The foreground wall did not occlude the coplanar portal");
         if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium")) {

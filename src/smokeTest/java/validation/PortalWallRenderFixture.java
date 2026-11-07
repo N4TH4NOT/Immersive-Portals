@@ -25,6 +25,13 @@ final class PortalWallRenderFixture {
                                 throw new AssertionError("The wall rendering fixture has no Nether");
                             PortalCollisionSmoke.replacePlayerPortals(
                                     player, source, destination, scenePortals);
+                            // Illuminate the source face with real block light. An opaque
+                            // stone wall in this sealed room otherwise looks nearly black;
+                            // that is unrelated to whether it hides the green destination.
+                            for (int x = -10; x <= 10; x += 5)
+                                for (int z = 5; z <= 10; z += 5)
+                                    source.setBlock(new BlockPos(x, 76, z),
+                                            Blocks.SEA_LANTERN.defaultBlockState(), 3);
                             for (int x = -3; x <= 3; x++)
                                 for (int y = 70; y <= 76; y++)
                                     source.setBlock(new BlockPos(x, y, -1),

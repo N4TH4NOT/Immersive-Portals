@@ -139,7 +139,9 @@ final class PortalOpticsFixture {
             for (int x = 124; x <= 132; x++)
                 for (int y = 126; y <= 133; y++)
                     to.setBlock(new BlockPos(x, y, 126),
-                            (destination ? Blocks.STONE : Blocks.AIR).defaultBlockState(), 3);
+                            // A separate intrinsic hue identifies the nearest destination
+                            // face even under its naturally warm block-light spectrum.
+                            (destination ? Blocks.CONCRETE.blue() : Blocks.AIR).defaultBlockState(), 3);
             destinationOccluder = destination;
         }
     }
