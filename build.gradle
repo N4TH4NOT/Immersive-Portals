@@ -81,6 +81,34 @@ if (providers.gradleProperty('portalSmoke').isPresent()) {
         }
     }
     tasks.named('runServer') { dependsOn prepareServer }
+    def configureSmokeClient = { runConfig ->
+        runConfig.source sourceSets.smokeTest
+        runConfig.runDir providers.gradleProperty('portalSmokeClientDir').getOrElse('run/smoke-client')
+        runConfig.programArgs '--username', providers.gradleProperty('portalSmokeUsername').getOrElse('PortalTest')
+        runConfig.programArgs '--graphicsBackend', providers.gradleProperty('portalSmokeBackend').getOrElse('opengl')
+        if (!providers.gradleProperty('portalSmokeSingleplayer').isPresent()) {
+            runConfig.programArgs '--quickPlayMultiplayer', providers.gradleProperty('portalSmokeAddress').getOrElse('127.0.0.1:25567')
+        }
+        runConfig.vmArg '-DportalSmoke.singleplayer=' + providers.gradleProperty('portalSmokeSingleplayer').isPresent()
+        runConfig.vmArg '-DportalSmoke.existingWorld=' + providers.gradleProperty('portalSmokeSingleplayerWorld').getOrElse('')
+        runConfig.vmArg '-DportalSmoke.address=' + providers.gradleProperty('portalSmokeAddress').getOrElse('127.0.0.1:25567')
+        runConfig.vmArg '-DportalSmoke.target=' + providers.gradleProperty('portalSmokeTarget').getOrElse('minecraft:the_nether')
+        runConfig.vmArg '-DportalSmoke.interaction=' + providers.gradleProperty('portalSmokeInteraction').getOrElse('false')
+        runConfig.vmArg '-DportalSmoke.interactions=' + providers.gradleProperty('portalSmokeInteractions').getOrElse('false')
+        runConfig.vmArg '-DportalSmoke.rendering=' + providers.gradleProperty('portalRenderSmoke').getOrElse('false')
+        runConfig.vmArg '-DportalSmoke.optics=' + providers.gradleProperty('portalOpticsSmoke').getOrElse('false')
+        runConfig.vmArg '-DportalSmoke.nativeInteractions=' + providers.gradleProperty('portalSmokeNativeInteractions').getOrElse('false')
+        runConfig.vmArg '-DportalSmoke.quality=' + providers.gradleProperty('portalQualitySmoke').getOrElse('false')
+        runConfig.vmArg '-DportalSmoke.qualityReload=' + providers.gradleProperty('portalQualityReload').getOrElse('false')
+        runConfig.vmArg '-Dimm_ptl.renderDiagnostics=true'
+        if (providers.gradleProperty('portalSmokeSodium').isPresent()) {
+            runConfig.vmArg '-Dmixin.debug.export=true'
+            runConfig.vmArg '-Dmixin.debug.export.filter=net.minecraft.client.renderer.extract.LevelExtractor'
+        }
+        runConfig.vmArg '-DportalSmoke.gravity=' + providers.gradleProperty('portalGravitySmoke').getOrElse('false')
+        runConfig.vmArg '-DportalSmoke.dynamicDimensions=' + providers.gradleProperty('portalSmokeDynamicDimensions').getOrElse('false')
+        runConfig.vmArg '-DportalSmoke.dimensionReload=' + providers.gradleProperty('portalSmokeDimensionReload').getOrElse('false')
+    }
     loom {
         mods {
             immersive_portals { sourceSet sourceSets.main }
@@ -88,45 +116,21 @@ if (providers.gradleProperty('portalSmoke').isPresent()) {
         }
         runs {
             client {
-                source sourceSets.smokeTest
-                runDir providers.gradleProperty('portalSmokeClientDir').getOrElse('run/smoke-client')
-                programArgs '--username', providers.gradleProperty('portalSmokeUsername').getOrElse('PortalTest')
-                programArgs '--graphicsBackend', providers.gradleProperty('portalSmokeBackend').getOrElse('opengl')
-                if (!providers.gradleProperty('portalSmokeSingleplayer').isPresent()) {
-                    programArgs '--quickPlayMultiplayer', providers.gradleProperty('portalSmokeAddress').getOrElse('127.0.0.1:25567')
-                }
-                vmArg '-DportalSmoke.singleplayer=' + providers.gradleProperty('portalSmokeSingleplayer').isPresent()
-                vmArg '-DportalSmoke.existingWorld=' + providers.gradleProperty('portalSmokeSingleplayerWorld').getOrElse('')
-                vmArg '-DportalSmoke.address=' + providers.gradleProperty('portalSmokeAddress').getOrElse('127.0.0.1:25567')
-                vmArg '-DportalSmoke.target=' + providers.gradleProperty('portalSmokeTarget').getOrElse('minecraft:the_nether')
-                vmArg '-DportalSmoke.interaction=' + providers.gradleProperty('portalSmokeInteraction').getOrElse('false')
-                vmArg '-DportalSmoke.interactions=' + providers.gradleProperty('portalSmokeInteractions').getOrElse('false')
-                vmArg '-DportalSmoke.rendering=' + providers.gradleProperty('portalRenderSmoke').getOrElse('false')
-                vmArg '-DportalSmoke.optics=' + providers.gradleProperty('portalOpticsSmoke').getOrElse('false')
-                vmArg '-DportalSmoke.nativeInteractions=' + providers.gradleProperty('portalSmokeNativeInteractions').getOrElse('false')
-                vmArg '-DportalSmoke.quality=' + providers.gradleProperty('portalQualitySmoke').getOrElse('false')
-                vmArg '-DportalSmoke.qualityReload=' + providers.gradleProperty('portalQualityReload').getOrElse('false')
-                vmArg '-Dimm_ptl.renderDiagnostics=true'
-                if (providers.gradleProperty('portalSmokeSodium').isPresent()) {
-                    vmArg '-Dmixin.debug.export=true'
-                    vmArg '-Dmixin.debug.export.filter=net.minecraft.client.renderer.extract.LevelExtractor'
-                }
-                vmArg '-DportalSmoke.gravity=' + providers.gradleProperty('portalGravitySmoke').getOrElse('false')
-                vmArg '-DportalSmoke.dynamicDimensions=' + providers.gradleProperty('portalSmokeDynamicDimensions').getOrElse('false')
-                vmArg '-DportalSmoke.dimensionReload=' + providers.gradleProperty('portalSmokeDimensionReload').getOrElse('false')
+                configureSmokeClient(delegate)
             }
             if (providers.gradleProperty('portalQualitySmoke').isPresent()) {
                 // Loom's JVM classpath argfile is keyed by task name under build/,
                 // independently of --project-cache-dir. Give concurrent clients
-                // separate run tasks while retaining the common client options.
+                // separate run tasks with explicitly applied common client options.
+                // Inherited JVM argument conventions are replaced during Loom finalization.
                 qualityA {
-                    inherit client
-                    runDir providers.gradleProperty('portalSmokeClientDir').getOrElse('run/smoke-client')
+                    configureSmokeClient(delegate)
+                    client()
                     ideConfigGenerated false
                 }
                 qualityB {
-                    inherit client
-                    runDir providers.gradleProperty('portalSmokeClientDir').getOrElse('run/smoke-client')
+                    configureSmokeClient(delegate)
+                    client()
                     ideConfigGenerated false
                 }
             }

@@ -141,7 +141,7 @@ case "$modset" in
 esac
 
 # Resolve and compile before starting two long-lived Gradle processes against the checkout.
-./gradlew -PportalSmoke compileSmokeTestJava --no-daemon --stacktrace --console=plain \
+./gradlew -PportalSmoke compileSmokeTestJava downloadAssets --no-daemon --stacktrace --console=plain \
     2>&1 | tee "$evidence/prepare.log"
 
 start_server() {

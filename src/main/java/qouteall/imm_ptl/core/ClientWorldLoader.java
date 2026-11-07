@@ -131,7 +131,9 @@ public class ClientWorldLoader {
                     tickRemoteWorldRandomTicksClient(newWorld, nearbyPortals);
                 }
                 
-                newWorld.pollLightUpdates();
+                // In 26.2 polling only stages packet data. The native update also
+                // publishes the light engine's pending section data for rendering.
+                newWorld.update();
             }
             catch (Throwable e) {
                 if (LOG_LIMIT.tryDecrement()) {
