@@ -25,6 +25,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ChunkPos;
@@ -378,7 +379,7 @@ final class PortalQualitySmoke {
             }
             require(entity != null && !entity.isRemoved() && previous.type().isInstance(entity),
                     "Portal traversal lost or replaced the quality " + previous.name());
-            boolean crossWorld = previous.name().equals("cross_world_mob");
+            boolean crossWorld = previous.name().startsWith("cross_world_");
             boolean arrived = crossWorld ? entity.level().dimension() == Level.NETHER : destination(entity);
             Vec3 position = crossWorld && arrived
                     ? crossWorldEntityPortal.inverseTransformPoint(entity.position())
@@ -409,20 +410,28 @@ final class PortalQualitySmoke {
             if (arrived && crossedEntities.add(entity.getUUID())) {
                 double expectedX = crossWorld ? 192 : previous.name().equals("fast_projectile") ? 65.2 : 64;
                 require(entity.getZ() < (crossWorld ? 40 : 32) && Math.abs(entity.getX() - expectedX) < .02
-                                && velocity.z < -.005,
+                                && (velocity.z < -.005 || blockedProjectiles.contains(entity.getUUID())),
                         "The quality entity did not preserve its trajectory: " + previous.name()
                                 + " position=" + entity.position() + " velocity=" + velocity);
                 if (entity instanceof ItemEntity item)
                     require(item.getItem().is(Items.AMETHYST_SHARD) && item.getItem().getCount() == 3,
                             "Item traversal changed its stack");
                 if (crossWorld) {
-                    require(entity != originalEntities.get(entity.getUUID())
-                                    && originalEntities.get(entity.getUUID()).isRemoved()
-                                    && entity.getCustomName() != null
+                    require(entity.getCustomName() != null
                                     && entity.getCustomName().getString().equals("Quality UUID witness"),
-                            "Cross-dimension entity recreation did not preserve identity and NBT");
-                    System.out.println("PORTAL_QUALITY_ENTITY_UUID_OK uuid=" + entity.getUUID()
-                            + " destination=" + entity.level().dimension().identifier());
+                            "Cross-dimension traversal did not preserve the entity's NBT");
+                    if (entity instanceof Projectile) {
+                        require(entity == originalEntities.get(entity.getUUID()),
+                                "Inline projectile traversal replaced its active native tick object");
+                        System.out.println("PORTAL_QUALITY_PROJECTILE_WORLD_OK uuid=" + entity.getUUID()
+                                + " destination=" + entity.level().dimension().identifier());
+                    } else {
+                        require(entity != originalEntities.get(entity.getUUID())
+                                        && originalEntities.get(entity.getUUID()).isRemoved(),
+                                "Cross-dimension mob recreation did not preserve identity");
+                        System.out.println("PORTAL_QUALITY_ENTITY_UUID_OK uuid=" + entity.getUUID()
+                                + " destination=" + entity.level().dimension().identifier());
+                    }
                 }
                 System.out.println("PORTAL_QUALITY_ENTITY_CROSSED type=" + previous.name()
                         + " position=" + entity.position() + " velocity=" + velocity);
@@ -430,7 +439,7 @@ final class PortalQualitySmoke {
             entities.put(previous.id(), new Tracked(previous.name(), previous.id(), previous.type(),
                     position, velocity));
         }
-        return crossedEntities.size() == 5 && blockedProjectiles.size() == 2;
+        return crossedEntities.size() == 6 && blockedProjectiles.size() == 2;
     }
 
     private static void prepareCrossWorldEntity(ServerLevel source) {
@@ -473,6 +482,11 @@ final class PortalQualitySmoke {
         chicken.setPersistenceRequired();
         chicken.setCustomName(Component.literal("Quality UUID witness"));
         spawn(source, "cross_world_mob", chicken, new Vec3(2.5, 70, 40.2), new Vec3(0, 0, -.35));
+        var snowball = EntityTypes.SNOWBALL.create(source, EntitySpawnReason.COMMAND);
+        require(snowball != null, "Could not create the cross-dimension projectile witness");
+        snowball.setCustomName(Component.literal("Quality UUID witness"));
+        spawn(source, "cross_world_projectile", snowball,
+                new Vec3(2.5, 72.5, 40.2), new Vec3(0, 0, -.6));
     }
 
     private static double horizontal(Vec3 vector) {

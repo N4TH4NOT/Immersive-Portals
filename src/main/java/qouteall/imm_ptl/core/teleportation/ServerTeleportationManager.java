@@ -97,6 +97,7 @@ public class ServerTeleportationManager {
     public static boolean shouldEntityTeleport(Portal portal, Entity entity) {
         if (entity.level() != portal.level()) {return false;}
         if (!portal.canTeleportEntity(entity)) {return false;}
+        if (ProjectilePortalTraversal.handles(entity)) return false;
         Vec3 lastEyePos = entity.getEyePosition(0);
         Vec3 nextEyePos = entity.getEyePosition(1);
         
@@ -594,6 +595,18 @@ public class ServerTeleportationManager {
 
         // Replace both interpolation endpoints in the destination coordinate system.
         // Canceling the vanilla network lerp must not collapse this tick's motion.
+        synchronizePortalPosition(entity);
+        
+        // a new entity may be created
+        this.lastTeleportGameTime.put(entity, currGameTime);
+    }
+
+    void finishProjectilePortalTraversal(Projectile projectile) {
+        this.lastTeleportGameTime.put(projectile, McHelper.getServerGameTime());
+        synchronizePortalPosition(projectile);
+    }
+
+    private static void synchronizePortalPosition(Entity entity) {
         McHelper.sendToTrackers(
                 entity,
                 McRemoteProcedureCall.createPacketToSendToClient(
@@ -603,9 +616,6 @@ public class ServerTeleportationManager {
                         entity.position(),
                         McHelper.lastTickPosOf(entity),
                         McHelper.getWorldVelocity(entity)));
-        
-        // a new entity may be created
-        this.lastTeleportGameTime.put(entity, currGameTime);
     }
     
     private static Vec3 getPredictedProjectileExit(Entity entity, Portal portal) {

@@ -23,11 +23,12 @@ if reloaded:
 else:
     required += ["FIXTURE_READY", "CONCURRENT_CROSSING_OK phase=4",
                  "CONCURRENT_CROSSING_OK phase=5", "SERVER_PERFORMANCE_OK",
-                 "PERSISTENCE_SAVED", "ENTITY_UUID_OK", "ENTITY_PHYSICS_OK count=5 destinationHits=2"]
+                 "PERSISTENCE_SAVED", "ENTITY_UUID_OK", "PROJECTILE_WORLD_OK",
+                 "ENTITY_PHYSICS_OK count=6 destinationHits=2"]
     required += [f"PICKUP_{phase}_OK" for phase in
                  ("APPROACH", "DELAY", "CAPACITY", "OWNERSHIP", "APERTURE", "REACH", "RACE", "CROSS_WORLD")]
     required.append("PICKUP_OK")
-    for kind in ("mob", "item", "projectile", "fast_projectile"):
+    for kind in ("mob", "item", "projectile", "fast_projectile", "cross_world_mob", "cross_world_projectile"):
         required.append(f"ENTITY_CROSSED type={kind}")
     required += [f"PROJECTILE_DESTINATION_HIT type={kind}"
                  for kind in ("projectile", "fast_projectile")]
