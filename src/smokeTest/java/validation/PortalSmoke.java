@@ -27,6 +27,7 @@ public final class PortalSmoke implements ModInitializer {
         PortalBodyRenderFixture.initialize(scenePortals);
         PortalEnvironmentFixture.initialize(scenePortals);
         PortalPoseUseFixture.initialize(scenePortals);
+        PortalFluidFixture.initialize(scenePortals);
         PortalSameWorldSmoke.initialize(scenePortals);
         PortalQualitySmoke.initialize(scenePortals);
         net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(

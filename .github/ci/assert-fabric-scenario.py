@@ -72,6 +72,11 @@ if scenario in ("multiplayer", "singleplayer"):
         for case in ("sprint", "crouch", "fly", "fall", "swim", "bow", "food"):
             client_markers.append(f"PORTAL_POSE_USE_CLIENT_OK case={case}")
             server_markers.append(f"PORTAL_POSE_USE_SERVER_OK case={case}")
+        client_markers.append("PORTAL_FLUID_COMPLETE cases=6")
+        for case in ("hidden_water", "hidden_lava", "visible_water", "destination_water",
+                     "scaled_water", "rotated_water"):
+            client_markers.append(f"PORTAL_FLUID_CLIENT_OK case={case}")
+            server_markers.append(f"PORTAL_FLUID_SERVER_OK case={case}")
 if scenario == "multiplayer":
     client_markers.append(
         "PORTAL_SMOKE_DYNAMIC_DIMENSION_RELOAD_OK"

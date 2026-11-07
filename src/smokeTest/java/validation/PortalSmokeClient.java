@@ -275,7 +275,8 @@ public final class PortalSmokeClient implements ClientModInitializer {
                     if (ticks >= 280
                             && traversalValidated
                             && (Boolean.getBoolean("portalSmoke.dimensionReload")
-                                || PortalPoseUseSmoke.tick(client, ticks))
+                                || (PortalPoseUseSmoke.tick(client, ticks)
+                                    && PortalFluidSmoke.tick(client, ticks)))
                             && (!Boolean.getBoolean("portalSmoke.dynamicDimensions")
                                 || DimensionLibrarySmoke.tickClient(client))) {
                         System.out.println("PORTAL_SMOKE_COMPLETE");
