@@ -2,7 +2,9 @@
 
 [English](upstream-1.21-review.md) · [Français](upstream-1.21-review.fr.md)
 
-Reviewed October 20, 2026. Baseline `0dbdc1d493c3906943147668092a41fc67a49527` → upstream `2b1d3546aa60c7d866adfcb7236fba136a8433cb`: 69 commits, including three merges. All are inherited by `port-26.2`; no additional cherry-picks are required. The upstream configuration targets 1.21.1. Its final commit adds the maintenance notice; application changes end in November 2024.
+The imported source fork records an October 20, 2026 review of baseline `0dbdc1d493c3906943147668092a41fc67a49527` → upstream `2b1d3546aa60c7d866adfcb7236fba136a8433cb`: 69 commits, including three merges. That review concerns the upstream 1.21.1 behavior inherited by its 26.2 adaptations; it is historical source analysis, not a new gameplay result for this repository.
+
+The destination also preserves the [upstream 1.21.3 snapshot](https://github.com/iPortalTeam/ImmersivePortalsMod/tree/6831a3a72ba159d19951d80929a5809868bb08f9), revision `6831a3a72ba159d19951d80929a5809868bb08f9`, as the pre-migration baseline. Differences from the 26.2 implementation require behavior review rather than indiscriminate cherry-picking of obsolete engine adapters.
 
 | Behavior to preserve | Representative commits |
 | --- | --- |
@@ -19,4 +21,4 @@ The Sodium/Iris series contains reverts and reapplications: port its final behav
 
 The review also identified exclusive chunk-bound errors and legacy GUI wrappers ignoring viewport arguments. These require explicit adaptation, not blind reuse. Current fixes and verification are recorded in [migration findings](migration-audit-26.2.md).
 
-Reproduce the range with `git log 0dbdc1d4..2b1d3546` and `git diff --stat 0dbdc1d4 2b1d3546`. This baseline review used history/source inspection; later runtime checks are documented in the [validation guide](port-26.2.md).
+The commit range remains available for history/source inspection. Current compilation, tests and runtime scenarios run exclusively on GitHub Actions, as described in the [validation guide](port-26.2.md).

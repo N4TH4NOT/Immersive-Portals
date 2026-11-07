@@ -23,4 +23,4 @@ Les stencils en texture remplacent les opérations S8 indisponibles dans l’API
 
 Les réglages actuels figurent dans [`IPConfig`](../src/main/java/qouteall/imm_ptl/core/platform_specific/IPConfig.java) et les diagnostics dans [`PortalDebugCommands`](../src/main/java/qouteall/imm_ptl/core/commands/PortalDebugCommands.java). Les options OpenGL obsolètes de tampons/caches ont été retirées. Les anciennes clés JSON sont ignorées.
 
-Le [guide de validation](port-26.2.fr.md#rendu) couvre occlusion, découpage, modes, rechargement et Sodium/Iris. Le cave culling conserve un repli pour les caméras transformées incompatibles ; le rejet d’octree exige que tout le volume soit hors de la région visible.
+Le [guide de validation GitHub](port-26.2.fr.md) décrit les scénarios de rendu et les preuves conservées. La suite intégrée ne démontre pas une compatibilité arbitraire avec Sodium/Iris ou les shaderpacks. Le cave culling conserve un repli pour les caméras transformées incompatibles ; le rejet d’octree exige que tout le volume soit hors de la région visible.

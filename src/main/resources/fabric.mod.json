@@ -12,12 +12,12 @@
   "authors": [
     "qouteall",
     "Other Contributors (see GitHub)",
-    "N4TH4NOT (Minecraft 26.2 port and Minestom bridge)"
+    "N4TH4NOT and contributors (Minecraft 26.2 port)"
   ],
   "contact": {
     "homepage": "https://qouteall.fun/immptl",
-    "sources": "https://github.com/N4TH4NOT/immersive-portals-minestom",
-    "issues": "https://github.com/N4TH4NOT/immersive-portals-minestom/issues",
+    "sources": "https://github.com/N4TH4NOT/Immersive-Portals",
+    "issues": "https://github.com/N4TH4NOT/Immersive-Portals/issues",
     "email": "qouteall@163.com",
     "discord": "https://discord.gg/BZxgURK"
   },

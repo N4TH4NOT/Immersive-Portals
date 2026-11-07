@@ -1,28 +1,26 @@
-# Immersive Portals — Minecraft 26.2 / Minestom
+# Immersive Portals — Minecraft 26.2 / Fabric
 
 [English](README.md) · [Français](README.fr.md)
 
-Fabric port with native OpenGL/Vulkan rendering and a Minestom server SDK. Development continues on `port-26.2`; dependency versions are defined in [gradle.properties](gradle.properties). Java 25 is required.
+Fabric port of [Immersive Portals](https://github.com/iPortalTeam/ImmersivePortalsMod): see through portals and travel between worlds seamlessly. The renderer targets Minecraft's native OpenGL and Vulkan backends. This repository distributes the Fabric mod; the Minestom server SDK remains in its [own repository](https://github.com/N4TH4NOT/immersive-portals-minestom).
 
-## Build and run
+## Installation
 
-```sh
-git submodule update --init --recursive
-./gradlew build validateAccessWidener
-./gradlew :minestom-example:run
-```
+Use Minecraft Java **26.2**, Java **25**, Fabric Loader and Fabric API. Exact dependency versions are pinned in [gradle.properties](gradle.properties).
 
-Install the mod JAR from `build/libs/` with Fabric API. Cloth Config and the gravity adapter/API are bundled. Directional player gravity additionally requires [Gravity Changer](https://github.com/N4TH4NOT/gravity-changer#fabric-installation-and-use). The Minestom example listens on `127.0.0.1:25566` in offline mode.
+Download a successful revision's mod JAR from [GitHub Actions](https://github.com/N4TH4NOT/Immersive-Portals/actions), then place it in the client's and Fabric server's `mods` directory with Fabric API. Cloth Config and the gravity adapter/API are bundled. Directional player gravity additionally requires [Gravity Changer](https://github.com/N4TH4NOT/gravity-changer#fabric-installation-and-use). Development artifacts are not stable releases.
 
-Use Minecraft's `--graphicsBackend vulkan` for native Vulkan. Iris is tested with OpenGL; shaderpack compatibility varies. Cloud setup is available through [scripts/setup-cloud.sh](scripts/setup-cloud.sh).
+Select Vulkan through Minecraft's `--graphicsBackend vulkan` option. Iris uses the OpenGL adapter; compatibility with an arbitrary shaderpack or GPU requires separate verification.
 
-## Developer guides
+## Development and status
 
-- [Minestom API](docs/minestom.md) and [gravity integration](docs/gravity-repository.md).
-- [Build/runtime validation](docs/port-26.2.md) and [rendering decisions](docs/rendering-26.2.md).
-- [1.21 upstream review](docs/upstream-1.21-review.md), [migration findings](docs/migration-audit-26.2.md) and [network audit](docs/network-audit-26.2.md).
+All compilation, automated tests and runtime scenarios run **exclusively on GitHub Actions**. See the [validation guide](docs/port-26.2.md) for required checks, retained evidence and limits. A successful build does not establish complete gameplay compatibility.
+
+- [Source provenance and scope](docs/provenance.md), [upstream review](docs/upstream-1.21-review.md) and [migration findings](docs/migration-audit-26.2.md).
+- [Rendering design](docs/rendering-26.2.md), [network compatibility](docs/network-audit-26.2.md) and [gravity integration](docs/gravity-repository.md).
+- [Built-in alternate dimensions](docs/alternate-dimensions.md).
 - [Optional generation datapack](examples/custom_portal_gen/README.md).
 
-DimLib, Pehkui, Flywheel, Porting Lib and Requiem integrations remain excluded: no matching Fabric 26.2 releases were found in the October 2026 review. Native scaling and datapack dimensions remain available.
+Legacy DimLib, Pehkui, Flywheel, Porting Lib and Requiem adapters are not supplied as 26.2 integrations. Native entity scaling does not require Pehkui. Remaining differences and the evidence required before declaring the migration complete are documented in the [migration findings](docs/migration-audit-26.2.md).
 
-Based on [Immersive Portals](https://github.com/iPortalTeam/ImmersivePortalsMod) by qouteall and contributors, under [Apache-2.0](LICENSE). The [upstream wiki](https://qouteall.fun/immptl/wiki/) describes earlier engine versions.
+Original work by qouteall and contributors, under [Apache-2.0](LICENSE). This port preserves their source history and reuses the 26.2 adaptations from N4TH4NOT's [Fabric/Minestom fork](https://github.com/N4TH4NOT/immersive-portals-minestom/tree/67bf29333b82b0d6c594c65d84256c881f0182b4). The [upstream wiki](https://qouteall.fun/immptl/wiki/) describes earlier engine versions.

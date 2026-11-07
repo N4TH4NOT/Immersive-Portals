@@ -1,25 +1,26 @@
-# Minecraft 1.21 → 26.2 migration findings
+# Minecraft 26.2 migration findings
 
 [English](migration-audit-26.2.md) · [Français](migration-audit-26.2.fr.md)
 
-Review performed October 22, 2026, against the inherited 1.21 branch. [Upstream scope](upstream-1.21-review.md) records the baseline; [runtime validation](port-26.2.md) is maintained separately.
+This document distinguishes inherited migration work from validation of the standalone Fabric repository. [Provenance](provenance.md) identifies the imported revision; [upstream scope](upstream-1.21-review.md) describes its earlier review.
 
-## Corrections from the review
+## Inherited adaptations
 
-| Area | Finding and resolution |
+| Area | Adaptation |
 | --- | --- |
-| World creation | The constructor mixin captured obsolete 1.21 arguments; capture only the callback it uses. |
-| Item resources | Add current item definitions referencing the retained models. |
-| Reverse generation | Register validated reverse rules for all trigger families. Tests cover valid, invalid and one-way rules. |
-| Teleport hooks | Distinguish local teleportation from dimension changes to avoid generation/tracker side effects. |
-| Chunk loading | Wait for native unloaded-ticket sentinel promotion rather than releasing a still-pending slot. |
-| Remote terrain | Copy reusable deltas per view, replay initial chunks and propagate empty/nonempty, replacement and unload transitions. |
-| Example datapack | Migrate registry paths/tags and data format; declare dimensions through datapacks instead of DimLib. |
+| Build and APIs | Java 25, unremapped Minecraft classes, current Fabric/Loom dependencies, NBT and registry codecs. |
+| World lifecycle | Native dimension lifecycle, world creation mixins, remote worlds and chunk-ticket transitions. |
+| Teleportation and physics | Current entity references/transitions, collision, native scaling, gravity adapter and interpolation. |
+| Rendering | Blaze3D world rendering and portal composition for OpenGL/Vulkan; separate optional Sodium/Iris adapters. |
+| Items and generation | Current item definitions, reverse portal generation rules, commands, GUI and example datapack formats. |
+| Networking | Redirected native packets and the inherited version-2 client bridge. |
 
-## Evidence and limits
+The imported implementation removed automatic registration of the five historical alternate dimensions. Restoring their lifecycle and configuration is part of the standalone migration; datapack examples alone do not preserve that behavior. Check the current implementation and destination CI for its status.
 
-Review covered source/resources, Mixin signatures, access widener, codecs, rendering, physics and optional adapters. Bytecode inspection and real client/server runs supplement compilation: resource loading and captured mixin arguments are not established by a successful build alone.
+Legacy external DimLib, Pehkui, Flywheel, Porting Lib and Requiem adapters are not provided as 26.2 integrations. Native scaling is independent of Pehkui. Removing an old adapter does not establish compatibility with an installed replacement.
 
-Runtime scenarios exercise Fabric world creation/datapacks, shapes, recursive views, GUI rendering, Minestom traversal/containers, gravity and Sodium/Iris. Native 26.2 entity references and teleport transitions replace the old projectile-owner/ender-pearl mixins.
+## Evidence and remaining scope
 
-Unavailable optional integrations are listed in the [README](../README.md). Their absence of a matching release does not imply project abandonment. Application-specific third-party components and arbitrary hardware/shaderpacks are outside the exercised scenarios.
+Earlier source-fork documentation records manual runtime experiments, but those experiments are not rerun evidence for this repository. The imported GitHub workflow establishes compilation/unit-test success only. The destination [validation workflow](port-26.2.md) adds explicit gameplay checks and retains logs for review.
+
+A complete migration requires passing destination compilation/tests, working dimensions and world persistence, portal generation and traversal, collision/scale/rotation, remote interaction, recursion, GUI rendering, resource reload and both supported native backends. Optional integrations need separate compatibility evidence. A finite smoke suite does not establish every mod combination or rendering device.

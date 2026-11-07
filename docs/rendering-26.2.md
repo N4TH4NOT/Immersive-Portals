@@ -23,4 +23,4 @@ Texture stencils replace unavailable native S8 operations. Switching modes prese
 
 Current settings are defined in [`IPConfig`](../src/main/java/qouteall/imm_ptl/core/platform_specific/IPConfig.java); diagnostics in [`PortalDebugCommands`](../src/main/java/qouteall/imm_ptl/core/commands/PortalDebugCommands.java). Obsolete OpenGL buffer/cache options were removed instead of exposing ineffective controls. Legacy JSON keys are ignored.
 
-The [runtime guide](port-26.2.md#rendering) covers occlusion, clipping, modes, reload and Sodium/Iris. Cave culling conservatively falls back for incompatible transformed cameras; octree rejection requires the entire volume to be outside the visible region.
+The [GitHub runtime guide](port-26.2.md) describes the rendering scenarios and retained evidence. The built-in suite does not establish arbitrary Sodium/Iris or shaderpack compatibility. Cave culling conservatively falls back for incompatible transformed cameras; octree rejection requires the entire volume to be outside the visible region.

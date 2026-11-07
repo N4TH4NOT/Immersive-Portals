@@ -2,7 +2,9 @@
 
 [English](upstream-1.21-review.md) · [Français](upstream-1.21-review.fr.md)
 
-Revue du 20 octobre 2026. Référence `0dbdc1d493c3906943147668092a41fc67a49527` → amont `2b1d3546aa60c7d866adfcb7236fba136a8433cb` : 69 commits, dont trois merges. Tous sont hérités par `port-26.2` ; aucun cherry-pick supplémentaire n’est nécessaire. La configuration amont cible 1.21.1. Son dernier commit ajoute l’annonce de maintenance ; les changements applicatifs s’arrêtent en novembre 2024.
+Le fork source importé consigne une revue du 20 octobre 2026 de la référence `0dbdc1d493c3906943147668092a41fc67a49527` → amont `2b1d3546aa60c7d866adfcb7236fba136a8433cb` : 69 commits, dont trois merges. Cette revue porte sur les comportements amont 1.21.1 hérités par ses adaptations 26.2 ; il s’agit d’une analyse historique des sources, pas d’un nouveau résultat en jeu pour ce dépôt.
+
+Le dépôt cible conserve aussi l’[instantané amont 1.21.3](https://github.com/iPortalTeam/ImmersivePortalsMod/tree/6831a3a72ba159d19951d80929a5809868bb08f9), révision `6831a3a72ba159d19951d80929a5809868bb08f9`, comme référence avant migration. Les différences avec l’implémentation 26.2 demandent une revue des comportements, plutôt qu’une reprise indifférenciée des anciens adaptateurs du moteur.
 
 | Comportement à conserver | Commits représentatifs |
 | --- | --- |
@@ -19,4 +21,4 @@ La série Sodium/Iris contient des reverts et réapplications : porter son compo
 
 La revue a aussi identifié des erreurs de bornes exclusives de chunks et des wrappers GUI ignorant les coordonnées du viewport. Ces cas demandent une adaptation explicite. Les corrections et contrôles actuels figurent dans les [constats de migration](migration-audit-26.2.fr.md).
 
-Reproduire l’intervalle avec `git log 0dbdc1d4..2b1d3546` et `git diff --stat 0dbdc1d4 2b1d3546`. Cette revue reposait sur l’historique et les sources ; les essais ultérieurs figurent dans le [guide de validation](port-26.2.fr.md).
+L’intervalle de commits reste accessible pour examiner l’historique et les sources. Les compilations, les tests et les scénarios en jeu actuels s’exécutent exclusivement sur GitHub Actions, comme décrit dans le [guide de validation](port-26.2.fr.md).

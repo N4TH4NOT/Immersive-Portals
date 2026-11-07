@@ -1,51 +1,23 @@
-# Validation de compilation et en jeu
+# Validation sur GitHub Actions
 
 [English](port-26.2.md) · [Français](port-26.2.fr.md)
 
-```sh
-git submodule update --init --recursive
-./gradlew build validateAccessWidener -PportalSmoke compileSmokeTestJava
-```
+Les compilations, les tests automatisés et les scénarios en jeu s’exécutent exclusivement sur [GitHub Actions](https://github.com/N4TH4NOT/Immersive-Portals/actions). Le workflow [build.yml](../.github/workflows/build.yml) fait foi pour les commandes, les dépendances et les délais. Ne pas exécuter ces contrôles localement.
 
-La référence du 24 octobre passe 56 tests JUnit sur les deux dépôts. Les classes des scénarios optionnels sont exclues du mod distribué. Prévoir un affichage graphique et un pilote OpenGL/Vulkan fonctionnels ; mondes de développement et captures figurent sous `run/smoke-*`.
+## Preuves de compilation
 
-## Fabric
+Le job `build` récupère les sous-modules épinglés, sélectionne Java 25, compile le mod Fabric et ses bibliothèques internes, exécute les tests JUnit, valide l’access widener et compile les scénarios de validation optionnels. Ces scénarios ne sont pas inclus dans le mod distribué. Télécharger les artefacts du passage réussi correspondant au commit exact examiné.
 
-Lancer serveur et client dans deux terminaux ; configurer d’abord l’EULA du serveur local.
+La référence importée dispose d’un [passage CI réussi dans le dépôt source](https://github.com/N4TH4NOT/immersive-portals-minestom/actions/runs/40115478061). Son workflow compilait les scénarios sans les exécuter. Il s’agit d’une preuve historique, pas d’un résultat pour les modifications réalisées ici.
 
-```sh
-./gradlew -PportalSmoke runServer
-./gradlew -PportalSmoke runClient --args='--graphicsBackend vulkan --username PortalValidation'
-```
+## Preuves en jeu
 
-Pour les ressources/datapacks du serveur intégré, remplacer la commande cliente par `./gradlew -PportalSmoke -PportalSmokeSingleplayer runClient`. Utiliser le nom `ScaledTest` pour les vérifications de rotation/échelle sur le serveur dédié.
+La matrice `fabric-runtime` lance de vrais clients Minecraft sous OpenGL et Vulkan dans Xvfb, avec les pilotes logiciels Mesa. Ses scénarios multijoueur, rendu et solo exercent les serveurs dédiés/intégrés, les traversées de portails, les ressources et le rendu. Le journal doit confirmer le backend demandé ; un repli de Vulkan vers OpenGL doit faire échouer le contrôle Vulkan.
 
-## Minestom
+La réussite exige les marqueurs de fin de chaque scénario, notamment `PORTAL_SMOKE_COMPLETE` ou `PORTAL_RENDER_COMPLETE`, ainsi que leurs marqueurs serveur/ressources spécifiques. Le simple démarrage d’un processus ne suffit pas. Les journaux de console, les journaux du jeu, les rapports de plantage et les captures sont conservés en artefacts, y compris en cas d’échec.
 
-```sh
-./gradlew :minestom-example:run
-./gradlew -PportalSmoke -PportalSmokeAddress=127.0.0.1:25566 \
-  -PportalSmokeTarget=demo:gallery -PportalSmokeInteraction=true \
-  runClient --args='--graphicsBackend vulkan --username PortalValidation'
-```
+Examiner les deux jobs pour le même commit. Une compilation seule ne valide ni l’application des mixins, ni la création de monde, les dimensions, les interactions distantes ou le résultat affiché. Consulter journaux et captures avant d’interpréter un succès en jeu ; les scènes automatisées ne couvrent pas chaque fonction, GPU ou shaderpack. Sodium/Iris et les mods externes nécessitent leurs propres cas de compatibilité exercés.
 
-Attendre `PORTAL_SMOKE_COMPLETE`, `MINESTOM_REMOTE_CHEST_OK` et le changement de monde confirmé par le serveur. Ajouter `-PportalSmokeInteractions=true` aux deux commandes pour les callbacks de blocs/entités à travers plusieurs portails et les prédictions d’actions refusées.
+## Conditions de revue
 
-## Gravité
-
-```sh
-./gradlew :minestom-example:run -PportalSmokeGravity
-./gradlew -PportalSmoke -PportalSmokeGravity -PportalGravitySmoke=true \
-  -PportalSmokeAddress=127.0.0.1:25566 -PportalSmokeTarget=demo:gallery \
-  runClient --args='--graphicsBackend vulkan --username GravityTest'
-```
-
-Attendre `PORTAL_GRAVITY_COMPLETE` : six directions, traversée, entités et interaction distantes. Conserver le serveur, retirer `-PportalSmokeGravity` côté client et utiliser le nom `GravityNone` pour obtenir `PORTAL_GRAVITY_UNSUPPORTED_CLIENT_OK`.
-
-## Rendu
-
-Ajouter `-PportalRenderSmoke=true` à la commande cliente Fabric et utiliser le nom `OcclusionTest`. Le scénario vérifie mur masquant/révélé, politiques de prédiction, modes et rechargement ; attendre `PORTAL_RENDER_COMPLETE`.
-
-Utiliser `opengl` avec `-PportalSmokeSodium` ou `-PportalSmokeIris` pour ces intégrations. Le drapeau Iris prépare le shaderpack de test. Les [choix de rendu](rendering-26.2.fr.md) expliquent le comportement attendu.
-
-Les essais enregistrés utilisent Xvfb/Mesa llvmpipe, notamment Vulkan natif et OpenGL avec Sodium/Iris. Ils couvrent les scènes exercées, pas tous les GPU ou shaderpacks. Voir les [constats de migration](migration-audit-26.2.fr.md) et les [constats réseau](network-audit-26.2.fr.md).
+Indiquer dans la PR le commit exact, le lien du workflow, les jobs réussis ou échoués et les fonctions non exercées. Ne pas déclarer le portage terminé lorsqu’un job requis échoue ou qu’une omission fonctionnelle connue subsiste. Voir les [constats de migration](migration-audit-26.2.fr.md) et l’[architecture du rendu](rendering-26.2.fr.md).
