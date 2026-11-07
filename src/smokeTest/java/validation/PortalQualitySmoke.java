@@ -26,6 +26,7 @@ import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.entity.projectile.hurtingprojectile.SmallFireball;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ChunkPos;
@@ -92,6 +93,7 @@ final class PortalQualitySmoke {
     private static final List<Portal> entityPortals = new ArrayList<>();
     private static final Set<UUID> crossedEntities = new HashSet<>();
     private static final Set<UUID> blockedProjectiles = new HashSet<>();
+    private static final Set<UUID> resolvedHurtingProjectiles = new HashSet<>();
     private static final Set<UUID> faceIds = new HashSet<>();
     private static final List<Long> tickDurations = new ArrayList<>();
     private static Portal forward;
@@ -130,6 +132,7 @@ final class PortalQualitySmoke {
             entityPortals.clear();
             crossedEntities.clear();
             blockedProjectiles.clear();
+            resolvedHurtingProjectiles.clear();
             faceIds.clear();
             tickDurations.clear();
             phase = WAIT;
@@ -369,6 +372,7 @@ final class PortalQualitySmoke {
         require(world.getServer().getTickCount() - phaseTick < 120,
                 "A natural entity/projectile failed to traverse its intact backing wall");
         for (var previous : List.copyOf(entities.values())) {
+            if (resolvedHurtingProjectiles.contains(previous.id())) continue;
             Entity entity = null;
             for (var level : world.getServer().getAllLevels()) {
                 var candidate = level.getEntity(previous.id());
@@ -376,6 +380,16 @@ final class PortalQualitySmoke {
                     require(entity == null, "The same quality entity UUID exists in two dimensions");
                     entity = candidate;
                 }
+            }
+            if (entity == null && previous.name().equals("cross_world_fireball")
+                    && crossedEntities.contains(previous.id())) {
+                require(world.getServer().getLevel(Level.NETHER)
+                                .getBlockState(new BlockPos(191, 73, 39)).is(Blocks.FIRE)
+                                && world.getBlockState(new BlockPos(2, 73, 39)).is(Blocks.STONE),
+                        "The fireball did not execute its native impact in the destination world");
+                resolvedHurtingProjectiles.add(previous.id());
+                System.out.println("PORTAL_QUALITY_HURTING_PROJECTILE_OK uuid=" + previous.id());
+                continue;
             }
             require(entity != null && !entity.isRemoved() && previous.type().isInstance(entity),
                     "Portal traversal lost or replaced the quality " + previous.name());
@@ -386,10 +400,18 @@ final class PortalQualitySmoke {
                     : crossWorld ? entity.position() : unfold(entity.position());
             Vec3 velocity = entity.getDeltaMovement();
             double step = horizontal(position.subtract(previous.position()));
-            require(step <= horizontal(previous.velocity()) + .12,
+            Vec3 expectedMovement = previous.velocity();
+            if (entity instanceof SmallFireball fireball) {
+                expectedMovement = previous.velocity().add(previous.velocity().normalize()
+                        .scale(fireball.accelerationPower)).scale((double) .95f);
+                require(velocity.distanceTo(expectedMovement) < 1e-6
+                                && horizontal(position.subtract(previous.position()).subtract(expectedMovement)) < .02,
+                        "Fireball traversal changed native acceleration, drag, or its tick endpoint");
+            }
+            require(step <= horizontal(expectedMovement) + .12,
                     "Portal traversal added entity displacement: " + previous.name()
                             + " previous=" + previous + " current=" + position + " velocity=" + velocity);
-            require(horizontal(velocity) <= horizontal(previous.velocity()) + .01,
+            require(horizontal(velocity) <= horizontal(expectedMovement) + .01,
                     "Portal traversal accelerated the unpowered quality " + previous.name());
             if (entity instanceof AbstractArrow arrow) {
                 if (arrow.shakeTime > 0) {
@@ -408,7 +430,8 @@ final class PortalQualitySmoke {
                 }
             }
             if (arrived && crossedEntities.add(entity.getUUID())) {
-                double expectedX = crossWorld ? 192 : previous.name().equals("fast_projectile") ? 65.2 : 64;
+                double expectedX = crossWorld ? crossWorldEntityPortal.transformPoint(previous.position()).x
+                        : previous.name().equals("fast_projectile") ? 65.2 : 64;
                 require(entity.getZ() < (crossWorld ? 40 : 32) && Math.abs(entity.getX() - expectedX) < .02
                                 && (velocity.z < -.005 || blockedProjectiles.contains(entity.getUUID())),
                         "The quality entity did not preserve its trajectory: " + previous.name()
@@ -439,7 +462,8 @@ final class PortalQualitySmoke {
             entities.put(previous.id(), new Tracked(previous.name(), previous.id(), previous.type(),
                     position, velocity));
         }
-        return crossedEntities.size() == 6 && blockedProjectiles.size() == 2;
+        return crossedEntities.size() == 7 && blockedProjectiles.size() == 2
+                && resolvedHurtingProjectiles.size() == 1;
     }
 
     private static void prepareCrossWorldEntity(ServerLevel source) {
@@ -487,6 +511,15 @@ final class PortalQualitySmoke {
         snowball.setCustomName(Component.literal("Quality UUID witness"));
         spawn(source, "cross_world_projectile", snowball,
                 new Vec3(2.5, 72.5, 40.2), new Vec3(0, 0, -.6));
+        // A fireball must retain its normal acceleration and drag, then run its
+        // actual block-impact callback after crossing into the Nether.
+        target.setBlock(new BlockPos(191, 73, 38), Blocks.STONE.defaultBlockState(), 3);
+        target.setBlock(new BlockPos(191, 72, 39), Blocks.STONE.defaultBlockState(), 3);
+        var fireball = EntityTypes.SMALL_FIREBALL.create(source, EntitySpawnReason.COMMAND);
+        require(fireball != null, "Could not create the damaging-projectile witness");
+        fireball.setCustomName(Component.literal("Quality UUID witness"));
+        spawn(source, "cross_world_fireball", fireball,
+                new Vec3(2.2, 73.3, 40.2), new Vec3(0, 0, -.6));
     }
 
     private static double horizontal(Vec3 vector) {

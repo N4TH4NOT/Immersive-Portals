@@ -23,6 +23,7 @@
     "common.chunk_sync.MixinServerGamePacketListenerImpl_ChunkSync",
     "common.collision.IEEntity_Collision",
     "common.collision.MixinAbstractArrow",
+    "common.collision.MixinAbstractHurtingProjectile",
     "common.collision.MixinEntity",
     "common.collision.MixinPlayer_Collision",
     "common.collision.MixinThrowableProjectile",

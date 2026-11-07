@@ -10,6 +10,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.ThrowableProjectile;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
+import net.minecraft.world.entity.projectile.hurtingprojectile.AbstractHurtingProjectile;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -44,7 +45,8 @@ public final class ProjectilePortalTraversal {
     private ProjectilePortalTraversal() {}
 
     public static boolean handles(Entity entity) {
-        return entity instanceof AbstractArrow || entity instanceof ThrowableProjectile;
+        return entity instanceof AbstractArrow || entity instanceof ThrowableProjectile
+                || entity instanceof AbstractHurtingProjectile;
     }
 
     /** A transferred object can also be present in a world that has not ticked yet. */
