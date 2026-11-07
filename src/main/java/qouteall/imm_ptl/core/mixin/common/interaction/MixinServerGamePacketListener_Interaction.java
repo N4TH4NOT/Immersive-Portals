@@ -16,11 +16,18 @@ import qouteall.imm_ptl.core.block_manipulation.PortalInteractionServer;
 /** Vanilla entity handlers retain their checks while operating on a validated remote target. */
 @Mixin(ServerGamePacketListenerImpl.class)
 public abstract class MixinServerGamePacketListener_Interaction {
-    @Redirect(method = {"handleAttack", "handleInteract"}, at = @At(value = "INVOKE",
+    @Redirect(method = {"handleAttack", "handleInteract", "handleUseItemOn"}, at = @At(value = "INVOKE",
             target = "Lnet/minecraft/server/level/ServerPlayer;level()Lnet/minecraft/server/level/ServerLevel;"))
     private ServerLevel ip_targetWorld(ServerPlayer player) {
         ServerLevel remote = PortalInteractionServer.entityWorld();
         return remote == null ? player.level() : remote;
+    }
+
+    @WrapOperation(method = "handleUseItemOn", at = @At(value = "INVOKE", target =
+            "Lnet/minecraft/server/level/ServerPlayer;isWithinBlockInteractionRange(Lnet/minecraft/core/BlockPos;D)Z"))
+    private boolean ip_blockUseReach(ServerPlayer player, net.minecraft.core.BlockPos block,
+            double padding, Operation<Boolean> original) {
+        return PortalInteractionServer.hasValidatedBlock() || original.call(player, block, padding);
     }
 
     @WrapOperation(method = "handleAttack", at = @At(value = "INVOKE", target =
@@ -42,5 +49,17 @@ public abstract class MixinServerGamePacketListener_Interaction {
             "Lnet/minecraft/server/level/ServerPlayer;attack(Lnet/minecraft/world/entity/Entity;)V"))
     private void ip_attackDirection(ServerPlayer player, Entity target, Operation<Void> original) {
         PortalInteractionServer.withAttackRotation(player, () -> original.call(player, target));
+    }
+
+    @WrapOperation(method = "handleInteract", at = @At(value = "INVOKE", target =
+            "Lnet/minecraft/server/level/ServerPlayer;interactOn(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/InteractionResult;"))
+    private net.minecraft.world.InteractionResult ip_useDirection(ServerPlayer player, Entity entity,
+            net.minecraft.world.InteractionHand hand, net.minecraft.world.phys.Vec3 point,
+            Operation<net.minecraft.world.InteractionResult> original) {
+        var target = PortalInteractionServer.currentEntityTarget();
+        return PortalInteractionServer.isValidatedEntity(entity)
+                ? qouteall.imm_ptl.core.block_manipulation.PortalEntityActionContext.withUseRotation(
+                        player, target, () -> original.call(player, entity, hand, point))
+                : original.call(player, entity, hand, point);
     }
 }

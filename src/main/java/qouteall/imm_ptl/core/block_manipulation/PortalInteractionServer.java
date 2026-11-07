@@ -180,15 +180,18 @@ public final class PortalInteractionServer {
     }
 
     public static boolean hasValidatedEntity() {
-        return ENTITY_ACTION.get() != null;
+        var target = ENTITY_ACTION.get();
+        return target != null && target.hit() instanceof EntityHitResult;
+    }
+
+    public static boolean hasValidatedBlock() {
+        var target = ENTITY_ACTION.get();
+        return target != null && target.hit() instanceof BlockHitResult;
     }
 
     public static void withAttackRotation(Player player, Runnable action) {
         var target = ENTITY_ACTION.get();
         if (target == null) { action.run(); return; }
-        PortalInteractionTarget.withRotation(player, target.portals(), target.projectionPortal(), () -> {
-            action.run();
-            return null;
-        });
+        PortalEntityActionContext.withAttackGeometry(player, target, action);
     }
 }

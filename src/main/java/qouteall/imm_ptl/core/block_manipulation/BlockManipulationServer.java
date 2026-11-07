@@ -6,7 +6,6 @@ import net.fabricmc.fabric.api.event.EventFactory;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.resources.ResourceKey;
@@ -14,10 +13,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import qouteall.q_misc_util.my_util.Tuple;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -167,7 +163,8 @@ public class BlockManipulationServer {
                 new Context(world, packet.getHitResult()),
                 () -> {
                     PortalInteractionTarget.withRotation(player, target.portals(), () -> {
-                        doProcessUseItemOn(world, player, packet);
+                        PortalInteractionServer.withEntityAction(target,
+                                () -> player.connection.handleUseItemOn(packet));
                         return null;
                     });
                 }
@@ -255,56 +252,6 @@ public class BlockManipulationServer {
         return action == ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK ||
             action == ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK ||
             action == ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK;
-    }
-    
-    /**
-     * {@link ServerGamePacketListenerImpl#handleUseItemOn(ServerboundUseItemOnPacket)}
-     */
-    @IPVanillaCopy
-    private static void doProcessUseItemOn(
-        ServerLevel world, ServerPlayer player, ServerboundUseItemOnPacket packet
-    ) {
-        player.connection.ackBlockChangesUpTo(packet.getSequence());
-        InteractionHand hand = packet.getHand();
-        BlockHitResult blockHitResult = packet.getHitResult();
-        ResourceKey<Level> dimension = world.dimension();
-        
-        ItemStack itemStack = player.getItemInHand(hand);
-        
-        if (!itemStack.isItemEnabled(world.enabledFeatures())) {
-            return;
-        }
-        
-        BlockPos blockPos = blockHitResult.getBlockPos();
-        Direction direction = blockHitResult.getDirection();
-        player.resetLastActionTime();
-        if (world.mayInteract(player, blockPos)) {
-            InteractionResult actionResult = player.gameMode.useItemOn(
-                player,
-                world,
-                itemStack,
-                hand,
-                blockHitResult
-            );
-            if (actionResult instanceof net.minecraft.world.InteractionResult.Success success && success.swingSource() == net.minecraft.world.InteractionResult.SwingSource.SERVER) {
-                player.swing(hand, true);
-            }
-        }
-        
-        PacketRedirection.sendRedirectedMessage(
-            player,
-            dimension,
-            new ClientboundBlockUpdatePacket(world, blockPos)
-        );
-        
-        BlockPos offseted = blockPos.relative(direction);
-        if (offseted.getY() >= world.getMinY() && offseted.getY() < world.getMaxY()) {
-            PacketRedirection.sendRedirectedMessage(
-                player,
-                dimension,
-                new ClientboundBlockUpdatePacket(world, offseted)
-            );
-        }
     }
     
     public static boolean validateReach(Player player, Level targetWorld, BlockPos targetPos) {

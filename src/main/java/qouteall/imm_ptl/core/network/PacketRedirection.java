@@ -97,6 +97,14 @@ public class PacketRedirection {
             }
         }
     }
+
+    /** Runs real player transfers outside a temporary remote-action packet destination. */
+    public static <T> T withoutForceRedirect(Supplier<T> func) {
+        ResourceKey<Level> previous = serverPacketRedirection.get();
+        serverPacketRedirection.set(null);
+        try { return func.get(); }
+        finally { serverPacketRedirection.set(previous); }
+    }
     
     /**
      * If it's not null, all sent packets will be wrapped into redirected packet
