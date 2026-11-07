@@ -17,6 +17,7 @@ import qouteall.imm_ptl.core.McHelper;
 import qouteall.imm_ptl.core.compat.GravityChangerInterface;
 import qouteall.imm_ptl.core.ducks.IEEntity;
 import qouteall.imm_ptl.core.portal.Portal;
+import qouteall.imm_ptl.core.portal.global_portals.GlobalPortalStorage;
 import qouteall.q_misc_util.Helper;
 import qouteall.q_misc_util.my_util.Plane;
 import qouteall.q_misc_util.my_util.Range;
@@ -51,12 +52,14 @@ public class PortalCollisionHandler {
                 return true;
             }
             
-            // because that teleportation is based on rendering camera pos,
-            // the camera pos is behind this tick pos,
-            // this tick pos may go behind the portal before teleportation.
-            // use last tick pos to check whether it should collide
+            // Rendering can cross the portal between ticks. Before teleportation the
+            // previous eye position is in front; afterwards the transformed current
+            // eye position is in front of the reverse portal. Keep either contact
+            // while the body still straddles the plane.
             if (!CollisionHelper.mayEntityCollideWithPortal(
                 entity, p.portal, entity.getEyePosition(0), entity.getBoundingBox()
+            ) && !CollisionHelper.mayEntityCollideWithPortal(
+                entity, p.portal, entity.getEyePosition(1), entity.getBoundingBox()
             )) {
                 return true;
             }
@@ -358,20 +361,32 @@ public class PortalCollisionHandler {
     public static void updateCollidingPortalAfterTeleportation(
         Entity entity, Vec3 newEyePos, Vec3 newLastTickEyePos, float partialTicks
     ) {
+        McHelper.setEyePos(entity, newEyePos, newLastTickEyePos);
+        McHelper.updateBoundingBox(entity);
         ((IEEntity) entity).ip_clearCollidingPortal();
+
+        AABB stretchedBoundingBox = CollisionHelper.getStretchedBoundingBox(entity);
         
+        // setEyePos deliberately bypasses entity-section callbacks. A same-world
+        // teleport can therefore leave the entity indexed at its source until its
+        // next move. Discover destination portals, then notify this entity directly.
         McHelper.findEntitiesByBox(
             Portal.class,
             entity.level(),
-            CollisionHelper.getStretchedBoundingBox(entity),
+            stretchedBoundingBox,
             IPGlobal.maxNormalPortalRadius,
-            p -> true
-        ).forEach(p -> CollisionHelper.notifyCollidingPortals(p, partialTicks));
+            p -> CollisionHelper.canCollideWithPortal(entity, p, partialTicks)
+        ).forEach(p -> ((IEEntity) entity).ip_notifyCollidingWithPortal(p));
+
+        for (Portal portal : GlobalPortalStorage.getGlobalPortals(entity.level())) {
+            if (stretchedBoundingBox.intersects(portal.getBoundingBox())
+                && CollisionHelper.canCollideWithPortal(entity, portal, partialTicks)
+            ) {
+                ((IEEntity) entity).ip_notifyCollidingWithPortal(portal);
+            }
+        }
         
         // don't tickCollidingPortal() as it only removes collisions
-        
-        McHelper.setEyePos(entity, newEyePos, newLastTickEyePos);
-        McHelper.updateBoundingBox(entity);
     }
     
     public boolean hasCollisionEntry() {

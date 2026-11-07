@@ -86,7 +86,9 @@ public final class RectangularPortalShape implements PortalShape {
         double width = portalState.width();
         double height = portalState.height();
         
-        if (localFrom.z() > 0 && localTo.z() < 0) {
+        // A rendered frame can stop exactly on the plane. The next inward move
+        // must still cross it; staying on the plane or moving away must not.
+        if (localFrom.z() >= 0 && localTo.z() < 0) {
             double deltaZ = localTo.z() - localFrom.z();
             
             // localFrom + (localTo - localFrom) * t = 0
