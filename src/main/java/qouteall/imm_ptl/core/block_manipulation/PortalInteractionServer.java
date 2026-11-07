@@ -171,6 +171,12 @@ public final class PortalInteractionServer {
     @Nullable
     public static ServerLevel entityWorld() {
         var target = ENTITY_ACTION.get();
+        if (target != null && target.hit() instanceof BlockHitResult) {
+            // Placement at a global portal boundary can intentionally adjust the final
+            // action world after the original target ray has already been validated.
+            var redirected = BlockManipulationServer.REDIRECT_CONTEXT.get();
+            if (redirected != null) return redirected.world();
+        }
         return target != null && target.world() instanceof ServerLevel level ? level : null;
     }
 
