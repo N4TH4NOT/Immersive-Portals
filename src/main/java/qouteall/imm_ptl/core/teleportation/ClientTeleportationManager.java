@@ -340,6 +340,8 @@ public class ClientTeleportationManager {
         
         Vec3 thisTickEyePos = McHelper.getEyePos(player);
         Vec3 lastTickEyePos = McHelper.getLastTickEyePos(player);
+        Vec3 sourceFeet = player.position();
+        var sourcePose = player.getPose();
         
         Vec3 newThisTickEyePos = teleportation.newThisTickEyePos();
         Vec3 newLastTickEyePos = teleportation.newLastTickEyePos();
@@ -374,7 +376,8 @@ public class ClientTeleportationManager {
         player.connection.send(ClientPlayNetworking.createServerboundPacket(
             new ImmPtlNetworking.TeleportPacket(
                 PortalAPI.clientDimKeyToInt(fromDimension),
-                thisTickEyePos,
+                sourceFeet,
+                sourcePose,
                 portal.getUUID()
             )
         ));

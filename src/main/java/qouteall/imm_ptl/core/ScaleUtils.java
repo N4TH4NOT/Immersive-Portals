@@ -68,6 +68,20 @@ public class ScaleUtils {
         }
         return 1.0;
     }
+
+    /** Previews the native clamped attribute value without changing the entity or its bounds. */
+    public static float getScaleAfterTeleportation(Entity entity, Portal portal) {
+        AttributeInstance current = getScaleAttr(entity);
+        if (current == null || !portal.hasScaling() || !portal.isTeleportChangesScale())
+            return (float) getScale(entity);
+        double portalScale = transformScale(portal, getIPortalScaling(entity));
+        if (!entity.level().isClientSide() && isScaleIllegal(portalScale)) portalScale = 1;
+        var preview = new AttributeInstance(current.getAttribute(), ignored -> {});
+        preview.replaceFrom(current);
+        preview.addOrReplacePermanentModifier(new AttributeModifier(IPORTAL_SCALING,
+                portalScale - 1, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL));
+        return (float) preview.getValue();
+    }
     
     public static double getBaseScale(Entity entity) {
         AttributeInstance scaleAttr = getScaleAttr(entity);

@@ -21,6 +21,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.apache.commons.lang3.Validate;
@@ -43,7 +44,7 @@ public class ImmPtlNetworking {
     
     // client to server
     public static record TeleportPacket(
-        int dimensionId, Vec3 eyePosBeforeTeleportation, UUID portalId
+        int dimensionId, Vec3 feetPosBeforeTeleportation, Pose poseBeforeTeleportation, UUID portalId
     ) implements CustomPacketPayload {
         public static final CustomPacketPayload.Type<TeleportPacket> TYPE =
             new CustomPacketPayload.Type<>(
@@ -62,15 +63,17 @@ public class ImmPtlNetworking {
                 buf.readDouble()
             );
             UUID portalId = buf.readUUID();
-            return new TeleportPacket(dimId, pos, portalId);
+            Pose pose = buf.readEnum(Pose.class);
+            return new TeleportPacket(dimId, pos, pose, portalId);
         }
         
         public void write(FriendlyByteBuf buf) {
             buf.writeVarInt(dimensionId);
-            buf.writeDouble(eyePosBeforeTeleportation.x);
-            buf.writeDouble(eyePosBeforeTeleportation.y);
-            buf.writeDouble(eyePosBeforeTeleportation.z);
+            buf.writeDouble(feetPosBeforeTeleportation.x);
+            buf.writeDouble(feetPosBeforeTeleportation.y);
+            buf.writeDouble(feetPosBeforeTeleportation.z);
             buf.writeUUID(portalId);
+            buf.writeEnum(poseBeforeTeleportation);
         }
         
         public void handle(ServerPlayer player) {
@@ -79,7 +82,7 @@ public class ImmPtlNetworking {
             );
             
             ServerTeleportationManager.of(player.level().getServer()).onPlayerTeleportedInClient(
-                player, dim, eyePosBeforeTeleportation, portalId
+                player, dim, feetPosBeforeTeleportation, poseBeforeTeleportation, portalId
             );
         }
         

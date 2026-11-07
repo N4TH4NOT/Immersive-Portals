@@ -50,6 +50,10 @@ public class GravityChangerInterface {
             return adapter().getBaseGravityDirection(entity);
         }
 
+        public Direction getGravityDirectionWithBase(Entity entity, Direction baseDirection) {
+            return adapter().getGravityDirectionWithBase(entity, baseDirection);
+        }
+
         public GravityState getState(Entity entity) {
             return adapter().getState(entity);
         }

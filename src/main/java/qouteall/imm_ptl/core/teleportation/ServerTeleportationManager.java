@@ -12,6 +12,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.Level;
@@ -164,7 +165,8 @@ public class ServerTeleportationManager {
     public void onPlayerTeleportedInClient(
         ServerPlayer player,
         ResourceKey<Level> dimensionBefore,
-        Vec3 eyePosBeforeTeleportation,
+        Vec3 feetPosBeforeTeleportation,
+        Pose poseBeforeTeleportation,
         UUID portalId
     ) {
         if (player.getRemovalReason() != null) {
@@ -184,9 +186,14 @@ public class ServerTeleportationManager {
         
         lastTeleportGameTime.put(player, McHelper.getServerGameTime());
         
-        Vec3 oldFeetPos = eyePosBeforeTeleportation.subtract(McHelper.getEyeOffset(player));
+        Vec3 oldFeetPos = feetPosBeforeTeleportation;
+        Vec3 sourceEyeOffset = PlayerTeleportAnchor.eyeOffset(player, poseBeforeTeleportation);
+        Vec3 eyePosBeforeTeleportation = oldFeetPos.add(sourceEyeOffset);
         
-        String failReason = validatePlayerTeleportationAndGetReason(
+        String failReason = !PlayerTeleportAnchor.isFinite(oldFeetPos)
+                || !PlayerTeleportAnchor.isFinite(sourceEyeOffset)
+                || !PlayerTeleportAnchor.isPlayerPose(player, poseBeforeTeleportation)
+                ? "invalid player crossing anchor" : validatePlayerTeleportationAndGetReason(
             player, dimensionBefore, oldFeetPos, portal
         );
         if (failReason == null) {
@@ -198,10 +205,15 @@ public class ServerTeleportationManager {
             
             ResourceKey<Level> dimensionTo = portal.getDestDim();
             Vec3 newEyePos = portal.transformPoint(eyePosBeforeTeleportation);
+            Vec3 plannedFeet = PlayerTeleportAnchor.transformFeet(oldFeetPos, sourceEyeOffset,
+                    PlayerTeleportAnchor.destinationEyeOffset(player, poseBeforeTeleportation, portal),
+                    portal::transformPoint);
             
             recordLastPosition(player, dimensionBefore, oldFeetPos);
             
-            teleportPlayer(player, dimensionTo, newEyePos);
+            // Dimension/advancement callbacks must already see the final physical feet.
+            // teleportPlayer accepts the server's current eye offset, not the snapshot's.
+            teleportPlayer(player, dimensionTo, plannedFeet.add(McHelper.getEyeOffset(player)));
             
             portal.onEntityTeleportedOnServer(player);
             
@@ -213,11 +225,19 @@ public class ServerTeleportationManager {
                 GravityChangerInterface.invoker.setBaseGravityDirectionServer(
                     player, portal.getTransformedGravityDirection(oldGravityDir)
                 );
-                // Re-anchor feet after the direction changes so the transformed eyes stay fixed.
-                McHelper.setEyePos(player, newEyePos, newEyePos);
-                McHelper.updateBoundingBox(player);
-                player.connection.resetPosition();
             }
+
+            // A crouch/swim command may reach the server after the crossing packet.
+            // Both offsets use the crossing's pose and server-owned scale/gravity;
+            // subtracting the server's current pose would add a visible height jump.
+            Vec3 newFeet = PlayerTeleportAnchor.transformFeet(oldFeetPos, sourceEyeOffset,
+                    PlayerTeleportAnchor.eyeOffset(player, poseBeforeTeleportation), portal::transformPoint);
+            McHelper.setPosAndLastTickPos(player, newFeet, newFeet);
+            McHelper.updateBoundingBox(player);
+            McHelper.adjustVehicle(player);
+            player.connection.resetPosition();
+            PortalCollisionHandler.updateCollidingPortalAfterTeleportation(player,
+                    McHelper.getEyePos(player), McHelper.getLastTickEyePos(player), 1);
             
         }
         else {
