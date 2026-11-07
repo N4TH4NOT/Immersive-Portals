@@ -411,6 +411,10 @@ final class PortalQualitySmoke {
                     ? crossWorldEntityPortal.inverseTransformPoint(entity.position())
                     : crossWorld ? entity.position() : unfold(entity.position());
             Vec3 velocity = entity.getDeltaMovement();
+            if (entity instanceof ItemEntity)
+                require(!entity.noPhysics,
+                        "The quality item bypassed native physical collisions at the portal: "
+                                + entity.position() + " velocity=" + velocity);
             double step = horizontal(position.subtract(previous.position()));
             Vec3 expectedMovement = previous.velocity();
             if (entity instanceof SmallFireball fireball) {
