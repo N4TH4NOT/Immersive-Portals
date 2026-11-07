@@ -21,6 +21,7 @@ import net.minecraft.world.level.Level;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 
+import qouteall.imm_ptl.core.IPGlobal;
 import qouteall.imm_ptl.core.ducks.IEClientPlayNetworkHandler;
 import qouteall.imm_ptl.core.ducks.IEMinecraftClient;
 import qouteall.imm_ptl.core.mixin.client.particle.NativeParticleEngineAccess;
@@ -49,6 +50,10 @@ public final class NativeWorldRenderer {
     private static final Map<ClientLevel, ParticleEngine> PARTICLES = new IdentityHashMap<>();
     private static final Map<GameRenderer, Matrix4f> PROJECTIONS = new IdentityHashMap<>();
     private static final Map<GameRenderer, Object> VISIBILITY_TOKENS = new IdentityHashMap<>();
+
+    static {
+        IPGlobal.POST_CLIENT_TICK_EVENT.register(NativeWorldRenderer::tickLightmaps);
+    }
 
     public static Object visibilityToken(GameRenderer renderer) {
         return VISIBILITY_TOKENS.computeIfAbsent(renderer, ignored -> new Object());
@@ -118,6 +123,9 @@ public final class NativeWorldRenderer {
                         new LevelExtractor(
                                 CLIENT, gameRenderer.gameRenderState().levelRenderState, renderer);
                 if (world != null) attach(world);
+                // Only the primary GameRenderer receives vanilla tick(). Its offscreen
+                // peers must prepare their first lightmap instead of keeping its white clear.
+                if (ownsGameRenderer) tickLightmap(this);
             }
         }
 
@@ -189,6 +197,20 @@ public final class NativeWorldRenderer {
 
     public static boolean isRenderingScene() {
         return activeScenes != 0;
+    }
+
+    private static void tickLightmaps() {
+        // Keep flicker and invalidation on the client tick clock, independent of frame
+        // rate and of whether remote entity/world ticking has been disabled.
+        for (Scene scene : SCENES.values())
+            if (scene.ownsGameRenderer) tickLightmap(scene);
+    }
+
+    private static void tickLightmap(Scene scene) {
+        withContext(scene, () -> {
+            ((NativeGameRendererAccess) scene.gameRenderer).ip_lightmapExtractor().tick();
+            return null;
+        });
     }
 
     public static boolean lastFlipX() {
@@ -285,6 +307,7 @@ public final class NativeWorldRenderer {
         scene.lastUsedFrame = RenderStates.frameIndex;
         scene.needsEndFrame = true;
         Camera parent = CLIENT.gameRenderer.mainCamera();
+        var parentLightmap = CLIENT.gameRenderer.gameRenderState().lightmapRenderState;
         Matrix4f baseProjection =
                 RenderStates.basicProjectionMatrix == null
                         ? projection(CLIENT.gameRenderer)
@@ -333,6 +356,11 @@ public final class NativeWorldRenderer {
                         var delta = CLIENT.getDeltaTracker();
                         float partial = delta.getGameTimeDeltaPartialTick(true);
                         access.ip_lightmapExtractor().extract(state.lightmapRenderState, partial);
+                        // Viewer-wide effects must agree across every view. Sky, ambient
+                        // and block-light tint are still extracted from this scene's world.
+                        state.lightmapRenderState.blockFactor = parentLightmap.blockFactor;
+                        state.lightmapRenderState.bossOverlayWorldDarkening =
+                                parentLightmap.bossOverlayWorldDarkening;
                         access.ip_extractCamera(delta, partial, partial);
                         state.levelRenderState.cameraRenderState.entityRenderState.isLiving = false;
                         // Direct offscreen extraction bypasses Fabric's GameRenderer.extract hook.

@@ -157,17 +157,17 @@ public class ClientWorldLoader {
             Vec3 oldCameraPos = camera.position();
             
             ((IECamera) camera).portal_setPos(center);
-            
-            if (newWorld.getGameTime() % 2 == 0) {
-                // it costs some CPU time
-                newWorld.animateTick(
-                    (int) center.x, (int) center.y, (int) center.z
-                );
+            try {
+                if (newWorld.getGameTime() % 2 == 0) {
+                    // it costs some CPU time
+                    newWorld.animateTick(
+                        (int) center.x, (int) center.y, (int) center.z
+                    );
+                }
             }
-            
-            CLIENT.particleEngine.tick();
-            
-            ((IECamera) camera).portal_setPos(oldCameraPos);
+            finally {
+                ((IECamera) camera).portal_setPos(oldCameraPos);
+            }
         });
         
         
