@@ -22,6 +22,7 @@ public final class PortalSmoke implements ModInitializer {
     public void onInitialize() {
         DimensionLibrarySmoke.init();
         PortalWallRenderFixture.initialize(scenePortals);
+        PortalSameWorldSmoke.initialize(scenePortals);
         net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(
                 (dispatcher, access, environment) ->
                         dispatcher.register(
@@ -74,6 +75,7 @@ public final class PortalSmoke implements ModInitializer {
                     DimensionLibrarySmoke.validateOnServerStart(server);
                     var from = server.overworld();
                     var to = server.getLevel(Level.NETHER);
+                    PortalCollisionSmoke.keepFixtureLoaded(from, to);
                     for (var world : new net.minecraft.server.level.ServerLevel[] {from, to}) {
                         var stale = new java.util.ArrayList<Portal>();
                         for (var entity : world.getAllEntities())

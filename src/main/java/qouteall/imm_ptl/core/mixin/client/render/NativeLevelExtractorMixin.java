@@ -62,6 +62,7 @@ public abstract class NativeLevelExtractorMixin {
 
     @Inject(method = "setSectionDirty(IIIZ)V", at = @At("HEAD"))
     private void ip_dirty(int x, int y, int z, boolean playerChanged, CallbackInfo ci) {
+        RenderDiagnostics.chunkDirtyEntry("section", (LevelExtractor) (Object) this, level);
         if (level != null)
             NativeWorldRenderer.markSectionDirty((LevelExtractor) (Object) this, level, x, y, z);
     }
@@ -69,17 +70,20 @@ public abstract class NativeLevelExtractorMixin {
     @Inject(method = "setBlocksDirty(IIIIII)V", at = @At("HEAD"))
     private void ip_sodiumDirtyBlockArea(
             int minX, int minY, int minZ, int maxX, int maxY, int maxZ, CallbackInfo ci) {
+        RenderDiagnostics.chunkDirtyEntry("sodium-area", (LevelExtractor) (Object) this, level);
         ip_propagateSodiumBlockArea(minX, minY, minZ, maxX, maxY, maxZ);
     }
 
     @Inject(method = "setBlockDirty(Lnet/minecraft/core/BlockPos;Z)V", at = @At("HEAD"))
     private void ip_sodiumDirtyBlock(BlockPos pos, boolean playerChanged, CallbackInfo ci) {
+        RenderDiagnostics.chunkDirtyEntry("sodium-block", (LevelExtractor) (Object) this, level);
         ip_propagateSodiumBlockArea(pos.getX(), pos.getY(), pos.getZ(),
                 pos.getX(), pos.getY(), pos.getZ());
     }
 
     @Inject(method = "setSectionDirtyWithNeighbors(III)V", at = @At("HEAD"))
     private void ip_sodiumDirtyNeighbors(int x, int y, int z, CallbackInfo ci) {
+        RenderDiagnostics.chunkDirtyEntry("sodium-neighbors", (LevelExtractor) (Object) this, level);
         if (level != null && SodiumInterface.invoker.isSodiumPresent())
             NativeWorldRenderer.markSectionRangeDirty((LevelExtractor) (Object) this, level,
                     x - 1, y - 1, z - 1, x + 1, y + 1, z + 1);

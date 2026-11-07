@@ -13,8 +13,10 @@ modset="${PORTAL_CI_MODSET:-vanilla}"
 case "$backend" in opengl|vulkan) ;; *) exit 2 ;; esac
 case "$scenario" in multiplayer|scaled|rendering|singleplayer) ;; *) exit 2 ;; esac
 case "$modset" in vanilla|sodium|iris) ;; *) exit 2 ;; esac
-if [[ "$modset" != vanilla && ( "$backend" != opengl || "$scenario" != rendering ) ]]; then
-    printf '%s\n' 'Sodium and Iris verification requires the OpenGL rendering scenario.' >&2
+if [[ "$modset" != vanilla && "$backend" != opengl ]] \
+    || [[ "$modset" == iris && "$scenario" != rendering ]] \
+    || [[ "$modset" == sodium && "$scenario" != rendering && "$scenario" != multiplayer ]]; then
+    printf '%s\n' 'Compatibility verification requires OpenGL rendering or Sodium multiplayer.' >&2
     exit 2
 fi
 
@@ -48,6 +50,16 @@ cleanup() {
         # GNU timeout forwards TERM to the complete Gradle/game process group.
         kill -TERM "$server_pid" 2>/dev/null || true
         wait "$server_pid" 2>/dev/null || true
+    fi
+    if [[ "$modset" == sodium ]]; then
+        extractor_class=run/smoke-client/.mixin.out/net/minecraft/client/renderer/extract/LevelExtractor.class
+        if [[ -f "$extractor_class" ]]; then
+            javap -c -p "$extractor_class" > "$evidence/sodium-level-extractor-bytecode.txt" || true
+            printf '%s\n' '::group::Sodium terrain update injection evidence'
+            rg -n -B 5 -A 8 'ip_sodiumDirty|ip_propagateSodium|scheduleRebuild|setSectionRangeDirty' \
+                "$evidence/sodium-level-extractor-bytecode.txt" || true
+            printf '%s\n' '::endgroup::'
+        fi
     fi
     if (( status != 0 )); then
         # Keep crash evidence readable through the job-log API when artifact delivery
@@ -90,6 +102,7 @@ maxFps:30
 renderDistance:3
 simulationDistance:5
 graphicsPreset:"fast"
+ao:true
 autoJump:false
 OPTIONS
 printf 'eula=true\n' > run/smoke-server/eula.txt

@@ -53,12 +53,18 @@ server_markers = [
     "PORTAL_SMOKE_SERVER_READY",
 ]
 if scenario in ("multiplayer", "singleplayer"):
-    client_markers.append("PORTAL_SMOKE_WALL_PORTAL_OK")
+    client_markers += [
+        "PORTAL_SMOKE_WALL_PORTAL_OK",
+        "PORTAL_SMOKE_SEAMLESS_MOVEMENT_OK",
+        "PORTAL_SMOKE_SEAMLESS_SAME_WORLD_OK",
+    ]
     server_markers += [
         "PORTAL_SMOKE_COLLISION_PHYSICS_OK",
         "PORTAL_SMOKE_WALL_PORTAL_READY",
         "PORTAL_SMOKE_WAND_CLUSTER_READY",
         "PORTAL_SMOKE_SERVER_WALL_PORTAL_OK",
+        "PORTAL_SMOKE_SAME_WORLD_READY",
+        "PORTAL_SMOKE_SERVER_SAME_WORLD_OK",
     ]
 if scenario == "multiplayer":
     client_markers.append(
@@ -95,9 +101,12 @@ else:
         "PORTAL_SMOKE_DIM_STACK_GUI_OK",
         "PORTAL_SMOKE_GUI_OK",
         "PORTAL_SMOKE_RENDER_OK",
+        "PORTAL_SMOKE_SEAMLESS_CAMERA_OK",
         "PORTAL_SMOKE_TELEPORT_OK",
         "PORTAL_SMOKE_COMPLETE",
     ]
+    if modset == "sodium":
+        client_markers.append("PORTAL_SMOKE_SODIUM_COMPAT_OK")
     server_markers += [
         "PORTAL_SMOKE_SERVER_SCALED_TELEPORT_OK"
         if scenario == "scaled"
@@ -114,6 +123,19 @@ for marker in client_markers:
     require(re.escape(marker), client, f"The client did not complete {marker}.")
 for marker in server_markers:
     require(re.escape(marker), server, f"The server did not complete {marker}.")
+
+if scenario != "rendering":
+    movement_scopes = re.findall(
+        r"PORTAL_SMOKE_SEAMLESS_START\b(.*?)PORTAL_SMOKE_SEAMLESS_CAMERA_OK", client, re.DOTALL)
+    if not movement_scopes:
+        raise AssertionError("The natural movement probe did not delimit its camera observations.")
+    for scope in movement_scopes:
+        forbidden = re.search(
+            r"client player force teleported|Client player teleportation rejected|"
+            r"Combo teleport out of limit|Adjusting Client Player Position", scope, re.IGNORECASE)
+        if forbidden:
+            raise AssertionError("The natural portal crossing required a correction: "
+                                 + forbidden.group(0))
 
 screenshots = Path("run/smoke-client/screenshots")
 if not any(screenshots.glob("*.png")):
@@ -169,7 +191,9 @@ if scenario == "rendering":
     # separate wall in front must still cover it, then reveal it again when removed.
     wall_metrics = {}
     wall_failures = []
-    phases = ("prediction", "synchronous", "angled", "compatibility", "occluded", "revealed")
+    phases = ("prediction", "synchronous", "angled", "compatibility", "occluded", "revealed",
+              "near-04-normal", "near-04-oblique", "near-01-normal", "near-01-oblique",
+              "near-001-normal", "near-001-oblique", "near-direct")
     for phase in phases:
         frames = re.findall(
             rf"PORTAL_RENDER_WALL_FRAME phase={phase} sample=(\d+) frame=(\d+)", client)
@@ -185,7 +209,8 @@ if scenario == "rendering":
                 raise AssertionError(f"The {phase} wall probe did not save frame {sample}.")
             with Image.open(path) as capture:
                 rgb = capture.convert("RGB")
-                if sample == 0 and phase in ("prediction", "occluded", "revealed"):
+                if sample == 0 and phase in ("prediction", "occluded", "revealed",
+                                              "near-04-oblique", "near-001-oblique", "near-direct"):
                     fixture_thumbnail(rgb, "PORTAL_WALL_THUMBNAIL", phase)
                 # This upper central patch lies well inside the fixed aperture, away
                 # from the crosshair and from the portal's edges at both camera angles.
@@ -242,7 +267,7 @@ if scenario == "rendering":
     print("PORTAL_RENDER_PIXEL_METRICS " + json.dumps(diagnostics, sort_keys=True), flush=True)
     if wall_failures:
         raise AssertionError("\n".join(wall_failures))
-    print("PORTAL_RENDER_WALL_PIXEL_CONTENT_OK phases=6 consecutive_frames_per_phase=12")
+    print(f"PORTAL_RENDER_WALL_PIXEL_CONTENT_OK phases={len(phases)} consecutive_frames_per_phase=12")
     for name, measurement in metrics.items():
         if measurement["black_fraction"] > 0.95:
             raise AssertionError(

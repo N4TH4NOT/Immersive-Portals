@@ -1,6 +1,8 @@
 package validation;
 
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -11,7 +13,7 @@ final class PortalWallRenderFixture {
     private PortalWallRenderFixture() {}
 
     static void initialize(java.util.Set<java.util.UUID> scenePortals) {
-        CommandRegistrationCallback.EVENT.register((dispatcher, access, environment) ->
+        CommandRegistrationCallback.EVENT.register((dispatcher, access, environment) -> {
                 dispatcher.register(Commands.literal("portal_smoke_backing_wall")
                         .requires(source -> source.getPlayer() != null
                                 && source.getPlayer().getGameProfile().name().equals("OcclusionTest"))
@@ -24,9 +26,11 @@ final class PortalWallRenderFixture {
                             PortalCollisionSmoke.replacePlayerPortals(
                                     player, source, destination, scenePortals);
                             for (int x = -3; x <= 3; x++)
-                                for (int y = 70; y <= 76; y++) {
+                                for (int y = 70; y <= 76; y++)
                                     source.setBlock(new BlockPos(x, y, -1),
                                             Blocks.STONE.defaultBlockState(), 3);
+                            for (int x = -12; x <= 12; x++)
+                                for (int y = 70; y <= 76; y++) {
                                     // Its green face provides an independent pixel-level witness
                                     // that the destination, rather than the source wall, is visible.
                                     destination.setBlock(new BlockPos(x, y, -4),
@@ -34,6 +38,27 @@ final class PortalWallRenderFixture {
                                 }
                             System.out.println("PORTAL_RENDER_WALL_FIXTURE_READY faces=4");
                             return 1;
-                        })));
+                        }));
+                dispatcher.register(Commands.literal("portal_smoke_wall_camera")
+                        .requires(source -> source.getPlayer() != null
+                                && source.getPlayer().getGameProfile().name().equals("OcclusionTest"))
+                        .then(Commands.argument("distance", DoubleArgumentType.doubleArg(.0001, .05))
+                                .then(Commands.argument("oblique", BoolArgumentType.bool())
+                                        .executes(context -> {
+                                            double distance = DoubleArgumentType.getDouble(
+                                                    context, "distance");
+                                            boolean oblique = BoolArgumentType.getBool(
+                                                    context, "oblique");
+                                            // Place the camera deliberately without depending on
+                                            // walking or changing the separate teleport scenario.
+                                            context.getSource().getPlayerOrException().teleportTo(
+                                                    context.getSource().getServer().overworld(),
+                                                    0, 70, distance, java.util.Set.of(),
+                                                    oblique ? 135 : 180, 0, false);
+                                            System.out.println("PORTAL_RENDER_WALL_CAMERA_READY distance="
+                                                    + distance + " oblique=" + oblique);
+                                            return 1;
+                                        }))));
+        });
     }
 }

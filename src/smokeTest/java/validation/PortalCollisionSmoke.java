@@ -6,6 +6,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
@@ -27,6 +28,25 @@ final class PortalCollisionSmoke {
 
     private static boolean enabled(ServerPlayer player) {
         return player.getGameProfile().name().equals("PortalTest");
+    }
+
+    static void keepFixtureLoaded(ServerLevel... worlds) {
+        for (var world : worlds) {
+            require(world != null, "The portal fixture level is missing");
+            // The client may take minutes to boot. Keep the rooms and their entities loaded
+            // from initial cleanup through the later JOIN callback, including after restart.
+            for (int x = -1; x <= 0; x++)
+                for (int z = -1; z <= 0; z++) {
+                    world.setChunkForced(x, z, true);
+                    world.getChunk(x, z);
+                }
+            // Load saved faces before the caller removes stale fixture entities. Otherwise
+            // older copies can arrive from disk after the fresh scene has been created.
+            for (int x = -1; x <= 0; x++)
+                for (int z = -1; z <= 0; z++)
+                    world.waitForEntities(new ChunkPos(x, z), 0);
+        }
+        System.out.println("PORTAL_SMOKE_FIXTURE_CHUNKS_READY count=" + worlds.length * 4);
     }
 
     static void prepare(ServerPlayer player, java.util.Set<java.util.UUID> scenePortals) {

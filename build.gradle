@@ -103,6 +103,10 @@ if (providers.gradleProperty('portalSmoke').isPresent()) {
                 vmArg '-DportalSmoke.interactions=' + providers.gradleProperty('portalSmokeInteractions').getOrElse('false')
                 vmArg '-DportalSmoke.rendering=' + providers.gradleProperty('portalRenderSmoke').getOrElse('false')
                 vmArg '-Dimm_ptl.renderDiagnostics=true'
+                if (providers.gradleProperty('portalSmokeSodium').isPresent()) {
+                    vmArg '-Dmixin.debug.export=true'
+                    vmArg '-Dmixin.debug.export.filter=net.minecraft.client.renderer.extract.LevelExtractor'
+                }
                 vmArg '-DportalSmoke.gravity=' + providers.gradleProperty('portalGravitySmoke').getOrElse('false')
                 vmArg '-DportalSmoke.dynamicDimensions=' + providers.gradleProperty('portalSmokeDynamicDimensions').getOrElse('false')
                 vmArg '-DportalSmoke.dimensionReload=' + providers.gradleProperty('portalSmokeDimensionReload').getOrElse('false')

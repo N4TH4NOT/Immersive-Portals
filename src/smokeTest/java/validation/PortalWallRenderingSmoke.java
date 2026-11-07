@@ -18,8 +18,11 @@ import qouteall.imm_ptl.core.render.context_management.WorldRenderInfo;
 final class PortalWallRenderingSmoke {
     private static final int SAMPLES = 12;
     private static final String[] PHASES = {
-        "prediction", "synchronous", "angled", "compatibility", "occluded", "revealed"
+        "prediction", "synchronous", "angled", "compatibility", "occluded", "revealed",
+        "near-04-normal", "near-04-oblique", "near-01-normal", "near-01-oblique",
+        "near-001-normal", "near-001-oblique", "near-direct"
     };
+    private static final double[] NEAR_DISTANCES = {.04, .04, .01, .01, .001, .001, .001};
     private static int phase = -1;
     private static int phaseTick;
     private static int captured;
@@ -55,6 +58,28 @@ final class PortalWallRenderingSmoke {
                         "The coplanar portal's intact backing wall was removed");
     }
 
+    private static void requireNearCamera(Minecraft client) {
+        if (phase < 6) return;
+        double distance = NEAR_DISTANCES[phase - 6];
+        var camera = client.gameRenderer.mainCamera().position();
+        require(client.level.dimension() == Level.OVERWORLD
+                        && Math.abs(camera.x) < 1.0E-5
+                        && Math.abs(camera.z - distance) < 1.0E-5,
+                "The near-plane probe camera moved away from its source plane: " + camera);
+        require(IPGlobal.enableDepthClampForPortalRendering,
+                "The near-plane regression probe disabled portal depth clamping");
+        boolean oblique = phase % 2 == 1 || phase == 12;
+        require(Math.abs(client.player.getYRot() - (oblique ? 135 : 180)) < .01,
+                "The near-plane probe camera did not retain its intended angle");
+        if (oblique) {
+            var look = client.player.getViewVector(1);
+            double left = new Vec3(-2, 72, 0).subtract(camera).dot(look);
+            double right = new Vec3(2, 72, 0).subtract(camera).dot(look);
+            require(left * right < 0,
+                    "The oblique aperture no longer straddles the camera's eye plane");
+        }
+    }
+
     private static void initialize() {
         if (initialized) return;
         initialized = true;
@@ -69,6 +94,7 @@ final class PortalWallRenderingSmoke {
                     "The wall flicker probe skipped a rendered frame");
             lastFrame = frame;
             requireWall(client);
+            requireNearCamera(client);
             if (phase != 4)
                 require(PortalRenderInfo.get(front(client)).wasRenderedLastFrame(),
                         "The coplanar portal stopped rendering in " + PHASES[phase]
@@ -84,6 +110,10 @@ final class PortalWallRenderingSmoke {
     }
 
     static boolean tick(Minecraft client, int ticks) {
+        if (phase >= PHASES.length) {
+            capturing = false;
+            return true;
+        }
         initialize();
         if (phase < 0) {
             phase = 0;
@@ -119,13 +149,22 @@ final class PortalWallRenderingSmoke {
                     client.player.connection.sendCommand("portal_smoke_wall true");
                 }
                 case 5 -> client.player.connection.sendCommand("portal_smoke_wall false");
+                case 6, 7, 8, 9, 10, 11, 12 -> {
+                    IPGlobal.renderMode = phase == 12
+                            ? IPGlobal.RenderMode.compatibility : IPGlobal.RenderMode.normal;
+                    client.player.connection.sendCommand("portal_smoke_wall_camera "
+                            + NEAR_DISTANCES[phase - 6] + " " + (phase % 2 == 1 || phase == 12));
+                }
                 default -> throw new AssertionError("Unexpected wall probe phase " + phase);
             }
         }
         // Let block updates, terrain rebuilds and visibility prediction settle before each
         // consecutive-frame series. Timing is based on actual rendered-frame progress.
         if (ticks - phaseTick < 25) return false;
+        require(client.options.ambientOcclusion().get(),
+                "The wall rendering probe disabled smooth lighting");
         requireWall(client);
+        requireNearCamera(client);
         var destination = ClientWorldLoader.getWorld(Level.NETHER);
         require(destination.getBlockState(new BlockPos(0, 72, -4)).is(Blocks.EMERALD_BLOCK),
                 "The wall probe's visible destination witness has not arrived");
@@ -135,6 +174,9 @@ final class PortalWallRenderingSmoke {
         if (occluded)
             require(!PortalRenderInfo.get(front(client)).wasRenderedLastFrame(),
                     "The foreground wall did not occlude the coplanar portal");
+        if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium"))
+            System.out.println("PORTAL_RENDER_WALL_CHUNK_UPDATES phase=" + PHASES[phase]
+                    + " " + qouteall.imm_ptl.core.render.RenderDiagnostics.chunkUpdates());
         capturing = true;
         return false;
     }

@@ -67,6 +67,9 @@ jobs:
             scenario: multiplayer
             modset: vanilla
           - backend: opengl
+            scenario: multiplayer
+            modset: sodium
+          - backend: opengl
             scenario: rendering
             modset: vanilla
           - backend: opengl

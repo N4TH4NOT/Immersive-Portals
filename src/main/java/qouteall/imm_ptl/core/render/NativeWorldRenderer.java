@@ -549,6 +549,7 @@ public final class NativeWorldRenderer {
     public static void markSectionRangeDirty(
             LevelExtractor source, ClientLevel world,
             int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        RenderDiagnostics.chunkDirtyBroadcast(world, propagatingDirty || reloading);
         if (propagatingDirty || reloading) return;
         propagatingDirty = true;
         try {
@@ -557,6 +558,8 @@ public final class NativeWorldRenderer {
                     withContext(
                             scene,
                             () -> {
+                                RenderDiagnostics.chunkDirtyTarget(world, scene.extractor,
+                                        scene.renderer, minX, minY, minZ, maxX, maxY, maxZ);
                                 scene.extractor.setSectionRangeDirty(
                                         minX, minY, minZ, maxX, maxY, maxZ);
                                 return null;

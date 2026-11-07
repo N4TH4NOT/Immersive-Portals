@@ -12,6 +12,7 @@ public final class PortalSmokeClient implements ClientModInitializer {
     private int ticks;
     private boolean rendered;
     private boolean crossed;
+    private boolean traversalValidated;
     private boolean singleplayerStarted;
     private long performanceSampleStartNanos;
     private Integer previousFramerateLimit;
@@ -51,6 +52,7 @@ public final class PortalSmokeClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         FabricExtractionSmoke.initialize();
+        PortalSeamlessSmoke.initialize();
         if (interactions) PortalInteractionSmoke.init();
         IPConfig.getConfig().initialScreenShown = true;
         ClientTickEvents.END_CLIENT_TICK.register(
@@ -58,6 +60,7 @@ public final class PortalSmokeClient implements ClientModInitializer {
                     if (client.player == null) {
                         if (bootTicks == 0) {
                             client.options.renderDistance().set(3);
+                            client.options.ambientOcclusion().set(true);
                             client.options.setCameraType(
                                     net.minecraft.client.CameraType.FIRST_PERSON);
                         }
@@ -214,7 +217,9 @@ public final class PortalSmokeClient implements ClientModInitializer {
                         System.out.println("PORTAL_SMOKE_INTERACTION_OK");
                     }
                     if (interactions) PortalInteractionSmoke.tick(client, ticks);
-                    if (ticks == 160) client.options.keyUp.setDown(true);
+                    PortalSeamlessSmoke.tick(client, ticks);
+                    if (ticks == 160 && !PortalSeamlessSmoke.controls(client))
+                        client.options.keyUp.setDown(true);
                     if (ticks > 160
                             && client.level
                                     .dimension()
@@ -224,10 +229,11 @@ public final class PortalSmokeClient implements ClientModInitializer {
                                             System.getProperty(
                                                     "portalSmoke.target",
                                                     "minecraft:the_nether"))) {
-                        client.options.keyUp.setDown(false);
+                        if (!PortalSeamlessSmoke.controls(client))
+                            client.options.keyUp.setDown(false);
                         crossed = true;
                     }
-                    if (ticks == 240) {
+                    if (ticks >= 240 && !traversalValidated && PortalSeamlessSmoke.complete()) {
                         if (!crossed) throw new AssertionError("Player did not cross the portal");
                         if (client.player.getGameProfile().name().equals("PortalTest")) {
                             var source = ClientWorldLoader.getWorld(
@@ -250,8 +256,11 @@ public final class PortalSmokeClient implements ClientModInitializer {
                                         > .001)
                             throw new AssertionError("Client scale was not synchronized");
                         System.out.println("PORTAL_SMOKE_TELEPORT_OK");
+                        PortalSeamlessSmoke.verify(client);
+                        traversalValidated = true;
                     }
                     if (ticks >= 280
+                            && traversalValidated
                             && (!Boolean.getBoolean("portalSmoke.dynamicDimensions")
                                 || DimensionLibrarySmoke.tickClient(client))) {
                         System.out.println("PORTAL_SMOKE_COMPLETE");
