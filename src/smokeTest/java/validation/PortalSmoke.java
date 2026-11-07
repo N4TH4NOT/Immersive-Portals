@@ -90,15 +90,21 @@ public final class PortalSmoke implements ModInitializer {
                         stale.forEach(Portal::discard);
                         for (int x = -12; x <= 12; x++)
                             for (int z = -12; z <= 12; z++) {
+                                var roomBlock = (world == from ? Blocks.STONE : Blocks.EMERALD_BLOCK)
+                                        .defaultBlockState();
                                 world.setBlock(
                                         new BlockPos(x, 69, z),
-                                        (world == from ? Blocks.STONE : Blocks.EMERALD_BLOCK)
-                                                .defaultBlockState(),
+                                        roomBlock,
                                         3);
+                                // The Nether retains its native terrain above and around this
+                                // room. Seal every boundary so natural lava cannot contaminate
+                                // the dry collision and stopped-movement acceptance scenes.
+                                world.setBlock(new BlockPos(x, 77, z), roomBlock, 3);
                                 for (int y = 70; y < 77; y++)
                                     world.setBlock(
                                             new BlockPos(x, y, z),
-                                            Blocks.AIR.defaultBlockState(),
+                                            Math.abs(x) == 12 || Math.abs(z) == 12
+                                                    ? roomBlock : Blocks.AIR.defaultBlockState(),
                                             3);
                             }
                     }
