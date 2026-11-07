@@ -182,6 +182,8 @@ final class PortalFluidFixture {
         player.getFoodData().setFoodLevel(20);
         player.getInventory().clearContent();
         player.teleportTo(source, START.x, START.y, START.z, java.util.Set.of(), 180, 0, false);
+        qouteall.imm_ptl.core.collision.PortalCollisionHandler.updateCollidingPortalAfterTeleportation(
+                player, player.getEyePosition(), player.getEyePosition(), 1);
         player.setDeltaMovement(Vec3.ZERO);
         probe = new Probe(name, player);
         player.sendSystemMessage(Component.literal("PORTAL_FLUID_SETUP " + name));
