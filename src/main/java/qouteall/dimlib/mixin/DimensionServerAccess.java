@@ -10,6 +10,7 @@ import net.minecraft.world.level.storage.LevelStorageSource;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.gen.Accessor;
+import org.spongepowered.asm.mixin.gen.Invoker;
 
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -18,6 +19,7 @@ import java.util.concurrent.Executor;
 public interface DimensionServerAccess {
     @Accessor("levels") Map<ResourceKey<Level>, ServerLevel> dimlib_levels();
     @Mutable @Accessor("levels") void dimlib_levels(Map<ResourceKey<Level>, ServerLevel> levels);
+    @Invoker("pollTask") boolean dimlib_pollTask();
     @Accessor("executor") Executor dimlib_executor();
     @Accessor("storageSource") LevelStorageSource.LevelStorageAccess dimlib_storage();
     @Mutable @Accessor("registries")

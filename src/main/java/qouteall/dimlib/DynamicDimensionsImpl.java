@@ -131,7 +131,7 @@ public final class DynamicDimensionsImpl {
             long deadline = System.nanoTime() + 15_000_000_000L;
             while (chunks.chunkMap.hasWork() && System.nanoTime() < deadline) {
                 chunks.tick(() -> true, false);
-                if (!chunks.pollTask() && !server.pollTask()) LockSupport.parkNanos(1_000_000L);
+                if (!chunks.pollTask() && !((DimensionServerAccess) server).dimlib_pollTask()) LockSupport.parkNanos(1_000_000L);
             }
             // Flush the removed world's chunks and entities before closing it. No directory is deleted.
             world.save(null, true, false);
@@ -180,7 +180,7 @@ public final class DynamicDimensionsImpl {
         ((DimensionServerAccess) server).dimlib_registries(server.registries().replaceFrom(
             RegistryLayer.DIMENSIONS, layer, server.registries().getLayer(RegistryLayer.RELOADABLE)));
         var settings = server.getWorldGenSettings();
-        ((DimensionSettingsAccess) settings).dimlib_dimensions(new WorldDimensions(registry));
+        ((DimensionSettingsAccess) (Object) settings).dimlib_dimensions(new WorldDimensions(registry));
         settings.setDirty();
     }
 
