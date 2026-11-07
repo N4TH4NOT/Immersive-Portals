@@ -22,6 +22,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.item.ItemStack;
@@ -338,15 +339,15 @@ final class PortalQualitySmoke {
         for (int x = 62; x <= 66; x++)
             for (int y = 70; y <= 74; y++)
                 world.setBlock(new BlockPos(x, y, 29), Blocks.STONE.defaultBlockState(), 3);
-        var chicken = EntityType.CHICKEN.create(world, EntitySpawnReason.COMMAND);
+        var chicken = EntityTypes.CHICKEN.create(world, EntitySpawnReason.COMMAND);
         require(chicken != null, "The quality chicken could not be created");
         chicken.setNoAi(true);
         chicken.setPersistenceRequired();
         spawn(world, "mob", chicken, new Vec3(0, 70, 32.2), new Vec3(0, 0, -.35));
-        var arrow = EntityType.ARROW.create(world, EntitySpawnReason.COMMAND);
+        var arrow = EntityTypes.ARROW.create(world, EntitySpawnReason.COMMAND);
         require(arrow != null, "The quality arrow could not be created");
         spawn(world, "projectile", arrow, new Vec3(0, 72.5, 32.4), new Vec3(0, 0, -.6));
-        var fastArrow = EntityType.ARROW.create(world, EntitySpawnReason.COMMAND);
+        var fastArrow = EntityTypes.ARROW.create(world, EntitySpawnReason.COMMAND);
         require(fastArrow != null, "The fast quality arrow could not be created");
         spawn(world, "fast_projectile", fastArrow, new Vec3(1.2, 72.5, 32.4), new Vec3(0, 0, -2.4));
         var item = new ItemEntity(world, 0, 70.1, 32.2, new ItemStack(Items.AMETHYST_SHARD, 3));
@@ -466,7 +467,7 @@ final class PortalQualitySmoke {
             for (int x = 190; x <= 194; x++)
                 target.setBlock(new BlockPos(x, y, 40), Blocks.STONE.defaultBlockState(), 3);
         }
-        var chicken = EntityType.CHICKEN.create(source, EntitySpawnReason.COMMAND);
+        var chicken = EntityTypes.CHICKEN.create(source, EntitySpawnReason.COMMAND);
         require(chicken != null, "Could not create the entity UUID witness");
         chicken.setNoAi(true);
         chicken.setPersistenceRequired();
