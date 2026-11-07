@@ -3,11 +3,15 @@ package qouteall.imm_ptl.peripheral.alternate_dimension;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.RegistrationInfo;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.WorldLoader;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
@@ -19,16 +23,18 @@ import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.levelgen.FlatLevelSource;
 import net.minecraft.world.level.levelgen.flat.FlatLayerInfo;
 import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
-import org.jetbrains.annotations.Nullable;
-
-import qouteall.q_misc_util.dimension.DimensionLifecycle;
+import com.mojang.serialization.Lifecycle;
 import qouteall.imm_ptl.core.McHelper;
 import qouteall.imm_ptl.core.ducks.IEWorld;
-import qouteall.imm_ptl.peripheral.dim_stack.DimStackInfo;
+import qouteall.imm_ptl.core.platform_specific.IPConfig;
 import qouteall.imm_ptl.peripheral.dim_stack.DimensionStackAPI;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
+import net.minecraft.tags.TagKey;
 
 public class AlternateDimensions {
     
@@ -66,11 +72,95 @@ public class AlternateDimensions {
         Registries.DIMENSION,
         McHelper.newIdentifier("immersive_portals:bright_void")
     );
+
+    public static final List<ResourceKey<Level>> BUILT_IN_DIMENSIONS =
+        List.of(SKYLAND, BRIGHT_SKYLAND, CHAOS, VOID, BRIGHT_VOID);
     
     public static void init() {
-        // Dynamic registration of alternate dimensions belongs to DimLib, unavailable for 26.2.
-        // Datapack dimensions using our registered terrain generators still work.
+        DimensionStackAPI.DIMENSION_STACK_CANDIDATE_COLLECTION_EVENT.register(
+            (registries, options) -> IPConfig.getConfig().enableAlternateDimensions
+                ? BUILT_IN_DIMENSIONS : List.of()
+        );
         ServerTickEvents.END_SERVER_TICK.register(AlternateDimensions::tick);
+    }
+
+    /** Extend the final dimension registry before it enters the native server registry layers. */
+    public static <D> WorldLoader.WorldDataSupplier<D> withAlternateDimensions(
+        WorldLoader.WorldDataSupplier<D> supplier
+    ) {
+        return context -> {
+            WorldLoader.DataLoadOutput<D> output = supplier.get(context);
+            RegistryAccess.Frozen dimensions = addMissingDimensions(
+                context.datapackWorldgen(), output.finalDimensions(),
+                IPConfig.getConfig().enableAlternateDimensions
+            );
+            return dimensions == output.finalDimensions() ? output
+                : new WorldLoader.DataLoadOutput<>(output.cookie(), dimensions);
+        };
+    }
+
+    /** Existing saved or datapack definitions always take precedence over generated defaults. */
+    public static RegistryAccess.Frozen addMissingDimensions(
+        HolderLookup.Provider worldgen, RegistryAccess.Frozen dimensions, boolean enabled
+    ) {
+        if (!enabled) return dimensions;
+        Registry<LevelStem> existing = dimensions.lookupOrThrow(Registries.LEVEL_STEM);
+        if (BUILT_IN_DIMENSIONS.stream().allMatch(key ->
+            existing.containsKey(ResourceKey.create(Registries.LEVEL_STEM, key.identifier()))
+        )) return dimensions;
+
+        MappedRegistry<LevelStem> replacement =
+            new MappedRegistry<>(Registries.LEVEL_STEM, Lifecycle.experimental());
+        existing.listElements().forEach(holder -> replacement.register(
+            holder.key(), holder.value(), existing.registrationInfo(holder.key())
+                .orElse(RegistrationInfo.BUILT_IN)
+        ));
+        for (ResourceKey<Level> key : BUILT_IN_DIMENSIONS) {
+            ResourceKey<LevelStem> stemKey =
+                ResourceKey.create(Registries.LEVEL_STEM, key.identifier());
+            if (!replacement.containsKey(stemKey)) {
+                replacement.register(stemKey, createDefaultStem(worldgen, key),
+                    new RegistrationInfo(Optional.empty(), Lifecycle.stable()));
+            }
+        }
+        Map<TagKey<LevelStem>, List<Holder<LevelStem>>> tags = new HashMap<>();
+        existing.listTags().forEach(tag -> tags.put(tag.key(), tag.stream()
+            .map(holder -> (Holder<LevelStem>) replacement.getOrThrow(holder.unwrapKey().orElseThrow()))
+            .toList()));
+        replacement.bindTags(tags);
+        replacement.freeze();
+
+        List<Registry<?>> registries = new ArrayList<>();
+        dimensions.registries().forEach(entry -> registries.add(
+            entry.key().equals(Registries.LEVEL_STEM) ? replacement : entry.value()
+        ));
+        return new RegistryAccess.ImmutableRegistryAccess(registries).freeze();
+    }
+
+    private static LevelStem createDefaultStem(
+        HolderLookup.Provider worldgen, ResourceKey<Level> key
+    ) {
+        ResourceKey<DimensionType> type =
+            key == BRIGHT_SKYLAND || key == BRIGHT_VOID ? SURFACE_TYPE_BRIGHT : SURFACE_TYPE;
+        ChunkGenerator generator;
+        if (key == SKYLAND || key == BRIGHT_SKYLAND) {
+            generator = NormalSkylandGenerator.create(
+                worldgen.lookupOrThrow(Registries.BIOME),
+                worldgen.lookupOrThrow(Registries.DENSITY_FUNCTION),
+                worldgen.lookupOrThrow(Registries.NOISE),
+                worldgen.lookupOrThrow(Registries.NOISE_SETTINGS),
+                worldgen.lookupOrThrow(Registries.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST),
+                0L, true
+            );
+        } else if (key == CHAOS) {
+            generator = ErrorTerrainGenerator.create(
+                worldgen.lookupOrThrow(Registries.BIOME),
+                worldgen.lookupOrThrow(Registries.NOISE_SETTINGS)
+            );
+        } else {
+            generator = createVoidGenerator(worldgen);
+        }
+        return new LevelStem(worldgen.lookupOrThrow(Registries.DIMENSION_TYPE).getOrThrow(type), generator);
     }
 
     public static boolean isAlternateDimension(Level world) {
@@ -98,7 +188,11 @@ public class AlternateDimensions {
     }
     
     public static ChunkGenerator createVoidGenerator(RegistryAccess rm) {
-        Registry<Biome> biomeRegistry = rm.lookupOrThrow(Registries.BIOME);
+        return createVoidGenerator((HolderLookup.Provider) rm);
+    }
+
+    public static ChunkGenerator createVoidGenerator(HolderLookup.Provider rm) {
+        var biomeRegistry = rm.lookupOrThrow(Registries.BIOME);
         
         Holder.Reference<Biome> plainsHolder = biomeRegistry.getOrThrow(Biomes.PLAINS);
         

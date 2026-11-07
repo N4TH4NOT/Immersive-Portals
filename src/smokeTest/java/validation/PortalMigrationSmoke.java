@@ -16,6 +16,30 @@ import java.util.List;
 
 /** Exercises the published data against the game's codecs with Fabric mixins active. */
 final class PortalMigrationSmoke {
+    static void validateAlternateDimensions(net.minecraft.server.MinecraftServer server) {
+        var dimensions = server.registryAccess().lookupOrThrow(
+                net.minecraft.core.registries.Registries.LEVEL_STEM);
+        var ops = RegistryOps.create(JsonOps.INSTANCE, server.registryAccess());
+        for (var key : qouteall.imm_ptl.peripheral.alternate_dimension.AlternateDimensions.BUILT_IN_DIMENSIONS) {
+            var world = server.getLevel(key);
+            if (world == null || !dimensions.containsKey(net.minecraft.resources.ResourceKey.create(
+                    net.minecraft.core.registries.Registries.LEVEL_STEM, key.identifier())))
+                throw new AssertionError("Native alternate dimension missing: " + key.identifier());
+            // Actual chunk generation also exercises mixin invokers and native random-state setup.
+            world.getChunk(0, 0);
+            var generator = world.getChunkSource().getGenerator();
+            var encoded = ChunkGenerator.CODEC.encodeStart(ops, generator).getOrThrow();
+            var restored = ChunkGenerator.CODEC.parse(ops, encoded).getOrThrow();
+            var reencoded = ChunkGenerator.CODEC.encodeStart(ops, restored).getOrThrow();
+            if (!encoded.equals(reencoded))
+                throw new AssertionError("Alternate generator changed on codec reload: " + key.identifier());
+            if (key == qouteall.imm_ptl.peripheral.alternate_dimension.AlternateDimensions.BRIGHT_SKYLAND
+                    && !encoded.getAsJsonObject().get("use_world_seed").getAsBoolean())
+                throw new AssertionError("Native skyland does not use the world's seed");
+        }
+        System.out.println("PORTAL_SMOKE_ALTERNATE_DIMENSIONS_OK");
+    }
+
     static void validate() {
         var ops = RegistryOps.create(JsonOps.INSTANCE, VanillaRegistries.createLookup());
         var pack = read("/migration-example/pack.mcmeta").getAsJsonObject().get("pack");

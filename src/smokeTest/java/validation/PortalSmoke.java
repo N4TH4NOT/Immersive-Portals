@@ -68,6 +68,7 @@ public final class PortalSmoke implements ModInitializer {
                                                                 }))));
         ServerLifecycleEvents.SERVER_STARTED.register(
                 server -> {
+                    PortalMigrationSmoke.validateAlternateDimensions(server);
                     var from = server.overworld();
                     var to = server.getLevel(Level.NETHER);
                     for (var world : new net.minecraft.server.level.ServerLevel[] {from, to}) {

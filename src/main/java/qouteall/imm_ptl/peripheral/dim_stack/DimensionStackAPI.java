@@ -10,7 +10,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import org.jetbrains.annotations.Nullable;
-import qouteall.q_misc_util.dimension.DimensionLifecycle;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -51,7 +50,9 @@ public class DimensionStackAPI {
      * 1.
      * When initializing a server and is initializing dimension stack, this event will fire.
      * In this case, the `dimStackInfo` parameter will not be null.
-     * It will fire inside {@link DimensionAPI#SERVER_DIMENSIONS_LOAD_EVENT} so you can add dimensions via {@link DimensionAPI#addDimension(MinecraftServer, Identifier, LevelStem)} at this time.
+     * The native dimension registry has already been prepared by the world loader at this point.
+     * Register additional dimensions through datapacks before world loading; this callback
+     * does not provide DimLib's former runtime dimension-creation API.
      *
      * 2.
      * After using `/portal dimension_stack` command, this event will also fire,

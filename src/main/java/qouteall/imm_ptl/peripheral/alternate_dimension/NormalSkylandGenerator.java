@@ -66,7 +66,8 @@ public class NormalSkylandGenerator extends NoiseBasedChunkGenerator {
                 RegistryOps.retrieveGetter(Registries.NOISE),
                 RegistryOps.retrieveGetter(Registries.NOISE_SETTINGS),
                 RegistryOps.retrieveGetter(Registries.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST),
-                Codec.LONG.optionalFieldOf("seed", 0L).forGetter(g -> g.seed)
+                Codec.LONG.optionalFieldOf("seed", 0L).forGetter(g -> g.seed),
+                Codec.BOOL.optionalFieldOf("use_world_seed", false).forGetter(g -> g.useWorldSeed)
             )
             .apply(instance, NormalSkylandGenerator::create)
     );
@@ -77,6 +78,7 @@ public class NormalSkylandGenerator extends NoiseBasedChunkGenerator {
     private final net.minecraft.core.HolderGetter<DensityFunction> densityFunctionHolderGetter;
     private final net.minecraft.core.HolderGetter<NormalNoise.NoiseParameters> noiseParametersHolderGetter;
     private final long seed;
+    private boolean useWorldSeed;
     
     public NormalSkylandGenerator(
         BiomeSource biomeSource,
@@ -178,6 +180,20 @@ public class NormalSkylandGenerator extends NoiseBasedChunkGenerator {
         
         return result;
     }
+
+    public static NormalSkylandGenerator create(
+        HolderGetter<Biome> biomes,
+        HolderGetter<DensityFunction> densities,
+        HolderGetter<NormalNoise.NoiseParameters> noises,
+        HolderGetter<NoiseGeneratorSettings> settings,
+        HolderGetter<MultiNoiseBiomeSourceParameterList> biomeParameters,
+        long seed, boolean useWorldSeed
+    ) {
+        NormalSkylandGenerator generator =
+            create(biomes, densities, noises, settings, biomeParameters, seed);
+        generator.useWorldSeed = useWorldSeed;
+        return generator;
+    }
     
     private final NoiseBasedChunkGenerator delegate;
     
@@ -203,6 +219,13 @@ public class NormalSkylandGenerator extends NoiseBasedChunkGenerator {
     
     @Override
     public ChunkGeneratorStructureState createState(HolderLookup<StructureSet> structureSetLookup, RandomState randomState, long seed) {
+        if (useWorldSeed) {
+            delegatedRandomState = RandomState.create(
+                delegate.generatorSettings().value(),
+                (HolderLookup.RegistryLookup<NormalNoise.NoiseParameters>) noiseParametersHolderGetter,
+                seed
+            );
+        }
         // filter the mineshaft out
         // cannot use HolderLookup.filterElements because it does not provide id in predicate
         HolderLookup<StructureSet> structureSetLookupDelegate = new HolderLookup<StructureSet>() {
