@@ -12,12 +12,28 @@ Pour arrêter temporairement le rendu des portails, ferme le jeu puis règle `"p
 
 Le scénario de régression GitHub enregistre un consommateur indépendant des événements Fabric, attache des données à l'état du monde extrait et les relit pendant le rendu. Il vérifie les contextes principal, hors écran et imbriqué avant et après le rechargement des ressources. Cela reproduit l'utilisation de l'API qui révélait le défaut ; cela ne remplace pas les essais de chaque version de BlockLab ou de chaque autre mod.
 
+## Le terrain ou l’éclairage d’un portail reste obsolète avec Sodium
+
+La modification de développement du [commit `9a90027b`](https://github.com/N4TH4NOT/Immersive-Portals/commit/9a90027b955914ecdfd1363b489fcc788e5f2cfa) propage les mises à jour des blocs et sections voisines vers toutes les vues de portail du même monde. Auparavant, Sodium pouvait actualiser la vue principale en contournant l’invalidation nécessaire aux maillages du terrain distant. Le changement concerne aussi Sodium seul : ces chemins de mise à jour du terrain ne nécessitent pas de shaderpack Iris actif.
+
+Des artefacts de développement peuvent partager un numéro de version tout en contenant des commits différents. Le commit associé à l’artefact GitHub Actions choisi et ses résultats en jeu permettent d’identifier la modification des mises à jour du terrain. Le scénario de contexte Fabric décrit plus haut utilise un consommateur d’événements indépendant ; il ne démontre pas la compatibilité avec chaque autre mod et n’isole pas tous les calculs d’éclairage adouci.
+
+Pour un signalement reproductible, joindre le nom du JAR d’Immersive Portals, sa version et son SHA-256, le commit de compilation GitHub lorsqu’il est connu, les versions de Sodium et BlockLab, les réglages d’éclairage adouci, la présence d’Iris ou d’un shaderpack actif, ainsi qu’une capture ou une courte vidéo des modifications de blocs. Voir l’[architecture des mises à jour de terrain](rendering-26.2.fr.md#mises-à-jour-du-terrain-avec-sodium) et le [guide de validation GitHub](port-26.2.fr.md).
+
 ## Un portail posé sur un mur bloque le passage
 
 La version `7.0.0-alpha.4` corrige une limite de collision du côté origine d'un portail placé exactement sur la face d'un mur solide. Le bloc de support dont la face touche le plan du portail doit être exclu dans l'ouverture pour permettre à la caméra du joueur de franchir le plan. L'ancienne comparaison stricte conservait ce bloc comme obstacle solide.
 
-Le test côté origine accepte désormais une tolérance d'arrondi de collision de `1e-7` bloc. Les blocs hors de l'ouverture et les obstacles solides du côté visible de la destination conservent leurs collisions. Un portail réellement enfoui dans un bloc reste bloqué. Installe la version corrigée pour traverser un portail posé en surface en conservant son mur de support intact.
+Le test côté origine accepte une tolérance d’arrondi de collision de `1e-7` bloc. Les blocs hors de l’ouverture et les obstacles solides du côté visible de la destination conservent leurs collisions. Un portail réellement enfoui dans un bloc reste bloqué. Cela traite la limite du mur affleurant ; le relais des contacts à destination et les déplacements lents disposent de contrôles de régression distincts.
 
 ## La vue du portail clignote avec la texture du mur
 
-La version `7.0.0-alpha.4` donne au portail posé sur un mur une priorité de profondeur cohérente sur la face de bloc située sur la même surface. Les tests de couverture et la composition du portail partagent le même petit décalage relatif de profondeur reverse-Z : les arrondis de rastérisation ne sélectionnent plus alternativement le mur et le portail. Les véritables obstacles au premier plan conservent leur priorité de profondeur. Cet ajustement de rendu ne déplace ni le portail ni son plan de collision.
+La version `7.0.0-alpha.4` introduit une priorité de profondeur commune au portail et à la face du bloc de support située sur la même surface. La couverture et la composition utilisent le même petit décalage relatif reverse-Z. La modification actuelle des shaders traite aussi une ouverture qui traverse le plan proche de la caméra : elle conserve sa couverture lorsque des sommets passent derrière l’œil, puis reconstruit et borne la profondeur de surface dans le shader de fragments. Les compositions masquée et directe suivent toutes deux ce chemin lorsque `useDepthClampForPortalRendering` est activé, comme c’est le cas par défaut.
+
+Ces ajustements préservent les plans géométriques et de collision du portail. La scène GitHub vérifie des images consécutives proches de l’ouverture, sous des angles obliques et avec un véritable obstacle au premier plan. La validation de la combinaison actuelle de shaders attend son passage GitHub Actions.
+
+## Le joueur accroche près de la sortie d’un portail dans le même monde
+
+Après téléportation, l’implémentation actuelle fixe la position finale des yeux et la boîte englobante de l’entité avant de chercher les portails de destination. Elle notifie directement à l’entité ses contacts à destination au lieu de réexaminer une section d’entités qui peut encore désigner la position source pendant une téléportation dans le même monde. Le contact est conservé lorsque la position précédente ou actuelle des yeux reste devant le portail et que le corps chevauche encore son ouverture.
+
+Cela maintient l’exclusion des collisions du mur de support associée au portail inverse pendant un arrêt ou un recul. Pour les portails rectangulaires, un mouvement partant exactement du plan et poursuivant vers l’intérieur compte aussi comme une traversée ; rester sur le plan, simplement l’atteindre ou s’en éloigner ne déclenche pas de téléportation. Ce changement traite le relais des contacts et ne remplace pas le mécanisme existant de correction des chevauchements. Le scénario GitHub de déplacement lent contrôle le mouvement résultant de la caméra et du joueur ; la validation de cette révision est en attente.

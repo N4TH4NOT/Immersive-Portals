@@ -19,6 +19,12 @@ The standalone migration restores automatic registration of the five historical 
 
 Legacy Pehkui, Flywheel, Porting Lib and Requiem adapters are not provided as 26.2 integrations. Native scaling is independent of Pehkui. Removing an old adapter does not establish compatibility with an installed replacement.
 
+## Current rendering follow-up
+
+The source now propagates Sodium block and neighboring-section invalidations across scoped portal extractors ([`9a90027b`](https://github.com/N4TH4NOT/Immersive-Portals/commit/9a90027b955914ecdfd1363b489fcc788e5f2cfa)). This targets stale remote terrain after updates, including lighting-related remeshing, without requiring an active shaderpack. The wall-collision correction retains its `1e-7`-block boundary tolerance; coplanar coverage and composition retain their shared 16-float-step reverse-Z offset. Neither changes the geometric portal plane. The depth-clamp shaders now reconstruct and clamp fragment depth across the full aperture, including vertices behind the eye. Destination collision contact is refreshed at the final entity position without relying on a potentially stale source entity-section index; contact can remain valid across a frame-time crossing based on either previous or current eye position.
+
+Validation of the latest combination is pending its GitHub Actions run. Slow approach, stopping at the portal, reversing input and crossing with the backing wall intact are separate movement acceptance cases; the collision or rendering fixes alone do not establish them. See [rendering details](rendering-26.2.md) and [troubleshooting](troubleshooting.md) for the implementation scope.
+
 ## Evidence and remaining scope
 
 Earlier source-fork documentation records manual runtime experiments, but those experiments are not rerun evidence for this repository. The imported GitHub workflow establishes compilation/unit-test success only. The destination [validation workflow](port-26.2.md) adds explicit gameplay checks and retains logs for review.

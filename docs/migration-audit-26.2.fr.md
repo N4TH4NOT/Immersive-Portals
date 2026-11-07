@@ -19,6 +19,12 @@ La migration autonome rétablit l’enregistrement automatique des cinq dimensio
 
 Les anciens adaptateurs Pehkui, Flywheel, Porting Lib et Requiem ne sont pas fournis comme intégrations 26.2. L’échelle native est indépendante de Pehkui. Retirer un ancien adaptateur ne démontre pas la compatibilité avec un éventuel remplacement installé.
 
+## Suivi actuel du rendu
+
+Les sources propagent désormais les invalidations de blocs Sodium et de sections voisines vers les extracteurs de chaque vue de portail ([`9a90027b`](https://github.com/N4TH4NOT/Immersive-Portals/commit/9a90027b955914ecdfd1363b489fcc788e5f2cfa)). Ce changement cible le terrain distant obsolète après mise à jour, y compris la reconstruction des maillages liée à l’éclairage, sans nécessiter de shaderpack actif. La correction des collisions sur les murs conserve sa tolérance de `1e-7` bloc ; la couverture et la composition coplanaires conservent leur décalage reverse-Z commun de 16 pas flottants. Aucun de ces changements ne déplace le plan géométrique du portail. Les shaders de limitation de profondeur reconstruisent et bornent désormais la profondeur des fragments sur toute l’ouverture, y compris pour les sommets derrière l’œil. Le contact de collision à destination est actualisé à la position finale de l’entité, sans dépendre d’un index de section encore situé à la source ; il peut rester valide pendant une traversée entre deux ticks grâce à la position précédente ou actuelle des yeux.
+
+La validation de la combinaison actuelle attend son passage GitHub Actions. L’approche lente, l’arrêt au niveau du portail, l’inversion des commandes et la traversée avec le mur de support intact sont des critères de déplacement distincts ; les seules corrections de collision ou de rendu ne les démontrent pas. Voir les [détails du rendu](rendering-26.2.fr.md) et le [dépannage](troubleshooting.fr.md) pour le périmètre de l’implémentation.
+
 ## Preuves et périmètre restant
 
 Les documents du fork source rapportent des essais manuels antérieurs, sans constituer des preuves rejouées pour ce dépôt. Le workflow GitHub importé démontre seulement la réussite de la compilation et des tests unitaires. Le [workflow de validation](port-26.2.fr.md) du dépôt cible ajoute des contrôles explicites en jeu et conserve les journaux pour la revue.
