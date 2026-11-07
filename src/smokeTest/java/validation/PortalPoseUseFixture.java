@@ -39,10 +39,11 @@ final class PortalPoseUseFixture {
         final java.util.UUID player;
         final ServerLevel destination;
         final int started;
+        final java.util.ArrayDeque<String> useHistory = new java.util.ArrayDeque<>();
         Vec3 previous;
         int sourcePoseTicks, destinationPoseTicks, sourceUseTicks, destinationUseTicks;
         int lastUseTicks = -1, maximumUseTicks, crossingTick = -1;
-        boolean crossed, verified, useStarted, projectileHit;
+        boolean crossed, verified, useStarted, projectileHit, destinationUseAcknowledged;
 
         Probe(String name, ServerPlayer player, ServerLevel destination) {
             this.name = name;
@@ -219,6 +220,17 @@ final class PortalPoseUseFixture {
         boolean destination = destination(player);
         Vec3 position = destination ? player.position().add(-64, 0, 0) : player.position();
         double vertical = probe.previous == null ? 0 : position.y - probe.previous.y;
+        if (heldUse(probe.name)) {
+            if (probe.useHistory.size() == 16) probe.useHistory.removeFirst();
+            probe.useHistory.addLast("tick=" + tick + " playerTick=" + player.tickCount
+                    + " dimension=" + player.level().dimension().identifier()
+                    + " feet=" + player.position() + " using=" + player.isUsingItem()
+                    + " hand=" + player.getUsedItemHand() + " used=" + player.getTicksUsingItem()
+                    + " remaining=" + player.getUseItemRemainingTicks()
+                    + " active=" + player.getUseItem()
+                    + " held=" + player.getItemInHand(player.getUsedItemHand())
+                    + " crossed=" + probe.crossed + " destinationUse=" + probe.destinationUseTicks);
+        }
         if (probe.previous != null) {
             var step = position.subtract(probe.previous);
             require(Math.hypot(step.x, step.z) < .9 && Math.abs(step.y) < 2.5,
@@ -230,7 +242,8 @@ final class PortalPoseUseFixture {
         }
         if (destination && !probe.crossed) {
             require(pose && probe.sourcePoseTicks >= 2,
-                    "The server crossing did not preserve its active pose/use: " + probe.name);
+                    "The server crossing did not preserve its active pose/use: " + probe.name
+                            + " history=" + probe.useHistory);
             probe.crossed = true;
             probe.crossingTick = tick;
         }
@@ -239,14 +252,26 @@ final class PortalPoseUseFixture {
             if (player.isUsingItem()) {
                 int used = player.getTicksUsingItem();
                 require(probe.lastUseTicks < 0 || used >= probe.lastUseTicks,
-                        "The authoritative held item restarted its use counter across the portal");
+                        "The authoritative held item restarted its use counter across the portal: "
+                                + probe.name + " history=" + probe.useHistory);
                 probe.useStarted = true;
                 probe.lastUseTicks = used;
                 probe.maximumUseTicks = Math.max(probe.maximumUseTicks, used);
                 if (destination) probe.destinationUseTicks++; else probe.sourceUseTicks++;
+                if (probe.name.equals("bow") && probe.destinationUseTicks >= 3
+                        && !probe.destinationUseAcknowledged) {
+                    probe.destinationUseAcknowledged = true;
+                    player.sendSystemMessage(Component.literal("PORTAL_POSE_USE_DESTINATION_HELD bow"));
+                    System.out.println("PORTAL_POSE_USE_DESTINATION_HELD case=bow sourceUse="
+                            + probe.sourceUseTicks + " destinationUse=" + probe.destinationUseTicks
+                            + " used=" + used);
+                }
             } else if (probe.useStarted) {
                 require(probe.crossed && probe.destinationUseTicks >= 2,
-                        "The held item stopped during the authoritative crossing");
+                        "The held item stopped during the authoritative crossing: " + probe.name
+                                + " sourceUse=" + probe.sourceUseTicks
+                                + " destinationUse=" + probe.destinationUseTicks
+                                + " crossed=" + probe.crossed + " history=" + probe.useHistory);
             }
             if (probe.name.equals("bow") && probe.crossed)
                 for (var entity : probe.destination.getAllEntities())

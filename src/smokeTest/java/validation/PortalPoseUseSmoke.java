@@ -23,7 +23,7 @@ final class PortalPoseUseSmoke {
 
     private static final java.util.Set<String> acknowledgements = new java.util.HashSet<>();
     private static Stage stage = Stage.SETUP;
-    private static int phase = -1, ticks, started, stageTick, crossingTick;
+    private static int phase = -1, ticks, started, stageTick, crossingTick, releaseTick;
     private static int sourceFrames, destinationFrames, transitions, sourcePoseTicks, destinationPoseTicks;
     private static int heldBefore, heldAfter, lastUsed = -1, poseSince;
     private static int gameTicks;
@@ -228,7 +228,7 @@ final class PortalPoseUseSmoke {
     }
 
     private static boolean outcome(Minecraft client) {
-        if (name().equals("bow")) return released && ticks - crossingTick >= 30;
+        if (name().equals("bow")) return released && ticks - releaseTick >= 30;
         if (name().equals("food")) {
             if (client.player.getMainHandItem().getCount() != 1) return false;
             released = true;
@@ -292,9 +292,14 @@ final class PortalPoseUseSmoke {
                         && ticks - crossingTick < 4);
                 if (correctPose(client)) destinationPoseTicks++;
                 require(destination(client), "The player was pushed back after its pose/use crossing");
-                if (name().equals("bow") && ticks - crossingTick >= 6) {
+                if (name().equals("bow") && !released && ticks - crossingTick >= 6
+                        && acknowledgements.contains("PORTAL_POSE_USE_DESTINATION_HELD bow")) {
                     released = true;
+                    releaseTick = ticks;
                     client.options.keyUse.setDown(false);
+                    System.out.println("PORTAL_POSE_USE_CLIENT_RELEASE case=bow heldBefore=" + heldBefore
+                            + " heldAfter=" + heldAfter + " used=" + lastUsed
+                            + " serverDestinationAcknowledged=true");
                 }
                 if (!outcome(client)) return false;
                 require(sourceFrames >= 2 && destinationFrames >= 2 && transitions == 1
