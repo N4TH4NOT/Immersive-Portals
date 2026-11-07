@@ -15,6 +15,7 @@ import qouteall.imm_ptl.core.render.context_management.WorldRenderInfo;
 
 /** Actual GPU pictures with independent physical-scene and direct-world lighting references. */
 final class PortalOpticsSmoke {
+    private static final com.google.gson.Gson FRAME_JSON = new com.google.gson.Gson();
     private record View(String name, double distance, int pitch, boolean oblique, String mode) {
         boolean reference() { return mode.startsWith("reference_"); }
         boolean lighting() { return mode.contains("dark") || mode.contains("lit"); }
@@ -77,7 +78,7 @@ final class PortalOpticsSmoke {
             pose.put("projectionScale", new float[] {Math.abs(projection.m00()), Math.abs(projection.m11())});
             pose.put("dimension", client.level.dimension().identifier().toString());
             pose.put("gamma", client.options.gamma().get());
-            System.out.println("PORTAL_OPTICS_FRAME " + IPGlobal.gson.toJson(pose));
+            System.out.println("PORTAL_OPTICS_FRAME " + FRAME_JSON.toJson(pose));
             Screenshot.grab(client.gameDirectory,
                     "portal-optics-" + view.name() + "-" + String.format(java.util.Locale.ROOT, "%02d", captured) + ".png",
                     client.gameRenderer.mainRenderTarget(), 1, message -> {});
