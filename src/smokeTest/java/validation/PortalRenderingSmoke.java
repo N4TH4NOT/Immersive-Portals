@@ -38,6 +38,44 @@ final class PortalRenderingSmoke {
                 text -> {});
     }
 
+    private static void captureTransformedSources(Minecraft client) {
+        for (var entity : client.level.entitiesForRendering()) {
+            if (!(entity instanceof Portal portal)
+                    || (!(portal instanceof Mirror)
+                            && !(portal.getPortalShape() instanceof
+                                    qouteall.imm_ptl.core.portal.shape.SpecialFlatPortalShape)))
+                continue;
+            String name = portal instanceof Mirror ? "mirror" : "triangle";
+            qouteall.imm_ptl.core.render.context_management.PortalRendering.pushPortalLayer(portal);
+            try {
+                var info = new qouteall.imm_ptl.core.render.context_management.WorldRenderInfo.Builder()
+                        .setWorld(ClientWorldLoader.getWorld(portal.getDestDim()))
+                        .setCameraPos(qouteall.imm_ptl.core.render.context_management.PortalRendering
+                                .getRenderingCameraPos())
+                        .setCameraTransformation(portal.getAdditionalCameraTransformation())
+                        .setOverwriteCameraTransformation(false)
+                        .setRenderDistance(client.options.getEffectiveRenderDistance())
+                        .setDoRenderHand(false)
+                        .setDoRenderSky(!portal.isFuseView())
+                        .build();
+                IPCGlobal.renderer.invokeWorldRendering(info);
+                net.minecraft.client.Screenshot.grab(
+                        client.gameDirectory,
+                        "portal-source-" + name + ".png",
+                        MyGameRenderer.renderedTarget(),
+                        1,
+                        text -> {});
+                System.out.println("PORTAL_RENDER_SOURCE " + name
+                        + " camera=" + info.cameraPos
+                        + " world=" + info.world.dimension().identifier()
+                        + " transform=" + portal.getAdditionalCameraTransformation()
+                        + " projection=" + NativeWorldRenderer.lastProjection());
+            } finally {
+                qouteall.imm_ptl.core.render.context_management.PortalRendering.popPortalLayer();
+            }
+        }
+    }
+
     private static void validatePlayerVisibility(Minecraft client) {
         var previousCamera = client.options.getCameraType();
         boolean previousRenderPlayer = IPGlobal.renderYourselfInPortal;
@@ -189,17 +227,28 @@ final class PortalRenderingSmoke {
         }
         if (ticks == 290) {
             capture(client, "portal-after-reload");
+            captureTransformedSources(client);
             require(
                     PortalRenderInfo.get(center(client)).wasRenderedLastFrame(),
                     "Reload lost the portal view");
             require(
                     RenderDiagnostics.tests() > 0 && RenderDiagnostics.rejected() > 0,
                     "Advanced frustum culling was not exercised");
-            if (qouteall.imm_ptl.core.compat.sodium_compatibility.SodiumInterface.invoker
-                    .isSodiumPresent())
-                require(
-                        RenderDiagnostics.sodiumViewports() > 0,
+            if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium")) {
+                require(qouteall.imm_ptl.core.compat.sodium_compatibility.SodiumInterface.invoker
+                                .isSodiumPresent(),
+                        "Installed Sodium did not initialize its portal adapter");
+                require(RenderDiagnostics.sodiumViewports() > 0,
                         "Sodium viewports were not adapted");
+                System.out.println("PORTAL_RENDER_SODIUM_COMPAT_OK");
+            }
+            if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("iris")) {
+                require(IrisInterface.invoker.isIrisPresent() && IrisInterface.invoker.isShaders(),
+                        "Installed Iris did not enable the verification shaderpack");
+                require(IPCGlobal.renderer instanceof IrisPortalRenderer,
+                        "Iris did not restore its normal portal pipeline after reload");
+                System.out.println("PORTAL_RENDER_IRIS_COMPAT_OK");
+            }
             require(NativePortalOcclusion.statistics().pending() <= 128, "Readbacks are unbounded");
             System.out.println(
                     "PORTAL_RENDER_MODES_OK "
