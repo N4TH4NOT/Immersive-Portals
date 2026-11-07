@@ -1,5 +1,8 @@
 package qouteall.imm_ptl.core.mixin.common.position_sync;
 
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.network.protocol.game.ServerboundAcceptTeleportationPacket;
@@ -10,6 +13,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.Relative;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
@@ -31,6 +35,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import qouteall.imm_ptl.core.IPGlobal;
+import qouteall.imm_ptl.core.collision.PortalPlayerMovement;
 import qouteall.imm_ptl.core.ducks.IEEntity;
 import qouteall.imm_ptl.core.ducks.IEPlayerMoveC2SPacket;
 import qouteall.imm_ptl.core.ducks.IEPlayerPositionLookS2CPacket;
@@ -95,6 +100,9 @@ public abstract class MixinServerGamePacketListenerImpl implements IEServerPlayN
     
     @Unique
     private int ip_wrongMovePacketCount = 0;
+
+    @Unique
+    private boolean ip_portalMovementBlocked;
     
     /**
      * Attach the dimension information to
@@ -126,6 +134,7 @@ public abstract class MixinServerGamePacketListenerImpl implements IEServerPlayN
         cancellable = true
     )
     private void onProcessMovePacket(ServerboundMovePlayerPacket packet, CallbackInfo ci) {
+        ip_portalMovementBlocked = false;
         ResourceKey<Level> packetDimension = ((IEPlayerMoveC2SPacket) packet).ip_getPlayerDimension();
         
         if (packetDimension == null) {
@@ -177,6 +186,22 @@ public abstract class MixinServerGamePacketListenerImpl implements IEServerPlayN
         ip_dimOfAwaitingPosition = player.level().dimension();
     }
 
+    @WrapOperation(method = "handleMovePlayer", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/server/level/ServerPlayer;move(Lnet/minecraft/world/entity/MoverType;Lnet/minecraft/world/phys/Vec3;)V"))
+    private void ip_preparePacketCollision(ServerPlayer movedPlayer, MoverType type,
+            Vec3 requestedMove, Operation<Void> original) {
+        // Player movement comes from packets, so the server entity's velocity is
+        // not a reliable swept-contact prediction between world collision updates.
+        boolean portalContact = PortalPlayerMovement.prepare(movedPlayer, requestedMove);
+        Vec3 requestedPosition = movedPlayer.position().add(requestedMove);
+        original.call(movedPlayer, type, requestedMove);
+        // Keep the actual source/aperture/destination collision result authoritative.
+        // Creative mode skips vanilla's moved-wrongly branch; clipping the source
+        // box alone must not turn a blocked remote move into an accepted packet.
+        ip_portalMovementBlocked = portalContact
+                && movedPlayer.position().distanceToSqr(requestedPosition) > 1.0E-6;
+    }
+
     @Inject(
         method = "isEntityCollidingWithAnythingNew", at = @At("HEAD"), cancellable = true
     )
@@ -184,6 +209,11 @@ public abstract class MixinServerGamePacketListenerImpl implements IEServerPlayN
         LevelReader level, Entity movedEntity, AABB playerBB, double newX, double newY, double newZ, CallbackInfoReturnable<Boolean> cir
     ) {
         if (!IPGlobal.crossPortalCollision) {
+            return;
+        }
+
+        if (movedEntity == player && ip_portalMovementBlocked) {
+            cir.setReturnValue(true);
             return;
         }
         
