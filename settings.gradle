@@ -22,8 +22,8 @@ pluginManagement {
 //    }
 }
 
-rootProject.name = "immersive-portals-minestom"
-include "portal-protocol", "minestom", "minestom-example"
+rootProject.name = "immersive-portals"
+include "portal-protocol"
 
 
 def gravitySources = providers.gradleProperty('gravitySourceDir')

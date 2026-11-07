@@ -58,7 +58,7 @@ tasks.register('examplePortalDatapack', Zip) {
 }
 tasks.named('assemble') { dependsOn 'examplePortalDatapack' }
 
-// Opt-in local runtime verification; these classes are never packaged in the mod.
+// GitHub Actions runtime verification; these classes are never packaged in the mod.
 if (providers.gradleProperty('portalSmoke').isPresent()) {
     sourceSets {
         smokeTest {
@@ -90,6 +90,8 @@ if (providers.gradleProperty('portalSmoke').isPresent()) {
             client {
                 source sourceSets.smokeTest
                 runDir 'run/smoke-client'
+                programArgs '--username', providers.gradleProperty('portalSmokeUsername').getOrElse('PortalTest')
+                programArgs '--graphicsBackend', providers.gradleProperty('portalSmokeBackend').getOrElse('opengl')
                 if (!providers.gradleProperty('portalSmokeSingleplayer').isPresent()) {
                     programArgs '--quickPlayMultiplayer', providers.gradleProperty('portalSmokeAddress').getOrElse('127.0.0.1:25567')
                 }
@@ -128,5 +130,8 @@ if (providers.gradleProperty('portalSmoke').isPresent()) {
     }
 }
 
-// Run the extracted library's checks alongside portal compatibility tests.
-tasks.named('check') { dependsOn gradle.includedBuild('immersive-portals-gravity').task(':build') }
+// Validate only the gravity modules required by the Fabric mod.
+tasks.named('check') {
+    dependsOn gradle.includedBuild('immersive-portals-gravity').task(':gravity-api:check')
+    dependsOn gradle.includedBuild('immersive-portals-gravity').task(':gravity-fabric:check')
+}

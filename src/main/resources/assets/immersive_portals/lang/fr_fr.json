@@ -195,7 +195,7 @@
   "text.autoconfig.immersive_portals.option.netherPortalMode": "Nether Portal Mode",
   "text.autoconfig.immersive_portals.option.endPortalMode": "End Portal Mode",
   "text.autoconfig.immersive_portals.option.lightVanillaNetherPortalWhenCrouching": "Light vanilla portal when crouching",
-  "text.autoconfig.immersive_portals.option.enableAlternateDimensions": "Enable Alternate Dimensions",
+  "text.autoconfig.immersive_portals.option.enableAlternateDimensions": "Activer les dimensions alternatives",
   "text.autoconfig.immersive_portals.option.enableServerPerformanceAdjustment": "Enable Server Performance Adjustment",
   "text.autoconfig.immersive_portals.option.enableDatapackPortalGen": "Enable Datapack Portal Generation",
   "text.autoconfig.immersive_portals.option.indirectLoadingRadiusCap": "Indirect Chunk Loading Radius Cap",
@@ -263,5 +263,6 @@
   "imm_ptl.mod_patch_version_mismatch": "The server's Immersive Portals mod version (%s) does not match the client's (%s). It's recommended to upgrade both client and server's Immersive Portals mod to latest.",
   "imm_ptl.mod_major_minor_version_mismatch": "The server's Immersive Portals mod version (%s) is incompatible with client's Immersive Portals mod version (%s).\nIt's recommended to upgrade both client and server's Immersive Portals mod to the latest version.\nIf you want to connect without using another version of Immersive Portals, turn on 'Tolerant version mismatch with server' in the mod settings (you need to install Mod Menu to access the settings).",
   "imm_ptl.server_missing_immptl": "Vous vous êtes connecté à un serveur qui n'installe pas le mod Immersive Portals. Le mod Immersive Portals est conçu pour fonctionner avec le serveur qui l'installe. Toutes les fonctionnalités de Immersive Portals ne fonctionneront pas ici. D'autres problèmes peuvent survenir. Il est recommandé de se connecter à ce serveur sans Immersive Portals.",
-  "imm_ptl.put_this_in_the_end_to_avoid_editing_trailing_comma": ""
+  "imm_ptl.put_this_in_the_end_to_avoid_editing_trailing_comma": "",
+  "text.autoconfig.immersive_portals.option.enableAlternateDimensions.@Tooltip": "Ajoute les cinq dimensions alternatives intégrées au chargement du monde. Un redémarrage est nécessaire ; les dimensions sauvegardées sont conservées si cette option est désactivée."
 }

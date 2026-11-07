@@ -98,6 +98,8 @@ public class IPConfig implements ConfigData {
     @ConfigEntry.Gui.Tooltip
     public boolean enableServerPerformanceAdjustment = true;
     public boolean enableDatapackPortalGen = true;
+    @ConfigEntry.Gui.Tooltip
+    public boolean enableAlternateDimensions = true;
     @ConfigEntry.BoundedDiscrete(min = 1, max = 32)
     @ConfigEntry.Gui.Tooltip
     public int indirectLoadingRadiusCap = 8;
