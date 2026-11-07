@@ -139,7 +139,7 @@ public final class NativePortalCompositor {
                                 NativePortalClipping.equation(parentClip, camera)));
     }
 
-    /** Texture-stencil composition: coverage and exact portal-plane depth come from the prepass. */
+    /** Texture-stencil composition: coverage and biased surface depth come from the prepass. */
     public static void drawPortalMasked(
             Portal portal,
             RenderTarget source,
@@ -246,7 +246,8 @@ public final class NativePortalCompositor {
                     .putFloat(
                             (mask == null ? 0 : 1)
                                     | (IPGlobal.enableDepthClampForPortalRendering ? 2 : 0)
-                                    | (clip == null ? 0 : 4));
+                                    | (clip == null ? 0 : 4)
+                                    | (key.depth ? 8 : 0));
             (clip == null ? new Vector4f() : clip).get(224, uniform);
             uniform.position(240).flip();
             var device = RenderSystem.getDevice();

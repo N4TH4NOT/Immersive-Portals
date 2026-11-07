@@ -1,4 +1,5 @@
 #version 330
+#moj_import <imm_ptl:portal_depth.glsl>
 uniform sampler2D PortalColor;
 uniform sampler2D PortalDepth;
 uniform sampler2D PortalMask;
@@ -15,12 +16,14 @@ out vec4 fragColor;
 void main() {
     if (portalClipDistance < -0.0001) discard;
     vec2 uv = (gl_FragCoord.xy - PortalViewport.xy) / PortalViewport.zw;
+    int flags = int(PortalFlags.w + 0.5);
     gl_FragDepth = gl_FragCoord.z;
-    if ((int(PortalFlags.w + 0.5) & 1) != 0) {
+    if ((flags & 1) != 0) {
         vec2 mask = texelFetch(PortalMask, ivec2(gl_FragCoord.xy), 0).rg;
         if (mask.r < 0.5) discard;
+        // Coverage already applied the surface offset; do not bias a second time.
         gl_FragDepth = mask.g;
-    }
+    } else if ((flags & 8) != 0) gl_FragDepth = portalSurfaceDepth(gl_FragCoord.z);
     if (PortalFlags.x > 0.5) {
         float depth = texture(PortalDepth, uv).r;
         // Reverse Z: the cleared depth represents an empty remote world.
