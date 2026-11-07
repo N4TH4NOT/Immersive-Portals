@@ -9,12 +9,18 @@ fi
 
 backend="${1:?Expected opengl or vulkan}"
 scenario="${2:?Expected multiplayer, scaled, rendering or singleplayer}"
+modset="${PORTAL_CI_MODSET:-vanilla}"
 case "$backend" in opengl|vulkan) ;; *) exit 2 ;; esac
 case "$scenario" in multiplayer|scaled|rendering|singleplayer) ;; *) exit 2 ;; esac
+case "$modset" in vanilla|sodium|iris) ;; *) exit 2 ;; esac
+if [[ "$modset" != vanilla && ( "$backend" != opengl || "$scenario" != rendering ) ]]; then
+    printf '%s\n' 'Sodium and Iris verification requires the OpenGL rendering scenario.' >&2
+    exit 2
+fi
 
 repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo"
-evidence="$repo/build/ci/$backend-$scenario"
+evidence="$repo/build/ci/$backend-$scenario-$modset"
 mkdir -p "$evidence"
 
 if [[ "${3:-}" != --display-ready ]]; then
@@ -43,11 +49,11 @@ cleanup() {
         kill -TERM "$server_pid" 2>/dev/null || true
         wait "$server_pid" 2>/dev/null || true
     fi
-    printf 'Backend: %s\nScenario: %s\nExit status: %s\n' \
-        "$backend" "$scenario" "$status" > "$evidence/result.txt"
+    printf 'Backend: %s\nScenario: %s\nMod set: %s\nExit status: %s\n' \
+        "$backend" "$scenario" "$modset" "$status" > "$evidence/result.txt"
     if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
-        printf '### Fabric %s / %s\n\nExit status: `%s`. Console logs, game logs and screenshots are retained in the runtime artifact.\n\n' \
-            "$backend" "$scenario" "$status" >> "$GITHUB_STEP_SUMMARY"
+        printf '### Fabric %s / %s / %s\n\nExit status: `%s`. Console logs, game logs and screenshots are retained in the runtime artifact.\n\n' \
+            "$backend" "$scenario" "$modset" "$status" >> "$GITHUB_STEP_SUMMARY"
     fi
     exit "$status"
 }
@@ -71,50 +77,119 @@ pauseOnLostFocus:false
 fullscreen:false
 maxFps:30
 renderDistance:3
-simulationDistance:3
+simulationDistance:5
 graphicsPreset:"fast"
 autoJump:false
 OPTIONS
 printf 'eula=true\n' > run/smoke-server/eula.txt
+cp src/smokeTest/resources/server.properties run/smoke-server/server.properties
+python3 - <<'PY'
+from pathlib import Path
+import secrets
+
+properties = Path('run/smoke-server/server.properties')
+with properties.open('a') as stream:
+    stream.write('\nenable-rcon=true\nrcon.port=25575\nbroadcast-rcon-to-ops=false\n')
+    stream.write('rcon.password=' + secrets.token_hex(24) + '\n')
+properties.chmod(0o600)
+PY
 
 username=PortalTest
 scenario_args=()
 case "$scenario" in
+    multiplayer) scenario_args+=(-PportalSmokeDynamicDimensions=true) ;;
     scaled) username=ScaledTest ;;
     rendering) username=OcclusionTest; scenario_args+=(-PportalRenderSmoke=true) ;;
     singleplayer) scenario_args+=(-PportalSmokeSingleplayer=true) ;;
+esac
+case "$modset" in
+    sodium) scenario_args+=(-PportalSmokeSodium=true) ;;
+    iris) scenario_args+=(-PportalSmokeIris=true) ;;
 esac
 
 # Resolve and compile before starting two long-lived Gradle processes against the checkout.
 ./gradlew -PportalSmoke compileSmokeTestJava --no-daemon --stacktrace --console=plain \
     2>&1 | tee "$evidence/prepare.log"
 
-if [[ "$scenario" != singleplayer ]]; then
+start_server() {
+    server_log="$1"
+    shift
     timeout --signal=TERM --kill-after=30s 900s \
         ./gradlew -PportalSmoke runServer --no-daemon --stacktrace --console=plain \
-        --project-cache-dir "${RUNNER_TEMP:?}/portal-server-gradle" \
-        > "$evidence/server-console.log" 2>&1 &
+        --project-cache-dir "${RUNNER_TEMP:?}/portal-server-gradle" "$@" \
+        > "$server_log" 2>&1 &
     server_pid=$!
     deadline=$((SECONDS + 240))
-    until grep -Fq 'PORTAL_SMOKE_SERVER_READY' "$evidence/server-console.log"; do
+    until grep -Fq 'PORTAL_SMOKE_SERVER_READY' "$server_log"; do
         if ! kill -0 "$server_pid" 2>/dev/null; then
-            cat "$evidence/server-console.log"
+            cat "$server_log"
             printf '%s\n' 'The verification server exited before becoming ready.' >&2
             exit 1
         fi
         if (( SECONDS >= deadline )); then
-            cat "$evidence/server-console.log"
+            cat "$server_log"
             printf '%s\n' 'The verification server did not become ready within four minutes.' >&2
             exit 1
         fi
         sleep 2
     done
+}
+
+stop_server() {
+    python3 .github/ci/stop-fabric-server.py run/smoke-server/server.properties
+    deadline=$((SECONDS + 60))
+    while kill -0 "$server_pid" 2>/dev/null; do
+        if (( SECONDS >= deadline )); then
+            printf '%s\n' 'The verification server did not finish its graceful shutdown.' >&2
+            exit 1
+        fi
+        sleep 1
+    done
+    wait "$server_pid"
+    server_pid=''
+    if ! grep -Fq 'All dimensions are saved' "$server_log"; then
+        printf '%s\n' 'The server did not confirm that every dimension was saved.' >&2
+        exit 1
+    fi
+}
+
+if [[ "$scenario" != singleplayer ]]; then
+    start_server "$evidence/server-console.log"
 fi
 
-timeout --signal=TERM --kill-after=30s 600s \
-    ./gradlew -PportalSmoke "-PportalSmokeBackend=$backend" \
-        "-PportalSmokeUsername=$username" "${scenario_args[@]}" \
-        runClient --no-daemon --stacktrace --console=plain \
-    2>&1 | tee "$evidence/client-console.log"
+run_client() {
+    client_log="$1"
+    shift
+    timeout --signal=TERM --kill-after=30s 600s \
+        ./gradlew -PportalSmoke "-PportalSmokeBackend=$backend" \
+            "-PportalSmokeUsername=$username" "${scenario_args[@]}" "$@" \
+            runClient --no-daemon --stacktrace --console=plain \
+        2>&1 | tee "$client_log"
+}
 
-python3 .github/ci/assert-fabric-scenario.py "$backend" "$scenario" "$evidence"
+run_client "$evidence/client-console.log"
+
+/usr/bin/python3 .github/ci/assert-fabric-scenario.py "$backend" "$scenario" "$evidence"
+
+if [[ "$scenario" == multiplayer ]]; then
+    stop_server
+    # Loading without the registration option proves that saved dimensions survive restart.
+    python3 - <<'PY'
+import json
+from pathlib import Path
+
+config = Path('run/smoke-server/config/immersive_portals.json')
+settings = json.loads(config.read_text())
+settings['enableAlternateDimensions'] = False
+config.write_text(json.dumps(settings, indent=2) + '\n')
+PY
+    start_server "$evidence/reload-server-console.log" -PportalSmokeDimensionReload=true
+    grep -F 'PORTAL_SMOKE_DIMENSION_RELOAD_OK' "$evidence/reload-server-console.log"
+    grep -F 'PORTAL_SMOKE_SKYLAND_WORLD_SEED_OK' "$evidence/reload-server-console.log"
+    run_client "$evidence/reload-client-console.log" -PportalSmokeDimensionReload=true
+    /usr/bin/python3 .github/ci/assert-fabric-scenario.py "$backend" "$scenario" "$evidence" --reload
+    stop_server
+    printf '%s\n' 'FABRIC_DIMENSION_RESTART_VERIFIED' | tee "$evidence/dimension-restart.txt"
+elif [[ "$scenario" != singleplayer ]]; then
+    stop_server
+fi

@@ -52,7 +52,7 @@ jobs:
             **/hs_err_pid*.log
 
   fabric-runtime:
-    name: Fabric ${{ matrix.backend }} / ${{ matrix.scenario }}
+    name: Fabric ${{ matrix.backend }} / ${{ matrix.scenario }} / ${{ matrix.modset }}
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -62,11 +62,20 @@ jobs:
       matrix:
         backend: [opengl, vulkan]
         scenario: [multiplayer, scaled, rendering, singleplayer]
+        modset: [vanilla]
+        include:
+          - backend: opengl
+            scenario: rendering
+            modset: sodium
+          - backend: opengl
+            scenario: rendering
+            modset: iris
     env:
       LIBGL_ALWAYS_SOFTWARE: 'true'
       GALLIUM_DRIVER: llvmpipe
       ALSOFT_DRIVERS: 'null'
       SDL_AUDIODRIVER: dummy
+      PORTAL_CI_MODSET: ${{ matrix.modset }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -81,7 +90,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             xvfb xauth mesa-utils mesa-vulkan-drivers vulkan-tools libgl1-mesa-dri \
-            libasound2t64 libxrandr2 libxi6 libxcursor1 libxinerama1
+            libasound2t64 libflite1 libxrandr2 libxi6 libxcursor1 libxinerama1 python3-pil
       - name: Run the game and assert the selected graphics backend
         shell: bash
         run: bash .github/ci/run-fabric-scenario.sh '${{ matrix.backend }}' '${{ matrix.scenario }}'
@@ -89,7 +98,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fabric-${{ matrix.backend }}-${{ matrix.scenario }}
+          name: fabric-${{ matrix.backend }}-${{ matrix.scenario }}-${{ matrix.modset }}
           if-no-files-found: error
           retention-days: 14
           path: |
@@ -98,9 +107,13 @@ jobs:
             run/smoke-client/crash-reports/**
             run/smoke-client/screenshots/**
             run/smoke-client/options.txt
+            run/smoke-client/saves/**/portal-smoke-dimensions.json
+            run/smoke-client/saves/**/portal-smoke-dynamic-dimensions.json
             run/smoke-client/hs_err_pid*.log
             run/smoke-server/logs/**
             run/smoke-server/crash-reports/**
             run/smoke-server/hs_err_pid*.log
+            run/smoke-server/**/portal-smoke-dimensions.json
+            run/smoke-server/**/portal-smoke-dynamic-dimensions.json
             **/build/reports/**
             **/build/test-results/**
