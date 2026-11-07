@@ -23,7 +23,8 @@ if not re.search(rf"Using graphics backend {actual}\b", client):
     raise AssertionError(f"The optical probe did not use the requested {actual} backend.")
 for name, log in (("client", client), ("server", server)):
     if re.search(r"AssertionError|MixinApplyError|InvalidMixinException|MixinTransformerError|"
-                 r"Could not execute entrypoint|Exception in thread|This crash report has been saved", log):
+                 r"Could not execute entrypoint|Exception in thread|This crash report has been saved|"
+                 r"Failed to handle packet|Network Protocol Error|Error executing task on Client", log):
         raise AssertionError(f"The optical {name} reported a runtime failure.")
 if "PORTAL_OPTICS_FIXTURE_READY faces=4" not in server or "PORTAL_OPTICS_COMPLETE views=41" not in client:
     raise AssertionError("The physical optical fixture and all 41 camera views did not complete.")

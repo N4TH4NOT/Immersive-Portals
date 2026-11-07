@@ -24,6 +24,8 @@ public abstract class MixinLevelRenderer implements IEWorldRenderer {
     @WrapOperation(method="lambda$addMainPass$0", at=@At(value="INVOKE", target="Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher$PreparedFrame;executeSolid()V"))
     private void ip_portalPass(FeatureRenderDispatcher.PreparedFrame frame, Operation<Void> original) {
         original.call(frame);
+        if (!qouteall.imm_ptl.core.render.NativeWorldRenderer.isRenderingScene()
+                && !qouteall.imm_ptl.core.ClientWorldLoader.isPrimaryWorldReady()) return;
         qouteall.imm_ptl.core.render.NativeEntityPass.render(gameRenderer.gameRenderState().levelRenderState);
         if (IPCGlobal.renderer != null && !IrisInterface.invoker.isRenderingShadowMap()) {
             IPCGlobal.renderer.onBeforeTranslucentRendering(gameRenderer.gameRenderState().levelRenderState.cameraRenderState.viewRotationMatrix);

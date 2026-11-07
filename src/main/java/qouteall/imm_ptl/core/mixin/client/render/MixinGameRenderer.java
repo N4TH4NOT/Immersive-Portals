@@ -31,7 +31,9 @@ public abstract class MixinGameRenderer implements IEGameRenderer {
     private void ip_beforeCamera(DeltaTracker delta, CallbackInfo ci) {
         if (NativeWorldRenderer.isRenderingScene()) return;
         IPGlobal.PRE_TOTAL_RENDER_TASK_LIST.processTasks();
-        if (minecraft.level == null || minecraft.getConnection() == null) return;
+        // setScreenAndShow renders reentrantly while vanilla's respawn packet still
+        // has the previous player/camera and the new level. Wait for their binding.
+        if (!ClientWorldLoader.isPrimaryWorldReady()) return;
         float partial = delta.getGameTimeDeltaPartialTick(true);
         RenderStates.setPartialTick(partial);
         StableClientTimer.update(minecraft.level.getGameTime(), partial);
@@ -44,6 +46,7 @@ public abstract class MixinGameRenderer implements IEGameRenderer {
 
     @Inject(method = "extractCamera", at = @At("RETURN"))
     private void ip_fog(CallbackInfo ci) {
+        if (!NativeWorldRenderer.isRenderingScene() && !ClientWorldLoader.isPrimaryWorldReady()) return;
         var cameraState =
                 ((GameRenderer) (Object) this).gameRenderState().levelRenderState.cameraRenderState;
         if (qouteall.imm_ptl.core.render.context_management.PortalRendering.isRendering()
@@ -69,9 +72,13 @@ public abstract class MixinGameRenderer implements IEGameRenderer {
         }
     }
 
-    @Inject(method = "renderLevel", at = @At("HEAD"))
+    @Inject(method = "renderLevel", at = @At("HEAD"), cancellable = true)
     private void ip_beforeLevel(DeltaTracker delta, CallbackInfo ci) {
         if (!NativeWorldRenderer.isRenderingScene()) {
+            if (!ClientWorldLoader.isPrimaryWorldReady()) {
+                ci.cancel();
+                return;
+            }
             PortalRenderer.switchToCorrectRenderer();
             IPCGlobal.renderer.prepareRendering();
         }
@@ -132,12 +139,12 @@ public abstract class MixinGameRenderer implements IEGameRenderer {
                             value = "INVOKE",
                             target = "Lnet/minecraft/client/gui/render/GuiRenderer;render()V"))
     private void ip_guiPortals(DeltaTracker delta, boolean advance, CallbackInfo ci) {
-        GuiPortalRendering._onGameRenderEnd();
+        if (ClientWorldLoader.isPrimaryWorldReady()) GuiPortalRendering._onGameRenderEnd();
     }
 
     @Inject(method = "render", at = @At("RETURN"))
     private void ip_renderEnd(DeltaTracker delta, boolean advance, CallbackInfo ci) {
-        if (minecraft.level != null && !NativeWorldRenderer.isRenderingScene()) {
+        if (ClientWorldLoader.isPrimaryWorldReady() && !NativeWorldRenderer.isRenderingScene()) {
             IPCGlobal.renderer.finishRendering();
             RenderStates.onTotalRenderEnd();
         }

@@ -103,6 +103,14 @@ public class ClientWorldLoader {
     public static boolean getIsInitialized() {
         return isInitialized;
     }
+
+    /** Vanilla can render its loading screen midway through replacing the local player. */
+    public static boolean isPrimaryWorldReady() {
+        return CLIENT.level != null && CLIENT.player != null
+            && CLIENT.player.level() == CLIENT.level
+            && CLIENT.getConnection() != null && CLIENT.getConnection().getLevel() == CLIENT.level
+            && CLIENT.getCameraEntity() != null && CLIENT.getCameraEntity().level() == CLIENT.level;
+    }
     
     public static boolean getIsCreatingClientWorld() {
         return isCreatingClientWorld;
