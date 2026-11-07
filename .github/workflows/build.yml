@@ -60,16 +60,39 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
-        backend: [opengl, vulkan]
-        scenario: [multiplayer, scaled, rendering, singleplayer]
-        modset: [vanilla]
+        # Start the independent compatibility paths early, alongside the dynamic-world
+        # and vanilla-rendering scenarios, so each iteration exposes useful failures.
         include:
+          - backend: opengl
+            scenario: multiplayer
+            modset: vanilla
+          - backend: opengl
+            scenario: rendering
+            modset: vanilla
           - backend: opengl
             scenario: rendering
             modset: sodium
           - backend: opengl
             scenario: rendering
             modset: iris
+          - backend: vulkan
+            scenario: rendering
+            modset: vanilla
+          - backend: vulkan
+            scenario: multiplayer
+            modset: vanilla
+          - backend: opengl
+            scenario: scaled
+            modset: vanilla
+          - backend: opengl
+            scenario: singleplayer
+            modset: vanilla
+          - backend: vulkan
+            scenario: scaled
+            modset: vanilla
+          - backend: vulkan
+            scenario: singleplayer
+            modset: vanilla
     env:
       LIBGL_ALWAYS_SOFTWARE: 'true'
       GALLIUM_DRIVER: llvmpipe
