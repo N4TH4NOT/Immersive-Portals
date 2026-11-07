@@ -12,11 +12,11 @@ The imported baseline has a [successful source-repository CI run](https://github
 
 ## Runtime evidence
 
-The `fabric-runtime` matrix runs actual Minecraft clients against OpenGL and Vulkan under Xvfb, using Mesa software drivers. Its multiplayer, rendering and singleplayer scenarios exercise dedicated/integrated servers, portal traversal, resources and rendering. The requested backend must be confirmed by the game log; a Vulkan fallback to OpenGL must fail the Vulkan check.
+The `fabric-runtime` matrix runs actual Minecraft clients against OpenGL and Vulkan under Xvfb, using Mesa software drivers. Its multiplayer, scaled-portal, rendering and singleplayer scenarios exercise dedicated/integrated servers, portal traversal, resources and rendering. Eight vanilla cases cover both backends; two additional OpenGL rendering cases use the pinned Sodium and Iris integrations. The requested backend must be confirmed by the game log; a Vulkan fallback to OpenGL must fail the Vulkan check.
 
-Success requires each scenario's completion marker, including `PORTAL_SMOKE_COMPLETE` or `PORTAL_RENDER_COMPLETE`, plus its specific server/resource markers. A process merely starting is insufficient. Console logs, game logs, crash reports and captures are retained as workflow artifacts, including on failures.
+Success requires each scenario's completion marker, including `PORTAL_SMOKE_COMPLETE` or `PORTAL_RENDER_COMPLETE`, its specific server/resource markers, and the final `FABRIC_RUNTIME_VERIFIED` assertion. Dimension checks cover world seeds, codec round-trips and persistence after restarting with automatic defaults disabled. Rendering checks include screenshot pixel content, rather than treating a nonempty capture as proof that portals render correctly. A process merely starting is insufficient. Console logs, game logs, crash reports and captures are retained as workflow artifacts, including on failures.
 
-Check both jobs for the same commit. A build alone cannot validate mixin application, world creation, dimensions, remote interaction or the rendered result. Inspect logs and screenshots before interpreting a runtime pass; automated scenes do not cover every feature, GPU or shaderpack. Sodium/Iris and external mods require their own exercised compatibility cases.
+Check both jobs for the same commit. A build alone cannot validate mixin application, world creation, dimensions, remote interaction or the rendered result. Inspect logs and screenshots before interpreting a runtime pass; automated scenes do not cover every feature, GPU or shaderpack. The pinned Sodium/Iris cases cover their fixed rendering fixtures; other versions, shaderpacks and external mods require separate compatibility evidence.
 
 ## Review requirements
 

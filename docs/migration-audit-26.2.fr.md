@@ -15,9 +15,9 @@ Ce document distingue le travail de migration hérité de la validation de ce d�
 | Objets et génération | Définitions d’objets actuelles, règles inverses de génération, commandes, GUI et formats du datapack d’exemple. |
 | Réseau | Paquets natifs redirigés et pont client hérité en version 2. |
 
-L’implémentation importée avait supprimé l’enregistrement automatique des cinq dimensions alternatives historiques. Rétablir leur cycle de vie et leur configuration fait partie de la migration autonome ; les seuls exemples de datapacks ne préservent pas ce comportement. Consulter l’implémentation actuelle et la CI du dépôt cible pour connaître son état.
+La migration autonome rétablit l’enregistrement automatique des cinq dimensions alternatives historiques, leur persistance, le choix de la graine du monde, leur création par les empilements et les modèles. L’API interne compatible DimLib remplace la dépendance externe indisponible. Voir les [dimensions alternatives](alternate-dimensions.fr.md) pour la configuration et les preuves GitHub requises ; les seuls exemples de datapacks ne préserveraient pas ces comportements.
 
-Les anciens adaptateurs externes DimLib, Pehkui, Flywheel, Porting Lib et Requiem ne sont pas fournis comme intégrations 26.2. L’échelle native est indépendante de Pehkui. Retirer un ancien adaptateur ne démontre pas la compatibilité avec un éventuel remplacement installé.
+Les anciens adaptateurs Pehkui, Flywheel, Porting Lib et Requiem ne sont pas fournis comme intégrations 26.2. L’échelle native est indépendante de Pehkui. Retirer un ancien adaptateur ne démontre pas la compatibilité avec un éventuel remplacement installé.
 
 ## Preuves et périmètre restant
 

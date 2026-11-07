@@ -10,6 +10,8 @@ The pre-migration branch preserves the [upstream 1.21.3 snapshot](https://github
 
 This repository targets the standalone Fabric mod. `portal-protocol` remains an internal dependency for the inherited client bridge; the Minestom server SDK and example application belong to the source fork. Gravity is supplied by the Apache-2.0 [gravity-changer repository](https://github.com/N4TH4NOT/gravity-changer), pinned by the submodule entry in Git and [.gitmodules](../.gitmodules).
 
+The internal dimension-management adaptation reuses the Apache-2.0 public API and templates from [iPortalTeam/DimLib](https://github.com/iPortalTeam/DimLib/tree/1.21.3). Its [license](../licenses/DimLib-LICENSE.txt) and [attribution notice](../licenses/DimLib-NOTICE.txt) accompany the sources.
+
 The destination repository existed independently before the import. Importing Git history preserves ancestry and attribution, but does not change GitHub's repository-level fork relationship. No repository deletion or history replacement is required for this import.
 
 Historical validation from another repository is identified as such. Current validation is the GitHub Actions run attached to the exact destination commit; see the [validation guide](port-26.2.md).

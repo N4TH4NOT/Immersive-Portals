@@ -15,9 +15,9 @@ This document distinguishes inherited migration work from validation of the stan
 | Items and generation | Current item definitions, reverse portal generation rules, commands, GUI and example datapack formats. |
 | Networking | Redirected native packets and the inherited version-2 client bridge. |
 
-The imported implementation removed automatic registration of the five historical alternate dimensions. Restoring their lifecycle and configuration is part of the standalone migration; datapack examples alone do not preserve that behavior. Check the current implementation and destination CI for its status.
+The standalone migration restores automatic registration of the five historical alternate dimensions, saved-world persistence, world-seed selection, dimension-stack creation and templates. The internal DimLib-compatible API replaces the unavailable external dependency. See [alternate dimensions](alternate-dimensions.md) for configuration semantics and required GitHub evidence; the datapack examples alone would not preserve these behaviors.
 
-Legacy external DimLib, Pehkui, Flywheel, Porting Lib and Requiem adapters are not provided as 26.2 integrations. Native scaling is independent of Pehkui. Removing an old adapter does not establish compatibility with an installed replacement.
+Legacy Pehkui, Flywheel, Porting Lib and Requiem adapters are not provided as 26.2 integrations. Native scaling is independent of Pehkui. Removing an old adapter does not establish compatibility with an installed replacement.
 
 ## Evidence and remaining scope
 

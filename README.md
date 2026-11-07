@@ -18,9 +18,9 @@ All compilation, automated tests and runtime scenarios run **exclusively on GitH
 
 - [Source provenance and scope](docs/provenance.md), [upstream review](docs/upstream-1.21-review.md) and [migration findings](docs/migration-audit-26.2.md).
 - [Rendering design](docs/rendering-26.2.md), [network compatibility](docs/network-audit-26.2.md) and [gravity integration](docs/gravity-repository.md).
-- [Built-in alternate dimensions](docs/alternate-dimensions.md).
+- [Built-in alternate dimensions](docs/alternate-dimensions.md) and [dimension API/commands](docs/dimension-library.md).
 - [Optional generation datapack](examples/custom_portal_gen/README.md).
 
-Legacy DimLib, Pehkui, Flywheel, Porting Lib and Requiem adapters are not supplied as 26.2 integrations. Native entity scaling does not require Pehkui. Remaining differences and the evidence required before declaring the migration complete are documented in the [migration findings](docs/migration-audit-26.2.md).
+Dimension management, including the DimLib API and templates, is adapted internally without an external DimLib dependency. Legacy Pehkui, Flywheel, Porting Lib and Requiem adapters are not supplied as 26.2 integrations. Native entity scaling does not require Pehkui. Remaining differences and the evidence required before declaring the migration complete are documented in the [migration findings](docs/migration-audit-26.2.md).
 
 Original work by qouteall and contributors, under [Apache-2.0](LICENSE). This port preserves their source history and reuses the 26.2 adaptations from N4TH4NOT's [Fabric/Minestom fork](https://github.com/N4TH4NOT/immersive-portals-minestom/tree/67bf29333b82b0d6c594c65d84256c881f0182b4). The [upstream wiki](https://qouteall.fun/immptl/wiki/) describes earlier engine versions.
