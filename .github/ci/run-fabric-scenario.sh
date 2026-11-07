@@ -44,9 +44,26 @@ fi
 
 server_pid=''
 client_pids=()
+quality_workspace_root=''
+
+collect_quality_evidence() {
+    [[ "$scenario" == quality && -n "$quality_workspace_root" ]] || return 0
+    local quality_role source_directory destination_directory
+    for quality_role in a b; do
+        source_directory="$quality_workspace_root/$quality_role/run/smoke-client-$quality_role"
+        destination_directory="$repo/run/smoke-client-$quality_role"
+        if [[ -d "$source_directory" ]]; then
+            mkdir -p "$destination_directory" || return 1
+            # Include hidden Mixin exports alongside game logs, options and screenshots.
+            cp -a "$source_directory/." "$destination_directory/" || return 1
+        fi
+    done
+}
+
 cleanup() {
     status=$?
     trap - EXIT INT TERM
+    cd "$repo"
     for client_pid in "${client_pids[@]}"; do
         pkill -TERM -P "$client_pid" 2>/dev/null || true
         kill -TERM "$client_pid" 2>/dev/null || true
@@ -57,8 +74,15 @@ cleanup() {
         kill -TERM "$server_pid" 2>/dev/null || true
         wait "$server_pid" 2>/dev/null || true
     fi
+    if ! collect_quality_evidence; then
+        printf '%s\n' 'Could not collect the isolated quality clients game evidence.' >&2
+        if (( status == 0 )); then status=1; fi
+    fi
     if [[ "$modset" == sodium ]]; then
         extractor_class=run/smoke-client/.mixin.out/class/net/minecraft/client/renderer/extract/LevelExtractor.class
+        if [[ "$scenario" == quality ]]; then
+            extractor_class=run/smoke-client-a/.mixin.out/class/net/minecraft/client/renderer/extract/LevelExtractor.class
+        fi
         if [[ -f "$extractor_class" ]]; then
             javap -c -p "$extractor_class" > "$evidence/sodium-level-extractor-bytecode.txt" || true
             printf '%s\n' '::group::Sodium terrain update injection evidence'
@@ -140,9 +164,45 @@ case "$modset" in
     iris) scenario_args+=(-PportalSmokeIris=true) ;;
 esac
 
-# Resolve and compile before starting two long-lived Gradle processes against the checkout.
+# Resolve assets serially before any long-lived game process can read the shared asset cache.
 ./gradlew -PportalSmoke compileSmokeTestJava downloadAssets --no-daemon --stacktrace --console=plain \
     2>&1 | tee "$evidence/prepare.log"
+
+prepare_quality_workspaces() {
+    quality_workspace_root="$(mktemp -d "${RUNNER_TEMP:?}/portal-quality-$backend-$modset.XXXXXX")"
+    local archive="$quality_workspace_root/source.tar"
+    local quality_role workspace quality_username quality_directory
+    # The populated gravity submodule is ordinary source here. Exclude generated
+    # outputs at every depth, including the composite build's classes and jars.
+    tar -C "$repo" --exclude=.git --exclude=.gradle --exclude=build --exclude=run \
+        -cf "$archive" .
+    for quality_role in a b; do
+        workspace="$quality_workspace_root/$quality_role"
+        mkdir -p "$workspace"
+        tar -C "$workspace" -xf "$archive"
+        chmod +x "$workspace/gradlew"
+        quality_directory="run/smoke-client-$quality_role"
+        mkdir -p "$workspace/$quality_directory"
+        cp "$repo/run/smoke-client/options.txt" "$workspace/$quality_directory/options.txt"
+        if [[ "$quality_role" == a ]]; then quality_username=QualityA; else quality_username=QualityB; fi
+        # Prepare each independent project before starting the root server. Its
+        # own output tree and execution history cannot delete another game's classes.
+        (
+            cd "$workspace"
+            ./gradlew -PportalSmoke "${scenario_args[@]}" \
+                "-PportalSmokeUsername=$quality_username" \
+                "-PportalSmokeClientDir=$quality_directory" \
+                --project-cache-dir "$workspace/.gradle" \
+                compileSmokeTestJava downloadAssets --no-daemon --stacktrace --console=plain
+        ) 2>&1 | tee "$evidence/prepare-client-$quality_role.log"
+        printf 'PORTAL_QUALITY_WORKSPACE_READY role=%s\n' "$quality_role"
+    done
+    rm -- "$archive"
+}
+
+if [[ "$scenario" == quality ]]; then
+    prepare_quality_workspaces
+fi
 
 start_server() {
     server_log="$1"
@@ -198,15 +258,19 @@ run_client() {
     local client_log="$1"
     shift
     local client_task=runClient
+    local client_workspace="$repo"
     if [[ "$scenario" == quality ]]; then
         # --project-cache-dir isolates launch.cfg, but Loom also writes a
         # classpath argfile under build/loom-cache/argFiles/<task name>.
         case "$username" in
-            QualityA) client_task=runQualityA ;;
-            QualityB) client_task=runQualityB ;;
+            QualityA) client_task=runQualityA; client_workspace="$quality_workspace_root/a" ;;
+            QualityB) client_task=runQualityB; client_workspace="$quality_workspace_root/b" ;;
             *) printf '%s\n' 'The quality client has no isolated Loom run task.' >&2; return 2 ;;
         esac
     fi
+    # Quality calls run in independent background shells. The timeout remains
+    # their direct child so cleanup can terminate the complete game process group.
+    cd "$client_workspace"
     timeout --signal=TERM --kill-after=30s 600s \
         ./gradlew -PportalSmoke "-PportalSmokeBackend=$backend" \
             "-PportalSmokeUsername=$username" "${scenario_args[@]}" "$@" \
@@ -220,16 +284,18 @@ run_quality_clients() {
     client_pids=()
     for quality_role in a b; do
         quality_directory="run/smoke-client-$quality_role"
-        mkdir -p "$quality_directory"
-        cp run/smoke-client/options.txt "$quality_directory/options.txt"
+        mkdir -p "$quality_workspace_root/$quality_role/$quality_directory"
+        cp "$repo/run/smoke-client/options.txt" \
+            "$quality_workspace_root/$quality_role/$quality_directory/options.txt"
         if [[ "$quality_role" == a ]]; then username=QualityA; else username=QualityB; fi
         run_client "$evidence/${quality_prefix}client-$quality_role-console.log" \
             "-PportalSmokeClientDir=$quality_directory" \
-            --project-cache-dir "${RUNNER_TEMP:?}/portal-quality-$quality_role-gradle" "$@" &
+            --project-cache-dir "$quality_workspace_root/$quality_role/.gradle" "$@" &
         client_pids+=("$!")
     done
     for client_pid in "${client_pids[@]}"; do wait "$client_pid"; done
     client_pids=()
+    collect_quality_evidence
     /usr/bin/python3 .github/ci/assert-quality.py "$backend" "$evidence" "$quality_prefix"
 }
 

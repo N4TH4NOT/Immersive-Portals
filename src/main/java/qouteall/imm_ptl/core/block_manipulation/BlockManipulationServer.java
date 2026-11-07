@@ -255,7 +255,11 @@ public class BlockManipulationServer {
     }
     
     public static boolean validateReach(Player player, Level targetWorld, BlockPos targetPos) {
-        return PortalInteractionServer.canKeepContainer(player, targetWorld, targetPos);
+        return validateReach(player, targetWorld, targetPos, 3);
+    }
+
+    public static boolean validateReach(Player player, Level targetWorld, BlockPos targetPos, double padding) {
+        return PortalInteractionServer.canKeepContainer(player, targetWorld, targetPos, padding);
     }
     
 }

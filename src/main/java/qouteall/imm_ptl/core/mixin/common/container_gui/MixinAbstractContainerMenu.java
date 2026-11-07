@@ -30,6 +30,6 @@ public class MixinAbstractContainerMenu {
             return true;
         }
         
-        return BlockManipulationServer.validateReach(player, world, blockPos);
+        return BlockManipulationServer.validateReach(player, world, blockPos, distance);
     }
 }

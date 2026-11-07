@@ -34,7 +34,7 @@ public interface MixinContainer {
             BlockPos targetPos = blockEntity.getBlockPos();
             Level targetWorld = blockEntity.getLevel();
             
-            return BlockManipulationServer.validateReach(player, targetWorld, targetPos);
+            return BlockManipulationServer.validateReach(player, targetWorld, targetPos, distance);
         }
         else {
             return true;

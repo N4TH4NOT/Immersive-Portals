@@ -127,12 +127,12 @@ public final class PortalInteractionServer {
                     target.portals().stream().map(Portal::getUUID).toArray(UUID[]::new), hit.getLocation()));
     }
 
-    public static boolean canKeepContainer(Player player, Level world, BlockPos block) {
+    public static boolean canKeepContainer(Player player, Level world, BlockPos block, double padding) {
         var remembered = CONTAINERS.get(player);
         if (remembered == null || remembered.world() != world.dimension()
                 || remembered.block().distManhattan(block) > 1) return false;
         var target = traceClaim(player, remembered.path(), remembered.point(),
-                player.getContainerInteractionRange() + 3, 0);
+                player.getContainerInteractionRange() + padding, 0);
         return target != null && target.world() == world
                 && target.hit() instanceof BlockHitResult hit
                 && hit.getBlockPos().distManhattan(block) <= 1;
