@@ -342,7 +342,11 @@ final class PortalNativeInteractionSmoke {
                     require(miningProgressBeforeCross > 0 && !broken
                                     && progress + 1e-6f >= miningProgressBeforeCross,
                             "Mining progress reset when ordinary movement crossed the portal: before="
-                                    + miningProgressBeforeCross + " after=" + progress);
+                                    + miningProgressBeforeCross + " after=" + progress
+                                    + " primary=" + describeHit(client.hitResult)
+                                    + " remote=" + describeHit(BlockManipulationClient.remoteHitResult)
+                                    + " remoteWorld=" + BlockManipulationClient.remotePointedDim
+                                    + " eye=" + client.player.getEyePosition());
                     miningCrossed = true;
                     System.out.println("PORTAL_NATIVE_INTERACTION_MINING_CROSS progress=" + progress);
                 }
@@ -389,6 +393,11 @@ final class PortalNativeInteractionSmoke {
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Cannot observe the native mining progress", exception);
         }
+    }
+
+    private static String describeHit(HitResult hit) {
+        return hit instanceof BlockHitResult block ? block.getType() + " " + block.getBlockPos()
+                : String.valueOf(hit);
     }
 
     static void tick(Minecraft client, int ticks) {

@@ -18,6 +18,7 @@ import qouteall.imm_ptl.core.portal.Mirror;
 import qouteall.imm_ptl.core.portal.Portal;
 import qouteall.imm_ptl.core.portal.PortalPlaceholderBlock;
 import qouteall.imm_ptl.core.portal.PortalUtils;
+import qouteall.imm_ptl.core.ducks.IEEntity;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -92,6 +93,30 @@ public final class PortalInteractionTarget {
         double travelled = 0, scale = 1;
         Vec3 firstPortalHit = null;
         var path = new ArrayList<Portal>();
+        var contacts = ((IEEntity) player).ip_getPortalCollisionHandler();
+        if (contacts != null) for (Portal crossing : contacts.getCollidingPortals()) {
+            if (crossing instanceof Mirror || crossing.level() != world
+                    || !crossing.isPortalValid() || !crossing.isInteractableBy(player)
+                    || !BlockManipulationServer.canDoCrossPortalInteractionEvent.invoker().test(player))
+                continue;
+            double side = start.subtract(crossing.getOriginPos()).dot(crossing.getNormal());
+            if (side < 0) {
+                // A tick may pick again after movement crossed the plane but before the
+                // physical world transfer. Keep targeting from the already crossed eye.
+                Vec3 front = start.add(crossing.getNormal().scale(-side + .001));
+                var contact = crossing.generalRayTrace(front, start, 0);
+                if (contact != null && crossing.getDestinationWorld() != null) {
+                    firstPortalHit = contact.hitPos();
+                    from = crossing.transformPoint(start);
+                    direction = crossing.transformLocalVecNonScale(direction).normalize();
+                    scale = crossing.getScale();
+                    if (!(scale > 0) || !Double.isFinite(scale)) return null;
+                    world = crossing.getDestinationWorld();
+                    path.add(crossing);
+                    break;
+                }
+            }
+        }
         while (travelled < reach) {
             double length = Math.min(4096, (reach - travelled) * scale);
             Vec3 end = from.add(direction.scale(length));
