@@ -43,6 +43,10 @@ class AlternateDimensionsTest {
         Bootstrap.bootStrap();
         var vanilla = VanillaRegistries.createLookup();
         var registry = new MappedRegistry<DimensionType>(Registries.DIMENSION_TYPE, Lifecycle.stable());
+        registry.register(net.minecraft.world.level.dimension.BuiltinDimensionTypes.OVERWORLD,
+            vanilla.lookupOrThrow(Registries.DIMENSION_TYPE)
+                .getOrThrow(net.minecraft.world.level.dimension.BuiltinDimensionTypes.OVERWORLD).value(),
+            RegistrationInfo.BUILT_IN);
         for (var type : List.of(AlternateDimensions.SURFACE_TYPE, AlternateDimensions.SURFACE_TYPE_BRIGHT)) {
             String path = "/data/immersive_portals/dimension_type/" + type.identifier().getPath() + ".json";
             try (var reader = new InputStreamReader(
@@ -75,6 +79,28 @@ class AlternateDimensionsTest {
     }
 
     @Test
+    void worldGenerationSettingsSaveTheAugmentedRegistryAndKeepTheOriginalSeed() {
+        var original = access(stems(List.of(Level.OVERWORLD, AlternateDimensions.SKYLAND,
+            AlternateDimensions.BRIGHT_SKYLAND, AlternateDimensions.CHAOS)));
+        var options = new net.minecraft.world.level.levelgen.WorldOptions(987654321L, false, false);
+        var cookie = new net.minecraft.world.level.storage.LevelDataAndDimensions.WorldDataAndGenSettings(
+            null, new net.minecraft.world.level.levelgen.WorldGenSettings(options,
+                new net.minecraft.world.level.levelgen.WorldDimensions(
+                    original.lookupOrThrow(Registries.LEVEL_STEM)))
+        );
+        var augmented = AlternateDimensions.addMissingDimensions(worldgen, original, true);
+        var saved = AlternateDimensions.withSavedDimensions(cookie, augmented);
+        assertSame(options, saved.genSettings().options());
+        assertEquals(6, saved.genSettings().dimensions().dimensions().size());
+        for (var key : AlternateDimensions.BUILT_IN_DIMENSIONS)
+            assertSame(augmented.lookupOrThrow(Registries.LEVEL_STEM).getOrThrow(stemKey(key)).value(),
+                saved.genSettings().dimensions().get(stemKey(key)).orElseThrow());
+        assertEquals(4, cookie.genSettings().dimensions().dimensions().size());
+        Object otherCookie = new Object();
+        assertSame(otherCookie, AlternateDimensions.withSavedDimensions(otherCookie, augmented));
+    }
+
+    @Test
     void fillsMissingVoidVariantsWithoutChangingExistingDefinitionsOrRegistryMetadata() {
         var original = stems(List.of(AlternateDimensions.SKYLAND,
             AlternateDimensions.BRIGHT_SKYLAND, AlternateDimensions.CHAOS));
@@ -97,7 +123,8 @@ class AlternateDimensionsTest {
             var generator = assertInstanceOf(FlatLevelSource.class, stem.generator());
             assertTrue(generator.settings().getLayers().stream().allMatch(state -> state.is(Blocks.AIR)));
             assertEquals(key == AlternateDimensions.BRIGHT_VOID
-                    ? AlternateDimensions.SURFACE_TYPE_BRIGHT : AlternateDimensions.SURFACE_TYPE,
+                    ? AlternateDimensions.SURFACE_TYPE_BRIGHT
+                    : net.minecraft.world.level.dimension.BuiltinDimensionTypes.OVERWORLD,
                 stem.type().unwrapKey().orElseThrow());
         }
         assertEquals(3, original.size());

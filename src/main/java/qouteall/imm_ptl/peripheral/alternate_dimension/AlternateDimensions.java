@@ -19,15 +19,23 @@ import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
 import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.levelgen.FlatLevelSource;
 import net.minecraft.world.level.levelgen.flat.FlatLayerInfo;
 import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
+import net.minecraft.world.level.levelgen.WorldDimensions;
+import net.minecraft.world.level.levelgen.WorldGenSettings;
+import net.minecraft.world.level.storage.LevelDataAndDimensions;
 import com.mojang.serialization.Lifecycle;
 import qouteall.imm_ptl.core.McHelper;
 import qouteall.imm_ptl.core.ducks.IEWorld;
 import qouteall.imm_ptl.core.platform_specific.IPConfig;
 import qouteall.imm_ptl.peripheral.dim_stack.DimensionStackAPI;
+import qouteall.imm_ptl.peripheral.dim_stack.DimStackInfo;
+import qouteall.dimlib.DimensionTemplate;
+import qouteall.dimlib.api.DimensionAPI;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.ArrayList;
@@ -75,13 +83,46 @@ public class AlternateDimensions {
 
     public static final List<ResourceKey<Level>> BUILT_IN_DIMENSIONS =
         List.of(SKYLAND, BRIGHT_SKYLAND, CHAOS, VOID, BRIGHT_VOID);
+
+    public static final DimensionTemplate SKYLAND_TEMPLATE = new DimensionTemplate(
+        SURFACE_TYPE, (server, type) -> new LevelStem(type,
+            createSkylandGenerator(server.registryAccess(), server.getWorldGenSettings().options().seed()))
+    );
+    public static final DimensionTemplate BRIGHT_SKYLAND_TEMPLATE = new DimensionTemplate(
+        SURFACE_TYPE_BRIGHT, (server, type) -> new LevelStem(type,
+            createSkylandGenerator(server.registryAccess(), server.getWorldGenSettings().options().seed()))
+    );
+    public static final DimensionTemplate CHAOS_TEMPLATE = new DimensionTemplate(
+        SURFACE_TYPE, (server, type) -> new LevelStem(type,
+            createErrorTerrainGenerator(server.getWorldGenSettings().options().seed(), server.registryAccess()))
+    );
+    public static final DimensionTemplate BRIGHT_VOID_TEMPLATE = new DimensionTemplate(
+        SURFACE_TYPE_BRIGHT, (server, type) -> new LevelStem(type, createVoidGenerator(server.registryAccess()))
+    );
     
     public static void init() {
         DimensionStackAPI.DIMENSION_STACK_CANDIDATE_COLLECTION_EVENT.register(
-            (registries, options) -> IPConfig.getConfig().enableAlternateDimensions
-                ? BUILT_IN_DIMENSIONS : List.of()
+            (registries, options) -> BUILT_IN_DIMENSIONS
         );
+        DimensionStackAPI.DIMENSION_STACK_PRE_UPDATE_EVENT.register(AlternateDimensions::addAltDimsIfUsedInDimStack);
+        DimensionTemplate.registerDimensionTemplate("skyland", SKYLAND_TEMPLATE);
+        DimensionTemplate.registerDimensionTemplate("bright_skyland", BRIGHT_SKYLAND_TEMPLATE);
+        DimensionTemplate.registerDimensionTemplate("chaos", CHAOS_TEMPLATE);
+        DimensionTemplate.registerDimensionTemplate("bright_void", BRIGHT_VOID_TEMPLATE);
+        DimensionAPI.suppressExperimentalWarningForNamespace("immersive_portals");
         ServerTickEvents.END_SERVER_TICK.register(AlternateDimensions::tick);
+    }
+
+    private static void addAltDimsIfUsedInDimStack(MinecraftServer server, @Nullable DimStackInfo stack) {
+        if (stack == null) return;
+        for (ResourceKey<Level> key : BUILT_IN_DIMENSIONS) {
+            if (!stack.hasDimension(key)) continue;
+            DimensionTemplate template = key == SKYLAND ? SKYLAND_TEMPLATE
+                : key == BRIGHT_SKYLAND ? BRIGHT_SKYLAND_TEMPLATE
+                : key == CHAOS ? CHAOS_TEMPLATE
+                : key == BRIGHT_VOID ? BRIGHT_VOID_TEMPLATE : DimensionTemplate.VOID_TEMPLATE;
+            DimensionAPI.addDimensionIfNotExists(server, key.identifier(), () -> template.createLevelStem(server));
+        }
     }
 
     /** Extend the final dimension registry before it enters the native server registry layers. */
@@ -95,8 +136,20 @@ public class AlternateDimensions {
                 IPConfig.getConfig().enableAlternateDimensions
             );
             return dimensions == output.finalDimensions() ? output
-                : new WorldLoader.DataLoadOutput<>(output.cookie(), dimensions);
+                : new WorldLoader.DataLoadOutput<>(withSavedDimensions(output.cookie(), dimensions), dimensions);
         };
+    }
+
+    /** Minecraft saves the supplier's world-generation settings separately from its registry. */
+    @SuppressWarnings("unchecked")
+    static <D> D withSavedDimensions(D cookie, RegistryAccess.Frozen dimensions) {
+        if (cookie instanceof LevelDataAndDimensions.WorldDataAndGenSettings settings) {
+            return (D) new LevelDataAndDimensions.WorldDataAndGenSettings(
+                settings.data(), new WorldGenSettings(settings.genSettings().options(),
+                    new WorldDimensions(dimensions.lookupOrThrow(Registries.LEVEL_STEM)))
+            );
+        }
+        return cookie;
     }
 
     /** Existing saved or datapack definitions always take precedence over generated defaults. */
@@ -110,7 +163,7 @@ public class AlternateDimensions {
         )) return dimensions;
 
         MappedRegistry<LevelStem> replacement =
-            new MappedRegistry<>(Registries.LEVEL_STEM, Lifecycle.experimental());
+            new MappedRegistry<>(Registries.LEVEL_STEM, existing.registryLifecycle());
         existing.listElements().forEach(holder -> replacement.register(
             holder.key(), holder.value(), existing.registrationInfo(holder.key())
                 .orElse(RegistrationInfo.BUILT_IN)
@@ -141,7 +194,8 @@ public class AlternateDimensions {
         HolderLookup.Provider worldgen, ResourceKey<Level> key
     ) {
         ResourceKey<DimensionType> type =
-            key == BRIGHT_SKYLAND || key == BRIGHT_VOID ? SURFACE_TYPE_BRIGHT : SURFACE_TYPE;
+            key == VOID ? BuiltinDimensionTypes.OVERWORLD
+                : key == BRIGHT_SKYLAND || key == BRIGHT_VOID ? SURFACE_TYPE_BRIGHT : SURFACE_TYPE;
         ChunkGenerator generator;
         if (key == SKYLAND || key == BRIGHT_SKYLAND) {
             generator = NormalSkylandGenerator.create(
