@@ -51,7 +51,14 @@ final class PortalWallRenderFixture {
                                                     context, "oblique");
                                             // Place the camera deliberately without depending on
                                             // walking or changing the separate teleport scenario.
-                                            context.getSource().getPlayerOrException().teleportTo(
+                                            // A setup teleport puts the body inside the backing
+                                            // block before portal contact is registered, allowing
+                                            // vanilla suffocation recovery to move the camera.
+                                            // Spectator mode isolates this optical probe; the
+                                            // PortalTest scenarios retain physical movement.
+                                            var player = context.getSource().getPlayerOrException();
+                                            player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
+                                            player.teleportTo(
                                                     context.getSource().getServer().overworld(),
                                                     0, 70, distance, java.util.Set.of(),
                                                     oblique ? 135 : 180, 0, false);

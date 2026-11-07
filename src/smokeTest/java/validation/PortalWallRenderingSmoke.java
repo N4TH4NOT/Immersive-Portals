@@ -174,9 +174,11 @@ final class PortalWallRenderingSmoke {
         if (occluded)
             require(!PortalRenderInfo.get(front(client)).wasRenderedLastFrame(),
                     "The foreground wall did not occlude the coplanar portal");
-        if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium"))
+        if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium")) {
             System.out.println("PORTAL_RENDER_WALL_CHUNK_UPDATES phase=" + PHASES[phase]
                     + " " + qouteall.imm_ptl.core.render.RenderDiagnostics.chunkUpdates());
+            SodiumChunkDiagnostics.dump(PHASES[phase]);
+        }
         capturing = true;
         return false;
     }

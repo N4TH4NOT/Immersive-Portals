@@ -172,6 +172,7 @@ final class PortalSeamlessSmoke {
         if (controlled && !sameWorld && stage == Stage.COMPLETE) {
             verifyPhase(client);
             sameWorld = true;
+            stage = Stage.APPROACH;
             portal = null;
             phaseTick = currentTick;
             client.player.connection.sendCommand("portal_smoke_same_world");
@@ -320,7 +321,7 @@ final class PortalSeamlessSmoke {
     }
 
     static boolean complete() {
-        return !controlled || sameWorld && stage == Stage.COMPLETE;
+        return !controlled || sameWorld && portal != null && stage == Stage.COMPLETE;
     }
 
     static void verify(Minecraft client) {
