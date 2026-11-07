@@ -110,9 +110,16 @@ final class PortalPoseUseSmoke {
                     require(frame.feet.distanceTo(previous.feet) < 1.0E-5,
                             "A frame-only pose/use crossing changed the player's movement endpoint: case="
                                     + name() + " previous=" + previous + " current=" + frame);
-                    require(frame.velocity.distanceTo(previous.velocity) < .025,
-                            "A frame-only pose/use crossing changed native velocity: case=" + name()
-                                    + " previous=" + previous + " current=" + frame);
+                    // Once the body clears the opening, ordinary damage packets can
+                    // change velocity between frames (notably native fall-damage sync).
+                    // Require velocity invariance throughout the actual seam interval.
+                    double halfWidth = client.player.getBbWidth() / 2.0 + 1.0E-5;
+                    if (frame.destination != previous.destination
+                            || Math.abs(frame.feet.z - PortalPoseUseFixture.PLANE_Z) <= halfWidth
+                            || Math.abs(previous.feet.z - PortalPoseUseFixture.PLANE_Z) <= halfWidth)
+                        require(frame.velocity.distanceTo(previous.velocity) < .025,
+                                "A frame-only pose/use crossing changed native velocity: case=" + name()
+                                        + " previous=" + previous + " current=" + frame);
                 } else if (frame.tick - previous.tick == 1) {
                     var step = frame.feet.subtract(previous.feet);
                     require(Math.hypot(step.x, step.z) <= Math.hypot(previous.velocity.x,
