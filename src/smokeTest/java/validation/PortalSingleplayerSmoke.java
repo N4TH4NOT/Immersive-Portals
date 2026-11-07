@@ -71,7 +71,7 @@ final class PortalSingleplayerSmoke {
                 defaults.enabledFeatures());
         var settings = new LevelSettings(name, GameType.CREATIVE,
                 LevelSettings.DifficultySettings.DEFAULT, true, config);
-        client.createWorldOpenFlows().createFreshLevel(name, settings, new WorldOptions(0, false, false),
+        client.createWorldOpenFlows().createFreshLevel(name, settings, new WorldOptions(987654321L, false, false),
                 WorldPresets::createNormalWorldDimensions, client.gui.screen());
     }
 

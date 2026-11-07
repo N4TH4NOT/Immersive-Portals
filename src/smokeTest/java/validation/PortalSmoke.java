@@ -20,6 +20,7 @@ public final class PortalSmoke implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        DimensionLibrarySmoke.init();
         net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(
                 (dispatcher, access, environment) ->
                         dispatcher.register(
@@ -69,6 +70,7 @@ public final class PortalSmoke implements ModInitializer {
         ServerLifecycleEvents.SERVER_STARTED.register(
                 server -> {
                     PortalMigrationSmoke.validateAlternateDimensions(server);
+                    DimensionLibrarySmoke.validateOnServerStart(server);
                     var from = server.overworld();
                     var to = server.getLevel(Level.NETHER);
                     for (var world : new net.minecraft.server.level.ServerLevel[] {from, to}) {

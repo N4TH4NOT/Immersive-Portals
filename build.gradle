@@ -104,6 +104,8 @@ if (providers.gradleProperty('portalSmoke').isPresent()) {
                 vmArg '-DportalSmoke.rendering=' + providers.gradleProperty('portalRenderSmoke').getOrElse('false')
                 vmArg '-Dimm_ptl.renderDiagnostics=true'
                 vmArg '-DportalSmoke.gravity=' + providers.gradleProperty('portalGravitySmoke').getOrElse('false')
+                vmArg '-DportalSmoke.dynamicDimensions=' + providers.gradleProperty('portalSmokeDynamicDimensions').getOrElse('false')
+                vmArg '-DportalSmoke.dimensionReload=' + providers.gradleProperty('portalSmokeDimensionReload').getOrElse('false')
             }
             server {
                 source sourceSets.smokeTest

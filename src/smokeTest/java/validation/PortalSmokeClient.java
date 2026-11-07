@@ -239,7 +239,9 @@ public final class PortalSmokeClient implements ClientModInitializer {
                             throw new AssertionError("Client scale was not synchronized");
                         System.out.println("PORTAL_SMOKE_TELEPORT_OK");
                     }
-                    if (ticks == 280) {
+                    if (ticks >= 280
+                            && (!Boolean.getBoolean("portalSmoke.dynamicDimensions")
+                                || DimensionLibrarySmoke.tickClient(client))) {
                         System.out.println("PORTAL_SMOKE_COMPLETE");
                         client.stop();
                     }
