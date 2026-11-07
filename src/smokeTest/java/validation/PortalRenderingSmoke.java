@@ -38,6 +38,47 @@ final class PortalRenderingSmoke {
                 text -> {});
     }
 
+    private static void validatePlayerVisibility(Minecraft client) {
+        var previousCamera = client.options.getCameraType();
+        boolean previousRenderPlayer = IPGlobal.renderYourselfInPortal;
+        var parent = client.gameRenderer.mainCamera();
+        var info = new qouteall.imm_ptl.core.render.context_management.WorldRenderInfo.Builder()
+                .setWorld(client.level)
+                .setCameraPos(parent.position())
+                .setRenderDistance(client.options.getEffectiveRenderDistance())
+                .build();
+        var camera = new NativeCamera(
+                client.level,
+                parent.position(),
+                parent,
+                parent.getViewRotationMatrix(new org.joml.Matrix4f()),
+                NativeWorldRenderer.projection(client.gameRenderer),
+                null,
+                client.getWindow().getWidth(),
+                client.getWindow().getHeight(),
+                256,
+                com.mojang.blaze3d.systems.RenderSystem.getDevice()
+                        .getDeviceInfo().isZZeroToOne());
+        require(camera.leftVector().dot(parent.leftVector()) > .999f,
+                "Native camera reversed the vanilla left axis");
+        qouteall.imm_ptl.core.render.context_management.WorldRenderInfo.pushRenderInfo(info);
+        try {
+            client.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);
+            IPGlobal.renderYourselfInPortal = false;
+            require(!camera.isDetached(), "Disabled first-person player policy was ignored");
+            IPGlobal.renderYourselfInPortal = true;
+            require(camera.isDetached(), "Enabled first-person portal player was hidden");
+            client.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK);
+            IPGlobal.renderYourselfInPortal = false;
+            require(camera.isDetached(), "Third-person portal player was hidden");
+            System.out.println("PORTAL_RENDER_PLAYER_VISIBILITY_OK");
+        } finally {
+            qouteall.imm_ptl.core.render.context_management.WorldRenderInfo.popRenderInfo();
+            client.options.setCameraType(previousCamera);
+            IPGlobal.renderYourselfInPortal = previousRenderPlayer;
+        }
+    }
+
     static void tick(Minecraft client, int realTicks) {
         if (firstFrame < 0) firstFrame = RenderStates.frameIndex;
         require(realTicks < 2400, "Rendering scenario did not finish within two minutes");
@@ -45,6 +86,7 @@ final class PortalRenderingSmoke {
         // rendered frames as well, including the initial eye-height interpolation.
         if ((RenderStates.frameIndex - firstFrame) * 2 <= logicalTicks) return;
         int ticks = ++logicalTicks;
+        if (ticks == 10) validatePlayerVisibility(client);
         if (ticks == 20) client.player.connection.sendCommand("portal_smoke_wall true");
         if (ticks == 50) capture(client, "portal-occlusion-check");
         if (ticks == 60) {

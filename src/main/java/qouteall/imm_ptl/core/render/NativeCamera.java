@@ -131,7 +131,12 @@ public final class NativeCamera extends Camera {
 
     @Override
     public boolean isDetached() {
-        return true;
+        // Match the root camera mode while allowing the portal policy to expose the
+        // first-person player. Always returning true bypasses renderYourselfInPortal
+        // and the near-mirror head guard in shouldRenderPlayerDefault().
+        return !net.minecraft.client.Minecraft.getInstance()
+                        .options.getCameraType().isFirstPerson()
+                || CrossPortalEntityRenderer.shouldRenderPlayerDefault();
     }
 
     @Override
@@ -171,7 +176,7 @@ public final class NativeCamera extends Camera {
 
     @Override
     public Vector3fc leftVector() {
-        return view.invert(new Matrix4f()).transformDirection(new Vector3f(1, 0, 0)).normalize();
+        return view.invert(new Matrix4f()).transformDirection(new Vector3f(-1, 0, 0)).normalize();
     }
 
     @Override
