@@ -215,7 +215,9 @@ final class PortalQualityClient {
                         "The quality camera did not observe the complete natural movement sequence");
                 require(peerTracked
                                 && (state.reloaded() || peerRenderStates > 0),
-                        "The other actual player was never tracked and extracted for rendering");
+                        "The other actual player was never tracked and extracted for rendering: tracked="
+                                + peerTracked + " rendered=" + peerRenderStates + " clipped="
+                                + peerClippedBodies + " peer=" + peer);
                 if (first && !state.reloaded()) {
                     var animation = CrossPortalPickupClient.lastAnimation();
                     require(CrossPortalPickupClient.animationCount() >= 2 && animation != null
@@ -278,6 +280,12 @@ final class PortalQualityClient {
     private static void cross(Minecraft client, boolean returning) {
         boolean expectedDestination = returning ? !first : first;
         if (substage == 0) {
+            // A rejoin can start only a few native ticks from the plane. Establish
+            // a real camera baseline before input, even while terrain is compiling.
+            if (phaseFrames == 0) {
+                keys(client, false, false, false);
+                return;
+            }
             keys(client, !returning, returning, true);
             if (destination(client) == expectedDestination) next(client);
         } else {
