@@ -2,7 +2,7 @@ package qouteall.imm_ptl.core.portal;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.player.LocalPlayer;
@@ -23,13 +23,12 @@ import net.minecraft.world.phys.Vec3;
 import qouteall.q_misc_util.my_util.IntBox;
 
 public class LoadingIndicatorEntity extends Entity {
+    @Override public boolean hurtServer(net.minecraft.server.level.ServerLevel level, net.minecraft.world.damagesource.DamageSource source, float amount) { return false; }
     public static final EntityType<LoadingIndicatorEntity> entityType =
-        FabricEntityTypeBuilder.create(
-            MobCategory.MISC,
-            (EntityType.EntityFactory<LoadingIndicatorEntity>) LoadingIndicatorEntity::new
-        ).dimensions(
-            EntityDimensions.fixed(1, 1)
-        ).fireImmune().trackable(96, 20).build();
+        EntityType.Builder.of(LoadingIndicatorEntity::new, MobCategory.MISC)
+            .sized(1, 1).fireImmune().clientTrackingRange(6).updateInterval(20)
+            .build(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.ENTITY_TYPE,
+                net.minecraft.resources.Identifier.fromNamespaceAndPath("immersive_portals", "loading_indicator")));
     
     private static final EntityDataAccessor<Component> TEXT = SynchedEntityData.defineId(
         LoadingIndicatorEntity.class, EntityDataSerializers.COMPONENT
@@ -113,12 +112,12 @@ public class LoadingIndicatorEntity extends Entity {
     }
     
     @Override
-    protected void readAdditionalSaveData(CompoundTag tag) {
+    protected void readAdditionalSaveData(net.minecraft.world.level.storage.ValueInput tag) {
     
     }
     
     @Override
-    protected void addAdditionalSaveData(CompoundTag tag) {
+    protected void addAdditionalSaveData(net.minecraft.world.level.storage.ValueOutput tag) {
     
     }
     
@@ -149,7 +148,7 @@ public class LoadingIndicatorEntity extends Entity {
     @Environment(EnvType.CLIENT)
     private void showMessageClient() {
         Gui inGameHud = Minecraft.getInstance().gui;
-        inGameHud.setOverlayMessage(
+        inGameHud.hud.setOverlayMessage(
             getText(), false
         );
     }

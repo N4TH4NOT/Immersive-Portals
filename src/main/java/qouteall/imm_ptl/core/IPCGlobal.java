@@ -25,14 +25,12 @@ public class IPCGlobal {
     public static boolean useHackedChunkRenderDispatcher = true;
     public static boolean isClientRemoteTickingEnabled = true;
     public static boolean useFrontClipping = true;
-    public static boolean doDisableAlphaTestWhenRenderingFrameBuffer = true;
     public static boolean lateClientLightUpdate = true;
     public static boolean earlyRemoteUpload = true;
     
     public static boolean useSuperAdvancedFrustumCulling = true;
     public static boolean earlyFrustumCullingPortal = true;
     
-    public static boolean useSeparatedStencilFormat = false;
     
     public static boolean experimentalIrisPortalRenderer = false;
     

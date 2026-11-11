@@ -81,39 +81,39 @@ public class PortalExtension {
     
     private void readFromNbt(CompoundTag compoundTag) {
         if (compoundTag.contains("motionAffinity")) {
-            motionAffinity = compoundTag.getDouble("motionAffinity");
+            motionAffinity = compoundTag.getDouble("motionAffinity").orElse(0.0);
         }
         else {
             motionAffinity = 0;
         }
         if (compoundTag.contains("adjustPositionAfterTeleport")) {
-            adjustPositionAfterTeleport = compoundTag.getBoolean("adjustPositionAfterTeleport");
+            adjustPositionAfterTeleport = compoundTag.getBoolean("adjustPositionAfterTeleport").orElse(false);
         }
         else {
             adjustPositionAfterTeleport = true;
         }
         
         if (compoundTag.contains("bindCluster")) {
-            bindCluster = compoundTag.getBoolean("bindCluster");
+            bindCluster = compoundTag.getBoolean("bindCluster").orElse(false);
         }
         else {
             bindCluster = true;
         }
         
-        if (compoundTag.hasUUID("reversePortalId")) {
-            reversePortalId = compoundTag.getUUID("reversePortalId");
+        if (compoundTag.read("reversePortalId", net.minecraft.core.UUIDUtil.CODEC).isPresent()) {
+            reversePortalId = compoundTag.read("reversePortalId", net.minecraft.core.UUIDUtil.CODEC).orElseThrow();
         }
         else {
             reversePortalId = null;
         }
-        if (compoundTag.hasUUID("flippedPortalId")) {
-            flippedPortalId = compoundTag.getUUID("flippedPortalId");
+        if (compoundTag.read("flippedPortalId", net.minecraft.core.UUIDUtil.CODEC).isPresent()) {
+            flippedPortalId = compoundTag.read("flippedPortalId", net.minecraft.core.UUIDUtil.CODEC).orElseThrow();
         }
         else {
             flippedPortalId = null;
         }
-        if (compoundTag.hasUUID("parallelPortalId")) {
-            parallelPortalId = compoundTag.getUUID("parallelPortalId");
+        if (compoundTag.read("parallelPortalId", net.minecraft.core.UUIDUtil.CODEC).isPresent()) {
+            parallelPortalId = compoundTag.read("parallelPortalId", net.minecraft.core.UUIDUtil.CODEC).orElseThrow();
         }
         else {
             parallelPortalId = null;
@@ -127,13 +127,13 @@ public class PortalExtension {
         compoundTag.putBoolean("adjustPositionAfterTeleport", adjustPositionAfterTeleport);
         compoundTag.putBoolean("bindCluster", bindCluster);
         if (reversePortalId != null) {
-            compoundTag.putUUID("reversePortalId", reversePortalId);
+            compoundTag.store("reversePortalId", net.minecraft.core.UUIDUtil.CODEC, reversePortalId);
         }
         if (flippedPortalId != null) {
-            compoundTag.putUUID("flippedPortalId", flippedPortalId);
+            compoundTag.store("flippedPortalId", net.minecraft.core.UUIDUtil.CODEC, flippedPortalId);
         }
         if (parallelPortalId != null) {
-            compoundTag.putUUID("parallelPortalId", parallelPortalId);
+            compoundTag.store("parallelPortalId", net.minecraft.core.UUIDUtil.CODEC, parallelPortalId);
         }
     }
     

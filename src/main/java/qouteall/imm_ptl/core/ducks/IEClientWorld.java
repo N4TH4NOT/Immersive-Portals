@@ -21,9 +21,9 @@ public interface IEClientWorld {
     
     EntityTickList ip_getEntityList();
     
-    Map<String, MapItemSavedData> ip_getAllMapData();
+    Map<net.minecraft.world.level.saveddata.maps.MapId, MapItemSavedData> ip_getAllMapData();
     
-    void ip_addMapData(Map<String, MapItemSavedData> map);
+    void ip_addMapData(Map<net.minecraft.world.level.saveddata.maps.MapId, MapItemSavedData> map);
     
     BlockStatePredictionHandler ip_getBlockStatePredictionHandler();
     

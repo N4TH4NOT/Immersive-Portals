@@ -8,6 +8,6 @@ import net.minecraft.client.gui.screens.Screen;
 @Environment(EnvType.CLIENT)
 public class IPConfigGUI {
     public static Screen createClothConfigScreen(Screen parent) {
-        return AutoConfig.getConfigScreen(IPConfig.class, parent).get();
+        return me.shedaniel.autoconfig.AutoConfigClient.getConfigScreen(IPConfig.class, parent).get();
     }
 }

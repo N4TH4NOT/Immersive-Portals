@@ -10,7 +10,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.WorldDimensions;
-import net.minecraft.world.level.levelgen.presets.WorldPreset;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.spongepowered.asm.mixin.Final;
@@ -29,8 +28,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.Set;
 
 @Mixin(CreateWorldScreen.class)
@@ -56,10 +53,7 @@ public abstract class MixinCreateWorldScreen_CVB extends Screen implements IECre
         method = "<init>",
         at = @At("RETURN")
     )
-    private void onInitEnd(
-        Minecraft minecraft, Screen screen, WorldCreationContext worldCreationContext,
-        Optional<ResourceKey<WorldPreset>> optional, OptionalLong optionalLong, CallbackInfo ci
-    ) {
+    private void onInitEnd(CallbackInfo ci) {
         DimStackManagement.dimStackToApply = DimStackManagement.getDimStackPreset();
         if (DimStackManagement.dimStackToApply != null) {
             LOGGER.info("[ImmPtl] Applying dimension stack preset");
@@ -75,13 +69,13 @@ public abstract class MixinCreateWorldScreen_CVB extends Screen implements IECre
                 () -> portal_getDimensionList(),
                 info -> {
                     DimStackManagement.dimStackToApply = info;
-                    Minecraft.getInstance().setScreen(this_);
+                    Minecraft.getInstance().gui.setScreen(this_);
                 }
             );
             ip_dimStackController.initializeAsDefault();
         }
         
-        Minecraft.getInstance().setScreen(ip_dimStackController.view);
+        Minecraft.getInstance().gui.setScreen(ip_dimStackController.view);
     }
     
     private List<ResourceKey<Level>> portal_getDimensionList() {
@@ -98,12 +92,12 @@ public abstract class MixinCreateWorldScreen_CVB extends Screen implements IECre
             
             // add vanilla dimensions
             for (var entry : selectedDimensions.dimensions().entrySet()) {
-                result.add(Helper.dimIdToKey(entry.getKey().location()));
+                result.add(Helper.dimIdToKey(entry.getKey().identifier()));
             }
             
             // add datapack dimensions
             for (var entry : settings.datapackDimensions().entrySet()) {
-                result.add(Helper.dimIdToKey(entry.getKey().location()));
+                result.add(Helper.dimIdToKey(entry.getKey().identifier()));
             }
             
             // add other dimensions via the event

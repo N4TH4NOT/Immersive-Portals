@@ -1,29 +1,18 @@
 package qouteall.imm_ptl.core.mixin.client;
-
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.DebugScreenOverlay;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.*;
+import java.util.*;
 import qouteall.imm_ptl.core.IPGlobal;
 import qouteall.imm_ptl.core.render.context_management.RenderStates;
-
-import java.util.List;
-
 @Mixin(DebugScreenOverlay.class)
-public class MixinDebugScreenOverlay {
-    @Inject(method = "Lnet/minecraft/client/gui/components/DebugScreenOverlay;getSystemInformation()Ljava/util/List;", at = @At("RETURN"), cancellable = true)
-    private void onGetRightText(CallbackInfoReturnable<List<String>> cir) {
-        List<String> returnValue = cir.getReturnValue();
-        
-        List<String> debugText = RenderStates.collectDebugText();
-        
-        if (IPGlobal.moveDebugTextToTop) {
-            returnValue.addAll(0, debugText);
-        }
-        else {
-            returnValue.addAll(debugText);
-        }
+public abstract class MixinDebugScreenOverlay {
+    @ModifyVariable(method="extractLines",at=@At("HEAD"),argsOnly=true)
+    private List<String> ip_debug(List<String> lines,GuiGraphicsExtractor gui,List<String> original,boolean left) {
+        if(left)return lines;
+        var result=new ArrayList<>(lines);
+        result.addAll(IPGlobal.moveDebugTextToTop ? 0 : result.size(),RenderStates.collectDebugText());
+        return result;
     }
-    
 }

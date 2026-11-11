@@ -2,18 +2,15 @@ package qouteall.imm_ptl.core.portal;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
-import net.minecraft.world.level.LevelReader;
-import net.minecraft.world.level.ScheduledTickAccess;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.SoundType;
-import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -23,7 +20,6 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import org.jetbrains.annotations.NotNull;
 import qouteall.imm_ptl.core.McHelper;
 import qouteall.imm_ptl.core.portal.nether_portal.BreakablePortalEntity;
 
@@ -55,8 +51,8 @@ public class PortalPlaceholderBlock extends Block {
     );
     
     public static final PortalPlaceholderBlock instance = new PortalPlaceholderBlock(
-        BlockBehaviour.Properties.of()
-            .noCollission()
+        BlockBehaviour.Properties.of().setId(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BLOCK, net.minecraft.resources.Identifier.fromNamespaceAndPath("immersive_portals", "nether_portal_block")))
+            .noCollision()
             .sound(SoundType.GLASS)
             .strength(1.0f, 0)
             .noOcclusion()
@@ -94,12 +90,17 @@ public class PortalPlaceholderBlock extends Block {
     }
     
     @Override
-    public BlockState updateShape(
-        BlockState blockState, LevelReader levelReader, ScheduledTickAccess scheduledTickAccess, BlockPos blockPos, Direction direction, BlockPos blockPos2, BlockState blockState2, RandomSource randomSource
+    public BlockState updateShape(BlockState thisState, net.minecraft.world.level.LevelReader worldAccess,
+        net.minecraft.world.level.ScheduledTickAccess ticks, BlockPos blockPos, Direction direction,
+        BlockPos neighborPos, BlockState neighborState, net.minecraft.util.RandomSource random
     ) {
-        if (!levelReader.isClientSide()) {
-            if (levelReader instanceof Level world) {
-                Direction.Axis axis = blockState.getValue(AXIS);
+        if (!worldAccess.isClientSide()) {
+            if (worldAccess instanceof Level) {
+                Level world = (Level) worldAccess;
+                
+                net.minecraft.util.profiling.Profiler.get().push("portal_placeholder");
+                
+                Direction.Axis axis = thisState.getValue(AXIS);
                 if (direction.getAxis() != axis) {
                     McHelper.findEntitiesRough(
                         BreakablePortalEntity.class,
@@ -113,12 +114,12 @@ public class PortalPlaceholderBlock extends Block {
                         }
                     );
                 }
+                
+                net.minecraft.util.profiling.Profiler.get().pop();
             }
         }
         
-        return super.updateShape(
-            blockState, levelReader, scheduledTickAccess, blockPos, direction, blockPos2, blockState2, randomSource
-        );
+        return super.updateShape(thisState, worldAccess, ticks, blockPos, direction, neighborPos, neighborState, random);
     }
     
     public static boolean isHitOnPlaceholder(HitResult hitResult, Level world) {
@@ -131,16 +132,14 @@ public class PortalPlaceholderBlock extends Block {
         return false;
     }
     
-    //---------Similar to BarrierBlock
+    //---------These are copied from BlockBarrier
     @Override
-    public boolean propagatesSkylightDown(
-        BlockState blockState
-    ) {
+    public boolean propagatesSkylightDown(BlockState state) {
         return true;
     }
     
     @Override
-    public @NotNull RenderShape getRenderShape(BlockState blockState) {
+    public RenderShape getRenderShape(BlockState blockState_1) {
         return RenderShape.INVISIBLE;
     }
     

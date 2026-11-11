@@ -1,251 +1,172 @@
 plugins {
-    id 'fabric-loom' version '1.8-SNAPSHOT'
-
+    id 'net.fabricmc.fabric-loom' version '1.19.2'
     id 'maven-publish'
-
-    id "me.modmuss50.mod-publish-plugin" version "0.3.5"
-    // https://modmuss50.github.io/mod-publish-plugin/
 }
-
 version = project.mod_version
 group = project.maven_group
-
-base {
-    archivesName = project.archives_base_name
-}
-
-repositories {
-    flatDir {
-        dirs 'deps'
-    }
-}
-
-version = rootProject.mod_version
-
+base { archivesName = project.archives_base_name }
 repositories {
     mavenCentral()
-    mavenLocal()
-    maven {
-        name = 'JitPack'
-        url = 'https://jitpack.io'
-    }
-
-    // cloth config
-    maven { url "https://maven.shedaniel.me/" }
-    maven { url "https://maven.terraformersmc.com/releases/" }
-
-    // for sodium
-    maven {
-        name = "Modrinth"
-        url = "https://api.modrinth.com/maven"
-        content {
-            includeGroup "maven.modrinth"
-        }
-    }
-
-    // for parchment
-    maven {
-        url = "https://maven.parchmentmc.org"
-    }
-
-    // for cardinal components that gravity changer uses
-    maven {
-        name = 'Ladysnake'
-        url = 'https://maven.ladysnake.org/releases'
-    }
-
-    // geckolib, for testing with portal gun
-    maven { url 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/' }
-
-
+    maven { url = 'https://api.modrinth.com/maven'; content { includeGroup 'maven.modrinth' } }
 }
-
-loom {
-    accessWidenerPath = file("src/main/resources/imm_ptl.accesswidener")
-}
-
+loom { accessWidenerPath = file('src/main/resources/imm_ptl.accesswidener') }
 dependencies {
-    minecraft "com.mojang:minecraft:${project.minecraft_version}"
-
-    mappings loom.layered() {
-        officialMojangMappings() {
-            setNameSyntheticMembers(false)
-        }
-        parchment("org.parchmentmc.data:parchment-1.21:2024.07.28")
-    }
-
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-
-    modImplementation("net.fabricmc.fabric-api:fabric-api:${project.fabric_version}") {
-        exclude module: "fabric-gametest-api-v1"
-        // for now, the gametest module makes client unable to login dev env server
-    }
-
-    modApi("me.shedaniel.cloth:cloth-config-fabric:${cloth_config_version}") {
-        exclude(group: "net.fabricmc.fabric-api")
-    }
-    include "me.shedaniel.cloth:cloth-config-fabric:${cloth_config_version}"
-
-    modCompileOnly "maven.modrinth:modmenu:${modmenu_version}"
-    modLocalRuntime "maven.modrinth:modmenu:${modmenu_version}"
-
-    modCompileOnly "${project.sodium_path}"
-
-    modCompileOnly "${project.iris_path}"
-
-    modCompileOnly("com.github.qouteall:GravityChanger:${gravity_changer_version}") {
-        exclude(group: "net.fabricmc.fabric-api")
-        transitive(false)
-    }
-
-    modApi("com.github.iPortalTeam:DimLib:${dimlib_version}") {
-        exclude(group: "net.fabricmc.fabric-api")
-    }
-    include("com.github.iPortalTeam:DimLib:${dimlib_version}")
-
-    // put these into inner mod to reduce duplicate MC jar
-
-    if (project.enable_sodium.equals('true')) {
-        modLocalRuntime "${project.sodium_path}"
-    }
-
-    if (project.enable_iris.equals('true')) {
-        modLocalRuntime "${project.iris_path}"
-        implementation "org.anarres:jcpp:1.4.14" // for iris
-        implementation 'io.github.douira:glsl-transformer:2.0.0-pre13' // for iris
-        implementation 'org.antlr:antlr4-runtime:4.11.1' // for iris
-    }
-
-    if (project.enable_gravity_changer.equals('true')) {
-        modLocalRuntime("com.github.qouteall:GravityChanger:${gravity_changer_version}") {
-            exclude(group: "net.fabricmc.fabric-api")
-        }
-    }
-
-    if (project.enable_geckolib.equals('true')) {
-        // for testing portal gun using dev jar
-        modLocalRuntime('software.bernie.geckolib:geckolib-fabric-1.20:4.2') {
-            transitive(false)
-        }
-    }
-
-    if (project.enable_test_mod.equals('true')) {
-        fileTree(dir: 'deps', include: '*.jar').each {
-            String baseName = it.name.replace(".jar", "")
-            String version = "0.1.0"
-            int split = baseName.lastIndexOf('-')
-
-            if (split != -1) {
-                version = baseName.substring(split + 1)
-                baseName = baseName.substring(0, split)
-            }
-
-            String name = "testmod:${baseName}:${version}"
-
-            System.out.println("Found test mod: " + it.name.replace(".jar", "") + " -> " + name)
-
-            modImplementation name
-        }
-    }
-    testImplementation(platform('org.junit:junit-bom:5.10.0'))
-    testImplementation('org.junit.jupiter:junit-jupiter')
+    implementation project(':portal-protocol')
+    implementation 'io.github.n4th4not.gravity:gravity-fabric:1.0.0-alpha.1'
+    include 'io.github.n4th4not.gravity:gravity-fabric:1.0.0-alpha.1'
+    include project(':portal-protocol')
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
+    implementation "maven.modrinth:cloth-config:${cloth_config_version}"
+    include "maven.modrinth:cloth-config:${cloth_config_version}"
+    compileOnly "maven.modrinth:modmenu:${modmenu_version}"
+    compileOnly "${sodium_path}"
+    compileOnly "${iris_path}"
+    if (providers.gradleProperty('portalSmokeGravity').isPresent()) runtimeOnly "${gravity_path}"
+    if (providers.gradleProperty('portalSmokeSodium').isPresent() || providers.gradleProperty('portalSmokeIris').isPresent()) runtimeOnly "${sodium_path}"
+    if (providers.gradleProperty('portalSmokeIris').isPresent()) runtimeOnly "${iris_path}"
+    testImplementation platform('org.junit:junit-bom:5.14.1')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
-
 processResources {
-    inputs.property "version", project.version
-
-    filesMatching("fabric.mod.json") {
-        expand "version": project.version
-    }
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand version: project.version }
 }
-
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 17
+    options.release = 25
+    options.compilerArgs += ['-Xmaxerrs', '5000']
 }
-
 java {
-    // Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-    // if it is present.
-    // If you remove this line, sources will not be generated.
+    toolchain.languageVersion = JavaLanguageVersion.of(25)
     withSourcesJar()
-
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
 }
-
-
-// change the output file name
-remapJar {
-    afterEvaluate {
-        archiveFileName = "${project.archives_base_name}-${project.mod_version}-mc${project.minecraft_version}-fabric.jar"
-    }
-}
-
-
-jar {
-    from("LICENSE") {
-        rename { "${it}_${project.base.archivesName.get()}"}
-    }
-}
-
+test { useJUnitPlatform() }
+jar { from('LICENSE') { rename { "${it}_${project.base.archivesName.get()}" } } }
+tasks.withType(Jar).configureEach { from('licenses') { into 'META-INF/licenses' } }
 publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            from components.java
+    publications { mavenJava(MavenPublication) { from components.java } }
+}
+
+tasks.register('examplePortalDatapack', Zip) {
+    from 'examples/custom_portal_gen'
+    archiveFileName = 'example_custom_portal_gen.zip'
+    destinationDirectory = layout.buildDirectory.dir('examples')
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+tasks.named('assemble') { dependsOn 'examplePortalDatapack' }
+
+// GitHub Actions runtime verification; these classes are never packaged in the mod.
+if (providers.gradleProperty('portalSmoke').isPresent()) {
+    sourceSets {
+        smokeTest {
+            java.srcDir new File(gradle.ext.gravitySources, 'compat-tests/fabric/smokeTest/java')
+            compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+            runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
         }
+    }
+    tasks.named('processSmokeTestResources') {
+        from('examples/custom_portal_gen') { into 'migration-example' }
+        from(tasks.named('examplePortalDatapack')) { into 'migration-example' }
+    }
+    def prepareServer = tasks.register('preparePortalSmokeServer') {
+        doLast {
+            def config = file('run/smoke-server/server.properties')
+            if (!config.exists()) {
+                config.parentFile.mkdirs()
+                config.text = file('src/smokeTest/resources/server.properties').text
+            }
+        }
+    }
+    tasks.named('runServer') { dependsOn prepareServer }
+    def configureSmokeClient = { runConfig ->
+        runConfig.source sourceSets.smokeTest
+        runConfig.runDir providers.gradleProperty('portalSmokeClientDir').getOrElse('run/smoke-client')
+        runConfig.programArgs '--username', providers.gradleProperty('portalSmokeUsername').getOrElse('PortalTest')
+        runConfig.programArgs '--graphicsBackend', providers.gradleProperty('portalSmokeBackend').getOrElse('opengl')
+        if (!providers.gradleProperty('portalSmokeSingleplayer').isPresent()) {
+            runConfig.programArgs '--quickPlayMultiplayer', providers.gradleProperty('portalSmokeAddress').getOrElse('127.0.0.1:25567')
+        }
+        runConfig.vmArg '-DportalSmoke.singleplayer=' + providers.gradleProperty('portalSmokeSingleplayer').isPresent()
+        runConfig.vmArg '-DportalSmoke.existingWorld=' + providers.gradleProperty('portalSmokeSingleplayerWorld').getOrElse('')
+        runConfig.vmArg '-DportalSmoke.address=' + providers.gradleProperty('portalSmokeAddress').getOrElse('127.0.0.1:25567')
+        runConfig.vmArg '-DportalSmoke.target=' + providers.gradleProperty('portalSmokeTarget').getOrElse('minecraft:the_nether')
+        runConfig.vmArg '-DportalSmoke.interaction=' + providers.gradleProperty('portalSmokeInteraction').getOrElse('false')
+        runConfig.vmArg '-DportalSmoke.interactions=' + providers.gradleProperty('portalSmokeInteractions').getOrElse('false')
+        runConfig.vmArg '-DportalSmoke.rendering=' + providers.gradleProperty('portalRenderSmoke').getOrElse('false')
+        runConfig.vmArg '-DportalSmoke.optics=' + providers.gradleProperty('portalOpticsSmoke').getOrElse('false')
+        runConfig.vmArg '-DportalSmoke.nativeInteractions=' + providers.gradleProperty('portalSmokeNativeInteractions').getOrElse('false')
+        runConfig.vmArg '-DportalSmoke.quality=' + providers.gradleProperty('portalQualitySmoke').getOrElse('false')
+        runConfig.vmArg '-DportalSmoke.qualityReload=' + providers.gradleProperty('portalQualityReload').getOrElse('false')
+        runConfig.vmArg '-Dimm_ptl.renderDiagnostics=true'
+        if (providers.gradleProperty('portalSmokeSodium').isPresent()) {
+            runConfig.vmArg '-Dmixin.debug.export=true'
+            runConfig.vmArg '-Dmixin.debug.export.filter=net.minecraft.client.renderer.extract.LevelExtractor'
+        }
+        runConfig.vmArg '-DportalSmoke.gravity=' + providers.gradleProperty('portalGravitySmoke').getOrElse('false')
+        runConfig.vmArg '-DportalSmoke.dynamicDimensions=' + providers.gradleProperty('portalSmokeDynamicDimensions').getOrElse('false')
+        runConfig.vmArg '-DportalSmoke.dimensionReload=' + providers.gradleProperty('portalSmokeDimensionReload').getOrElse('false')
+    }
+    loom {
+        mods {
+            immersive_portals { sourceSet sourceSets.main }
+            imm_ptl_smoke { sourceSet sourceSets.smokeTest }
+        }
+        runs {
+            client {
+                configureSmokeClient(delegate)
+            }
+            if (providers.gradleProperty('portalQualitySmoke').isPresent()) {
+                // Loom's JVM classpath argfile is keyed by task name under build/,
+                // independently of --project-cache-dir. Give concurrent clients
+                // separate run tasks with explicitly applied common client options.
+                // Inherited JVM argument conventions are replaced during Loom finalization.
+                qualityA {
+                    configureSmokeClient(delegate)
+                    client()
+                    ideConfigGenerated false
+                }
+                qualityB {
+                    configureSmokeClient(delegate)
+                    client()
+                    ideConfigGenerated false
+                }
+            }
+            server {
+                source sourceSets.smokeTest
+                runDir 'run/smoke-server'
+                vmArg '-DportalSmoke.dimensionReload=' + providers.gradleProperty('portalSmokeDimensionReload').getOrElse('false')
+                vmArg '-DportalSmoke.quality=' + providers.gradleProperty('portalQualitySmoke').getOrElse('false')
+                vmArg '-DportalSmoke.qualityReload=' + providers.gradleProperty('portalQualityReload').getOrElse('false')
+            }
+        }
+    }
+    if (providers.gradleProperty('portalSmokeIris').isPresent()) {
+        def prepareShaders = tasks.register('preparePortalSmokeShaders') {
+            inputs.dir 'src/smokeTest/shaders'
+            outputs.dir 'run/smoke-client/shaderpacks/PortalSmoke'
+            outputs.file 'run/smoke-client/config/iris.properties'
+            doLast {
+                def shaders = file('run/smoke-client/shaderpacks/PortalSmoke/shaders')
+                shaders.mkdirs()
+                ['terrain', 'entities', 'hand', 'hand_water', 'water', 'block', 'textured', 'textured_lit', 'basic'].each { program ->
+                    new File(shaders, "gbuffers_${program}.vsh").text = file('src/smokeTest/shaders/gbuffers_terrain.vsh').text
+                    new File(shaders, "gbuffers_${program}.fsh").text = file("src/smokeTest/shaders/gbuffers_${program == 'basic' ? 'basic' : 'terrain'}.fsh").text
+                }
+                new File(shaders, 'shaders.properties').text = file('src/smokeTest/shaders/shaders.properties').text
+                def config = file('run/smoke-client/config/iris.properties')
+                config.parentFile.mkdirs()
+                config.text = 'enableShaders=true\nshaderPack=PortalSmoke\n'
+            }
+        }
+        tasks.named('runClient') { dependsOn prepareShaders }
     }
 }
 
-// miscellaneous
-
-task printClasspath {
-    doLast {
-        // NOTE don't forget to exclude the submod dev jar
-        configurations.compileClasspath.each { println "\"" + (it.toString().replace("\\", "/")) + "\"," }
-    }
-}
-
-// Enable ZGC: -XX:+UseZGC
-
-// run test when building will slow down the build process
-// manually run when needed
-//test {
-//    useJUnitPlatform()
-//    testLogging {
-//        events "passed", "skipped", "failed"
-//    }
-//}
-
-publishMods {
-    file = remapJar.archiveFile
-    changelog = file("changelog.md").text
-    type = ALPHA
-    modLoaders.add("fabric")
-
-    displayName = "v${project.mod_version}-mc${project.minecraft_version}"
-    version = "v${project.mod_version}-mc${project.minecraft_version}"
-
-    curseforge {
-        projectId = "332273"
-        accessToken = providers.environmentVariable("CURSEFORGE_TOKEN")
-        minecraftVersions.add(minecraft_version)
-
-        requires {
-            slug = "fabric-api"
-        }
-    }
-    modrinth {
-        projectId = "zJpHMkdD"
-        accessToken = providers.environmentVariable("MODRINTH_TOKEN")
-        minecraftVersions.add(minecraft_version)
-
-        requires {
-            slug = "fabric-api"
-        }
-    }
-    github {
-        repository = "iPortalTeam/ImmersivePortalsMod"
-        accessToken = providers.environmentVariable("GITHUB_TOKEN")
-        commitish = "${project.git_branch}"
-    }
+// Validate only the gravity modules required by the Fabric mod.
+tasks.named('check') {
+    dependsOn gradle.includedBuild('immersive-portals-gravity').task(':gravity-api:check')
+    dependsOn gradle.includedBuild('immersive-portals-gravity').task(':gravity-fabric:check')
 }

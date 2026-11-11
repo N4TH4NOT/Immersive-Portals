@@ -9,7 +9,7 @@ import net.minecraft.client.gui.layouts.HeaderAndFooterLayout;
 import net.minecraft.client.gui.layouts.LinearLayout;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import qouteall.imm_ptl.core.platform_specific.IPConfig;
 
 public class IPortalInitialScreen extends Screen {
@@ -32,15 +32,13 @@ public class IPortalInitialScreen extends Screen {
         super(Component.empty());
         this.onClose = onClose;
         
-        this.minecraft = Minecraft.getInstance();
-        this.font = minecraft.font;
         
         prevButton = Button.builder(
             Component.translatable("iportal.initial_screen.prev"),
             button -> onPrevious()
         ).build();
         
-        pageNumberWidget = new StringWidget(
+        pageNumberWidget = new CenteredStringWidget(
             Component.empty(),
             font
         );
@@ -52,14 +50,14 @@ public class IPortalInitialScreen extends Screen {
         
         iconWidget = ImageWidget.texture(
             30, 30,
-            ResourceLocation.fromNamespaceAndPath("immersive_portals", "icon.png"),
+            Identifier.fromNamespaceAndPath("immersive_portals", "icon.png"),
             30, 30
         );
         
-        titleWidget = new StringWidget(
+        titleWidget = new CenteredStringWidget(
             Component.translatable("iportal.initial_screen.title"),
             font
-        ).alignCenter();
+        );
         
         contentWidget = new MultiLineTextWidget(
             Component.empty(),
@@ -114,7 +112,6 @@ public class IPortalInitialScreen extends Screen {
         contentWidget.setMaxWidth(this.width - 40);
         pageNumberWidget.setWidth(50);
         pageNumberWidget.setHeight(iKnowButton.getHeight());
-        pageNumberWidget.alignCenter();
         titleWidget.setHeight(iconWidget.getHeight());
         
         addRenderableWidget(prevButton);
@@ -143,5 +140,11 @@ public class IPortalInitialScreen extends Screen {
         layout.arrangeElements();
         
         updateUiStatus(currentPageIndex);
+    }
+    private static final class CenteredStringWidget extends StringWidget {
+        CenteredStringWidget(Component text, net.minecraft.client.gui.Font font) { super(text,font); }
+        @Override public void visitLines(net.minecraft.client.gui.ActiveTextCollector output) {
+            output.accept(getX()+(getWidth()-getFont().width(getMessage()))/2, getY()+(getHeight()-9)/2, getMessage());
+        }
     }
 }

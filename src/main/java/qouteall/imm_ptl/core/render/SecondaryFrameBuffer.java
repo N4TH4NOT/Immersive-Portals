@@ -1,41 +1,15 @@
 package qouteall.imm_ptl.core.render;
 
-import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import net.minecraft.client.Minecraft;
-import qouteall.q_misc_util.Helper;
 
-//it will always be the same size as the main frame buffer
-public class SecondaryFrameBuffer {
+public final class SecondaryFrameBuffer implements AutoCloseable {
     public TextureTarget fb;
-    
-    public void prepare() {
-        RenderTarget mainFrameBuffer = Minecraft.getInstance().getMainRenderTarget();
-        int width = mainFrameBuffer.viewWidth;
-        int height = mainFrameBuffer.viewHeight;
-        prepare(width, height);
-    }
-    
+    public void prepare() { var window = Minecraft.getInstance().getWindow(); prepare(window.getWidth(), window.getHeight()); }
     public void prepare(int width, int height) {
-        if (fb == null) {
-            fb = new TextureTarget(
-                width, height,
-                true,//has depth attachment
-                Minecraft.ON_OSX
-            );
-            fb.checkStatus();
-            Helper.log("Secondary Framebuffer init");
-        }
-        if (width != fb.viewWidth ||
-            height != fb.viewHeight
-        ) {
-            fb.resize(
-                width, height, Minecraft.ON_OSX
-            );
-            fb.checkStatus();
-            Helper.log("Secondary Framebuffer resized");
-        }
+        if (fb == null) fb = new TextureTarget("Immersive portal", width, height, true, GpuFormat.RGBA8_UNORM);
+        else if (width != fb.width || height != fb.height) fb.resize(width,height);
     }
-    
-    
+    @Override public void close() { if (fb != null) { fb.destroyBuffers(); fb = null; } }
 }

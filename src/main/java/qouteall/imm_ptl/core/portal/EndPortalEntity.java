@@ -14,12 +14,12 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.projectile.Arrow;
+import net.minecraft.world.entity.projectile.arrow.Arrow;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.EndPortalBlock;
-import net.minecraft.world.level.dimension.end.EndDragonFight;
+import net.minecraft.world.level.dimension.end.EnderDragonFight;
 import net.minecraft.world.level.levelgen.feature.EndPlatformFeature;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -29,7 +29,7 @@ import org.apache.logging.log4j.Logger;
 import qouteall.imm_ptl.core.IPGlobal;
 import qouteall.imm_ptl.core.McHelper;
 import qouteall.imm_ptl.core.ducks.IEEntity;
-import qouteall.imm_ptl.core.mixin.common.miscellaneous.IEEndDragonFight;
+import qouteall.imm_ptl.core.mixin.common.miscellaneous.IEEnderDragonFight;
 import qouteall.imm_ptl.core.portal.animation.NormalAnimation;
 import qouteall.imm_ptl.core.portal.animation.RotationAnimation;
 import qouteall.imm_ptl.core.portal.shape.BoxPortalShape;
@@ -41,7 +41,7 @@ public class EndPortalEntity extends Portal {
     private static final Logger LOGGER = LogManager.getLogger(EndPortalEntity.class);
     
     public static final EntityType<EndPortalEntity> ENTITY_TYPE =
-        createPortalEntityType(EndPortalEntity::new);
+        createPortalEntityType("end_portal", EndPortalEntity::new);
     public static final String PORTAL_TAG_VIEW_BOX = "view_box";
     
     private static final double BOX_PORTAL_SIDE_LEN = 3;
@@ -88,12 +88,12 @@ public class EndPortalEntity extends Portal {
         doCreateEndPlatform(world);
         
         // update dragon fight info
-        EndDragonFight dragonFight = world.getDragonFight();
+        EnderDragonFight dragonFight = world.getDragonFight();
         if (dragonFight == null) {
             return;
         }
-        if (((IEEndDragonFight) dragonFight).ip_getNeedsStateScanning()) {
-            ((IEEndDragonFight) dragonFight).ip_scanState();
+        if (((IEEnderDragonFight) dragonFight).ip_getNeedsStateScanning()) {
+            ((IEEnderDragonFight) dragonFight).ip_scanState();
         }
     }
     
@@ -102,7 +102,7 @@ public class EndPortalEntity extends Portal {
      */
     private static void doCreateEndPlatform(ServerLevel world) {
         EndPlatformFeature.createEndPlatform(
-            world, BlockPos.containing(ServerLevel.END_SPAWN_POINT.getBottomCenter()).below(),
+            world, ServerLevel.END_SPAWN_POINT.below(),
             true
         );
     }
@@ -147,7 +147,7 @@ public class EndPortalEntity extends Portal {
         
         Vec3 portalCenter = thisSideBox.getCenter();
         
-        EndPortalEntity portal = EndPortalEntity.ENTITY_TYPE.create(world);
+        EndPortalEntity portal = EndPortalEntity.ENTITY_TYPE.create(world, net.minecraft.world.entity.EntitySpawnReason.LOAD);
         assert portal != null;
         
         portal.setOriginPos(portalCenter);
@@ -263,7 +263,7 @@ public class EndPortalEntity extends Portal {
             );
         }
         
-        MinecraftServer server = getServer();
+        MinecraftServer server = level().getServer();
         assert server != null;
         ServerLevel endWorld = server.getLevel(Level.END);
         if (endWorld != null) {
@@ -342,7 +342,7 @@ public class EndPortalEntity extends Portal {
         if (!level().isClientSide()) {
             if (entity instanceof ServerPlayer) {
                 if (IPGlobal.endPortalMode == IPGlobal.EndPortalMode.toObsidianPlatform) {
-                    MinecraftServer server = getServer();
+                    MinecraftServer server = level().getServer();
                     assert server != null;
                     ServerLevel endWorld = server.getLevel(Level.END);
                     if (endWorld != null) {

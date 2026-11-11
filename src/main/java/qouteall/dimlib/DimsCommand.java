@@ -1,0 +1,236 @@
+package qouteall.dimlib;
+
+import com.google.gson.JsonElement;
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.builder.RequiredArgumentBuilder;
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.serialization.DataResult;
+import com.mojang.serialization.JsonOps;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.DimensionArgument;
+import net.minecraft.core.Registry;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.resources.RegistryOps;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.dimension.LevelStem;
+import org.jetbrains.annotations.Nullable;
+import qouteall.dimlib.api.DimensionAPI;
+
+import java.util.stream.Collectors;
+
+public class DimsCommand {
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+        LiteralArgumentBuilder<CommandSourceStack> builder = Commands
+            .literal("dims")
+            .requires(source -> source.permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_GAMEMASTER));
+        
+        builder.then(Commands
+            .literal("clone_dimension")
+            .then(Commands.argument("templateDimension", DimensionArgument.dimension())
+                .then(Commands.argument("newDimensionID", StringArgumentType.string())
+                    .executes(context -> {
+                        ServerLevel templateDimension =
+                            DimensionArgument.getDimension(context, "templateDimension");
+                        String newDimensionId = StringArgumentType.getString(context, "newDimensionID");
+                        
+                        Identifier newDimId = parseDimensionId(context, newDimensionId);
+                        
+                        if (newDimId == null) {
+                            return 0;
+                        }
+                        
+                        cloneDimension(
+                            templateDimension, newDimId
+                        );
+                        
+                        context.getSource().sendSuccess(() -> Component.literal(
+                            "Dynamically added dimension %s".formatted(newDimensionId)
+                        ), true);
+                        
+                        return 1;
+                    })
+                )
+            )
+        );
+        
+        // Keep the command tree compatible with native argument types.
+        RequiredArgumentBuilder<CommandSourceStack, String> addDimensionCommandNode =
+            Commands.argument("newDimensionId", StringArgumentType.string());
+        
+        for (var e : DimensionTemplate.DIMENSION_TEMPLATES.entrySet()) {
+            String dimTemplateId = e.getKey();
+            DimensionTemplate dimensionTemplate = e.getValue();
+            addDimensionCommandNode.then(Commands.literal(dimTemplateId)
+                .executes(context -> {
+                    return runAddDimension(context, dimensionTemplate);
+                })
+            );
+        }
+        
+        builder.then(Commands.literal("add_dimension")
+            .then(addDimensionCommandNode)
+        );
+        
+        builder.then(Commands
+            .literal("remove_dimension")
+            .then(Commands.argument("dimension", DimensionArgument.dimension())
+                .executes(context -> {
+                    ServerLevel dimension =
+                        DimensionArgument.getDimension(context, "dimension");
+                    
+                    DimensionAPI.removeDimensionDynamically(dimension);
+                    
+                    context.getSource().sendSuccess(() -> Component.literal(
+                        ("Scheduled removal of dimension %s. Its world files are preserved. " +
+                            "Note: if the datapack config for that dimension exists, the dimension will be re-added after server restart.")
+                            .formatted(dimension.dimension().identifier())
+                    ), true);
+                    
+                    return 1;
+                })
+            )
+        );
+        
+        builder.then(Commands.literal("list")
+            .executes(context -> {
+                MinecraftServer server = context.getSource().getServer();
+                
+                MutableComponent text = Component.literal(
+                    server.levelKeys()
+                        .stream()
+                        .map(k -> k.identifier().toString())
+                        .sorted()
+                        .collect(Collectors.joining("\n"))
+                );
+                
+                context.getSource().sendSuccess(() -> text, false);
+                
+                return 1;
+            }));
+        
+        builder.then(Commands.literal("view_dim_config")
+            .then(Commands.argument("dim", DimensionArgument.dimension())
+                .executes(context -> {
+                    ServerLevel world =
+                        DimensionArgument.getDimension(context, "dim");
+                    
+                    Registry<LevelStem> dimensionRegistry =
+                        DimensionImpl.getDimensionRegistry(world.getServer());
+                    
+                    LevelStem levelStem = dimensionRegistry.getValue(world.dimension().identifier());
+                    
+                    if (levelStem == null) {
+                        context.getSource().sendFailure(
+                            Component.literal("Dimension config not found")
+                        );
+                        return 0;
+                    }
+                    
+                    DataResult<JsonElement> encoded = LevelStem.CODEC.encodeStart(
+                        RegistryOps.create(JsonOps.INSTANCE, world.registryAccess()),
+                        levelStem
+                    );
+                    
+                    if (encoded.result().isPresent()) {
+                        String jsonStr = new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(encoded.result().get());
+                        
+                        context.getSource().sendSuccess(
+                            () -> Component.literal(jsonStr),
+                            true
+                        );
+                    }
+                    else {
+                        context.getSource().sendFailure(Component.literal(
+                            encoded.error().toString()
+                        ));
+                    }
+                    
+                    return 1;
+                })
+            )
+        );
+        
+        dispatcher.register(builder);
+    }
+    
+    @Nullable
+    private static Identifier parseDimensionId(
+        CommandContext<CommandSourceStack> context, String newDimensionId
+    ) {
+        Identifier newDimId;
+        try {
+            newDimId = Identifier.parse(newDimensionId);
+        }
+        catch (Exception e) {
+            context.getSource().sendFailure(Component.literal("Invalid dimension id"));
+            return null;
+        }
+        
+        MinecraftServer server = context.getSource().getServer();
+        
+        if (newDimId.getNamespace().equals("minecraft")) {
+            context.getSource().sendFailure(
+                Component.literal("namespace cannot be minecraft")
+            );
+            return null;
+        }
+        
+        if (DimensionAPI.dimensionExistsInRegistry(server, newDimId)) {
+            context.getSource().sendFailure(
+                Component.literal("Dimension" + newDimId + " already exists")
+            );
+            return null;
+        }
+        
+        return newDimId;
+    }
+    
+    private static int runAddDimension(
+        CommandContext<CommandSourceStack> context, DimensionTemplate template
+    ) {
+        String newDimensionId = StringArgumentType.getString(
+            context, "newDimensionId"
+        );
+        
+        Identifier newDimId = parseDimensionId(context, newDimensionId);
+        
+        if (newDimId == null) {
+            return 0;
+        }
+        
+        MinecraftServer server = context.getSource().getServer();
+        
+        DimensionAPI.addDimensionDynamically(
+            server,
+            newDimId,
+            template.createLevelStem(server)
+        );
+        
+        return 1;
+    }
+    
+    private static void cloneDimension(
+        ServerLevel templateDimension, Identifier newDimId
+    ) {
+        // may throw exception here
+        
+        ChunkGenerator generator = templateDimension.getChunkSource().getGenerator();
+        
+        DimensionAPI.addDimension(
+            templateDimension.getServer(),
+            newDimId,
+            DynamicDimensionsImpl.cloneLevelStem(templateDimension.getServer(), new LevelStem(
+                templateDimension.dimensionTypeRegistration(),
+                generator
+            ))
+        );
+    }
+    
+}

@@ -12,9 +12,9 @@ import java.util.Map;
 public interface IEClientLevel_Accessor {
     
     @Accessor("mapData")
-    Map<String, MapItemSavedData> ip_getMapData();
+    Map<net.minecraft.world.level.saveddata.maps.MapId, MapItemSavedData> ip_getMapData();
     
     @Mutable
     @Accessor("mapData")
-    void ip_setMapData(Map<String, MapItemSavedData> mapData);
+    void ip_setMapData(Map<net.minecraft.world.level.saveddata.maps.MapId, MapItemSavedData> mapData);
 }

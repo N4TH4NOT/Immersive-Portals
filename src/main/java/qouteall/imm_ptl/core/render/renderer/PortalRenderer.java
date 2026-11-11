@@ -1,19 +1,19 @@
 package qouteall.imm_ptl.core.render.renderer;
 
-import com.mojang.blaze3d.platform.GlStateManager;
-import com.mojang.blaze3d.systems.RenderSystem;
+
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+
 import net.fabricmc.fabric.api.event.Event;
 import net.fabricmc.fabric.api.event.EventFactory;
-import net.minecraft.client.GraphicsStatus;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.culling.Frustum;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
+
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
+
 import qouteall.imm_ptl.core.CHelper;
 import qouteall.imm_ptl.core.ClientWorldLoader;
 import qouteall.imm_ptl.core.IPCGlobal;
@@ -27,7 +27,6 @@ import qouteall.imm_ptl.core.portal.Mirror;
 import qouteall.imm_ptl.core.portal.Portal;
 import qouteall.imm_ptl.core.portal.global_portals.GlobalPortalStorage;
 import qouteall.imm_ptl.core.render.MyGameRenderer;
-import qouteall.imm_ptl.core.render.MyRenderHelper;
 import qouteall.imm_ptl.core.render.TransformationManager;
 import qouteall.imm_ptl.core.render.context_management.PortalRendering;
 import qouteall.imm_ptl.core.render.context_management.RenderStates;
@@ -62,6 +61,8 @@ public abstract class PortalRenderer {
     
     public abstract void onBeforeTranslucentRendering(Matrix4f modelView);
     
+    public abstract void onAfterTranslucentRendering(Matrix4f modelView);
+    
     // will be called when rendering portal
     public abstract void onHandRenderingEnded();
     
@@ -85,10 +86,10 @@ public abstract class PortalRenderer {
         Supplier<Frustum> frustumSupplier = Helper.cached(() -> {
             Frustum frustum = new Frustum(
                 modelView,
-                RenderSystem.getProjectionMatrix()
+                qouteall.imm_ptl.core.render.NativeWorldRenderer.projection(client.gameRenderer)
             );
             
-            Vec3 cameraPos = client.gameRenderer.getMainCamera().getPosition();
+            Vec3 cameraPos = client.gameRenderer.mainCamera().position();
             frustum.prepare(cameraPos.x, cameraPos.y, cameraPos.z);
             
             return frustum;
@@ -223,9 +224,8 @@ public abstract class PortalRenderer {
         
         PortalRendering.onEndPortalWorldRendering();
         
-        GlStateManager._enableDepthTest();
         
-        MyRenderHelper.restoreViewPort();
+        // Render-pass viewports are scoped by the native GPU API.
         
         
     }
@@ -313,19 +313,17 @@ public abstract class PortalRenderer {
             return;
         }
         
-        if (Minecraft.getInstance().options.graphicsMode().get() == GraphicsStatus.FABULOUS) {
-            if (!fabulousWarned) {
-                fabulousWarned = true;
-                CHelper.printChat(Component.translatable("imm_ptl.fabulous_warning"));
-            }
-        }
-        
         IPModInfoChecking.checkShaderpack();
         
         if (IrisInterface.invoker.isIrisPresent()) {
             if (IrisInterface.invoker.isShaders()) {
-                if (IPCGlobal.experimentalIrisPortalRenderer) {
-                    switchRenderer(ExperimentalIrisPortalRenderer.instance);
+                if (IPGlobal.renderMode == IPGlobal.RenderMode.normal
+                        && (IPCGlobal.experimentalIrisPortalRenderer
+                                || IPCGlobal.debugEnableStencilWithIris)) {
+                    switchRenderer(
+                            IPCGlobal.debugEnableStencilWithIris
+                                    ? IPCGlobal.rendererUsingStencil
+                                    : ExperimentalIrisPortalRenderer.instance);
                     return;
                 }
                 
@@ -351,10 +349,9 @@ public abstract class PortalRenderer {
         if (IPCGlobal.renderer != renderer) {
             Helper.log("switched to renderer " + renderer.getClass());
             IPCGlobal.renderer = renderer;
-            
-            if (IrisInterface.invoker.isShaders()) {
-                IrisInterface.invoker.reloadPipelines();
-            }
+
+            // Strategies share isolated native world pipelines. Destroying Iris here would
+            // invalidate shader state already extracted for the current frame.
         }
     }
 }

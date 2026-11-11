@@ -1,0 +1,17 @@
+{
+  "schema_version": "imm_ptl:v1",
+  "from": [
+    "minecraft:overworld"
+  ],
+  "to": "immersive_portals:void",
+  "form": {
+    "type": "imm_ptl:heterogeneous",
+    "frame_block": "#minecraft:planks",
+    "area_block": "minecraft:air",
+    "generate_frame_if_not_found": true
+  },
+  "trigger": {
+    "type": "imm_ptl:use_item",
+    "item": "minecraft:compass"
+  }
+}

@@ -12,5 +12,6 @@ public class MiscUtilModEntry implements ModInitializer {
         MiscNetworking.init();
         
         DimensionIntId.init();
+        qouteall.q_misc_util.dimension.DimensionLifecycle.init();
     }
 }

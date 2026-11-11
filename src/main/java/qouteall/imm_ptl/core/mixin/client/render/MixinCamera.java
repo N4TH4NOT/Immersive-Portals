@@ -3,116 +3,58 @@ package qouteall.imm_ptl.core.mixin.client.render;
 import net.minecraft.client.Camera;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.material.FogType;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.*;
 import qouteall.imm_ptl.core.ducks.IECamera;
-import qouteall.imm_ptl.core.render.CrossPortalEntityRenderer;
-import qouteall.imm_ptl.core.render.context_management.PortalRendering;
-import qouteall.imm_ptl.core.render.context_management.WorldRenderInfo;
 
 @Mixin(Camera.class)
 public abstract class MixinCamera implements IECamera {
-//    private static float lastClipSpaceResult = 1;
-    
-    @Shadow
-    private Vec3 position;
-    @Shadow
-    private BlockGetter level;
-    @Shadow
-    private Entity entity;
-    @Shadow
-    private float eyeHeight;
-    @Shadow
-    private float eyeHeightOld;
-    
-    @Shadow
-    protected abstract void setPosition(Vec3 vec3d_1);
-    
-    @Shadow
-    public abstract Entity getEntity();
-    
-    @Inject(
-        method = "Lnet/minecraft/client/Camera;setup(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/world/entity/Entity;ZZF)V",
-        at = @At("RETURN")
-    )
-    private void onUpdateFinished(
-        BlockGetter area, Entity focusedEntity, boolean thirdPerson,
-        boolean inverseView, float partialTick, CallbackInfo ci
+    @Shadow private Level level;
+    @Shadow private Entity entity;
+    @Shadow private float eyeHeight;
+    @Shadow private float eyeHeightOld;
+    @Shadow protected abstract void setPosition(Vec3 position);
+    @Override public void ip_resetState(Vec3 position, ClientLevel world) { setPosition(position); level = world; }
+    @Override public void portal_setPos(Vec3 position) { setPosition(position); }
+    @Override public float ip_getCameraY() { return eyeHeight; }
+    @Override public float ip_getLastCameraY() { return eyeHeightOld; }
+    @Override public void ip_setCameraY(float height, float old) { eyeHeight = height; eyeHeightOld = old; }
+    @Override public void portal_setFocusedEntity(Entity value) { entity = value; }
+    @com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation(
+        method="getMaxZoom",
+        at=@org.spongepowered.asm.mixin.injection.At(value="INVOKE",
+            target="Lnet/minecraft/world/level/Level;clip(Lnet/minecraft/world/level/ClipContext;)Lnet/minecraft/world/phys/BlockHitResult;"))
+    private net.minecraft.world.phys.BlockHitResult ip_cameraPortalCollision(
+        Level world, net.minecraft.world.level.ClipContext context,
+        com.llamalad7.mixinextras.injector.wrapoperation.Operation<net.minecraft.world.phys.BlockHitResult> original
     ) {
-        Camera this_ = (Camera) (Object) this;
-        WorldRenderInfo.adjustCameraPos(this_);
+        if (entity == null || !qouteall.imm_ptl.core.ClientWorldLoader.getIsInitialized())
+            return original.call(world, context);
+        return qouteall.imm_ptl.core.render.PortalCameraCollision.clip(
+            world, ((Camera) (Object) this).position(), context, entity);
     }
-    
-    @Inject(
-        method = "Lnet/minecraft/client/Camera;getFluidInCamera()Lnet/minecraft/world/level/material/FogType;",
-        at = @At("HEAD"),
-        cancellable = true
-    )
-    private void getSubmergedFluidState(CallbackInfoReturnable<FogType> cir) {
-        if (PortalRendering.isRendering()) {
-            cir.setReturnValue(FogType.NONE);
-            cir.cancel();
-        }
+    @org.spongepowered.asm.mixin.injection.Inject(method="getViewRotationMatrix", at=@org.spongepowered.asm.mixin.injection.At("HEAD"), cancellable=true)
+    private void ip_view(org.joml.Matrix4f out, org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<org.joml.Matrix4f> cir) {
+        Camera camera=(Camera)(Object)this;
+        out.rotation(camera.rotation().conjugate(new org.joml.Quaternionf()));
+        qouteall.imm_ptl.core.render.TransformationManager.applyAnimation(out);
+        cir.setReturnValue(out);
     }
-    
-//    @Inject(method = "getMaxZoom", at = @At("HEAD"), cancellable = true)
-//    private void onGetMaxZoomHead(float f, CallbackInfoReturnable<Float> cir) {
-//        if (PortalRendering.isRendering()) {
-//            cir.setReturnValue(lastClipSpaceResult);
-//            cir.cancel();
-//        }
-//    }
-//
-//    // TODO using global variable to pass may be problematic when multiple camera objects are used
-//    @Inject(method = "getMaxZoom", at = @At("RETURN"), cancellable = true)
-//    private void onGetMaxZoomReturn(float f, CallbackInfoReturnable<Float> cir) {
-//        lastClipSpaceResult = cir.getReturnValue();
-//    }
-    
-    // to let the player be rendered when rendering portal
-    @Inject(method = "Lnet/minecraft/client/Camera;isDetached()Z", at = @At("HEAD"), cancellable = true)
-    private void onIsThirdPerson(CallbackInfoReturnable<Boolean> cir) {
-        if (CrossPortalEntityRenderer.shouldRenderPlayerDefault()) {
-            cir.setReturnValue(true);
-        }
+    @org.spongepowered.asm.mixin.injection.Inject(method="extractRenderState", at=@org.spongepowered.asm.mixin.injection.At("RETURN"))
+    private void ip_cameraState(net.minecraft.client.renderer.state.level.CameraRenderState state, float partial, org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
+        state.orientation.setFromUnnormalized(state.viewRotationMatrix).conjugate().normalize();
+        if (qouteall.imm_ptl.core.render.TransformationManager.isIsometricView)
+            state.projectionMatrix.set(qouteall.imm_ptl.core.render.TransformationManager.getIsometricProjection());
     }
-    
-    @Override
-    public void ip_resetState(Vec3 pos, ClientLevel currWorld) {
-        setPosition(pos);
-        level = currWorld;
+    @org.spongepowered.asm.mixin.injection.Inject(method="createProjectionMatrixForCulling", at=@org.spongepowered.asm.mixin.injection.At("HEAD"), cancellable=true)
+    private void ip_cullProjection(org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<org.joml.Matrix4f> cir) {
+        if (qouteall.imm_ptl.core.render.TransformationManager.isIsometricView)
+            cir.setReturnValue(qouteall.imm_ptl.core.render.TransformationManager.getIsometricCullingProjection());
     }
-    
-    @Override
-    public float ip_getCameraY() {
-        return eyeHeight;
-    }
-    
-    @Override
-    public float ip_getLastCameraY() {
-        return eyeHeightOld;
-    }
-    
-    @Override
-    public void ip_setCameraY(float cameraY_, float lastCameraY_) {
-        eyeHeight = cameraY_;
-        eyeHeightOld = lastCameraY_;
-    }
-    
-    @Override
-    public void portal_setPos(Vec3 pos) {
-        setPosition(pos);
-    }
-    
-    @Override
-    public void portal_setFocusedEntity(Entity arg) {
-        entity = arg;
+    @org.spongepowered.asm.mixin.injection.Inject(method="getViewRotationProjectionMatrix", at=@org.spongepowered.asm.mixin.injection.At("HEAD"), cancellable=true)
+    private void ip_isometricView(org.joml.Matrix4f out, org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<org.joml.Matrix4f> cir) {
+        if (qouteall.imm_ptl.core.render.TransformationManager.isIsometricView)
+            cir.setReturnValue(out.set(qouteall.imm_ptl.core.render.TransformationManager.getIsometricProjection()).mul(((Camera)(Object)this).getViewRotationMatrix(new org.joml.Matrix4f())));
     }
 }

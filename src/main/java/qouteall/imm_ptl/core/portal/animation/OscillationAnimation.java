@@ -23,7 +23,7 @@ public record OscillationAnimation(
     // it's currently not called
     public static void init() {
         PortalAnimationDriver.registerDeserializer(
-            McHelper.newResourceLocation("imm_ptl:oscillation"),
+            McHelper.newIdentifier("imm_ptl:oscillation"),
             OscillationAnimation::fromTag
         );
     }
@@ -35,9 +35,9 @@ public record OscillationAnimation(
             return null;
         }
         
-        double frequency = tag.getDouble("frequency");
-        long startGameTime = tag.getLong("startGameTime");
-        long cycleCount = tag.getLong("cycleCount");
+        double frequency = tag.getDouble("frequency").orElse(0.0);
+        long startGameTime = tag.getLong("startGameTime").orElse(0L);
+        long cycleCount = tag.getLong("cycleCount").orElse(0L);
         
         return new OscillationAnimation(
             vec, frequency, startGameTime, cycleCount

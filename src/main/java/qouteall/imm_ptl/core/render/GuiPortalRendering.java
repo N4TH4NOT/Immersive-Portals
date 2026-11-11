@@ -1,125 +1,33 @@
 package qouteall.imm_ptl.core.render;
 
 import com.mojang.blaze3d.pipeline.RenderTarget;
-import com.mojang.blaze3d.platform.GlStateManager;
-import com.mojang.logging.LogUtils;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
-import org.apache.commons.lang3.Validate;
-import org.jetbrains.annotations.Nullable;
-import org.slf4j.Logger;
-import qouteall.imm_ptl.core.CHelper;
-import qouteall.imm_ptl.core.ClientWorldLoader;
 import qouteall.imm_ptl.core.IPCGlobal;
-import qouteall.imm_ptl.core.ducks.IECamera;
-import qouteall.imm_ptl.core.ducks.IEMinecraftClient;
-import qouteall.imm_ptl.core.render.context_management.RenderStates;
 import qouteall.imm_ptl.core.render.context_management.WorldRenderInfo;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-import java.util.HashMap;
-
-@Environment(EnvType.CLIENT)
-public class GuiPortalRendering {
-    private static final Logger LOGGER = LogUtils.getLogger();
-    
-    @Nullable
-    private static RenderTarget renderingFrameBuffer = null;
-    
-    @Nullable
-    public static RenderTarget getRenderingFrameBuffer() {
-        return renderingFrameBuffer;
+public final class GuiPortalRendering {
+    private static final Map<RenderTarget, WorldRenderInfo> TASKS = new LinkedHashMap<>();
+    private static RenderTarget rendering;
+    private GuiPortalRendering() {}
+    public static RenderTarget getRenderingFrameBuffer() { return rendering; }
+    public static boolean isRendering() { return rendering != null; }
+    public static void submitNextFrameRendering(WorldRenderInfo info, RenderTarget target) {
+        var window = Minecraft.getInstance().getWindow();
+        if (target.width != window.getWidth() || target.height != window.getHeight()) target.resize(window.getWidth(), window.getHeight());
+        if (TASKS.putIfAbsent(target, info) != null) throw new IllegalArgumentException("A render target already has a pending GUI portal task");
     }
-    
-    public static boolean isRendering() {
-        return getRenderingFrameBuffer() != null;
-    }
-    
-    private static void renderWorldIntoFrameBuffer(
-        WorldRenderInfo worldRenderInfo,
-        RenderTarget framebuffer
-    ) {
-        RenderStates.basicProjectionMatrix = null;
-        
-        CHelper.checkGlError();
-        
-        ((IECamera) RenderStates.originalCamera).ip_resetState(
-            worldRenderInfo.cameraPos, worldRenderInfo.world
-        );
-        
-        Validate.isTrue(renderingFrameBuffer == null);
-        renderingFrameBuffer = framebuffer;
-        
-        MyRenderHelper.restoreViewPort();
-        
-        RenderTarget mcFb = MyGameRenderer.client.getMainRenderTarget();
-        
-        Validate.isTrue(mcFb != framebuffer);
-        
-        ((IEMinecraftClient) MyGameRenderer.client).ip_setFrameBuffer(framebuffer);
-        
-        if (!worldRenderInfo.doRenderSky) {
-            // pre-clear the framebuffer with 0 alpha, if it doesn't render the sky
-            GlStateManager._colorMask(true, true, true, true);
-            framebuffer.setClearColor(0, 0, 0, 0);
-            framebuffer.clear(true);
-        }
-        
-        framebuffer.bindWrite(true);
-        
-        IPCGlobal.renderer.prepareRendering();
-        
-        IPCGlobal.renderer.invokeWorldRendering(worldRenderInfo);
-        
-        IPCGlobal.renderer.finishRendering();
-        
-        ((IEMinecraftClient) MyGameRenderer.client).ip_setFrameBuffer(mcFb);
-        
-        mcFb.bindWrite(true);
-        
-        renderingFrameBuffer = null;
-        
-        MyRenderHelper.restoreViewPort();
-        
-        CHelper.checkGlError();
-        
-        RenderStates.basicProjectionMatrix = null;
-    }
-    
-    private static final HashMap<RenderTarget, WorldRenderInfo> renderingTasks = new HashMap<>();
-    
-    public static void submitNextFrameRendering(
-        WorldRenderInfo worldRenderInfo,
-        RenderTarget renderTarget
-    ) {
-        if (!ClientWorldLoader.getIsInitialized()) {
-            LOGGER.error("Trying to submit world rendering task before client world is initialized", new Throwable());
-            return;
-        }
-        
-        Validate.isTrue(!renderingTasks.containsKey(renderTarget));
-        
-        RenderTarget mcFB = Minecraft.getInstance().getMainRenderTarget();
-        if (renderTarget.width != mcFB.width || renderTarget.height != mcFB.height) {
-            renderTarget.resize(mcFB.width, mcFB.height, true);
-            LOGGER.info("Resized Framebuffer for GUI Portal Rendering");
-        }
-        
-        renderingTasks.put(renderTarget, worldRenderInfo);
-    }
-    
-    // Not API
     public static void _onGameRenderEnd() {
-        renderingTasks.forEach((frameBuffer, worldRendering) -> {
-            renderWorldIntoFrameBuffer(
-                worldRendering, frameBuffer
-            );
-        });
-        renderingTasks.clear();
+        Map<RenderTarget, WorldRenderInfo> frame = new LinkedHashMap<>(TASKS);
+        TASKS.clear();
+        for (var task : frame.entrySet()) {
+            rendering = task.getKey();
+            try {
+                MyGameRenderer.renderWorldNew(task.getValue(), Runnable::run);
+                NativePortalCompositor.drawRectangle(MyGameRenderer.renderedTarget(), rendering, 0,0,rendering.width,rendering.height,false,true);
+            } finally { rendering = null; }
+        }
     }
-    
-    // not API
-    public static void _init() {
-        IPCGlobal.CLIENT_CLEANUP_EVENT.register(renderingTasks::clear);
-    }
+    public static void _init() { IPCGlobal.CLIENT_CLEANUP_EVENT.register(TASKS::clear); }
 }

@@ -9,11 +9,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import qouteall.imm_ptl.core.block_manipulation.BlockManipulationClient;
 import qouteall.imm_ptl.core.render.context_management.WorldRenderInfo;
 
-@Mixin(GameRenderer.class)
+@Mixin(Minecraft.class)
 public class MixinGameRenderer_B {
     
     //do not update target when rendering portal
-    @Inject(method = "Lnet/minecraft/client/renderer/GameRenderer;pick(F)V", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "pick", at = @At("HEAD"), cancellable = true)
     private void onUpdateTargetedEntity(float partialTick, CallbackInfo ci) {
         if (Minecraft.getInstance().level != null) {
             if (WorldRenderInfo.isRendering()) {
@@ -22,9 +22,9 @@ public class MixinGameRenderer_B {
         }
     }
     
-    @Inject(method = "Lnet/minecraft/client/renderer/GameRenderer;pick(F)V", at = @At("RETURN"))
+    @Inject(method = "pick", at = @At("RETURN"))
     private void onUpdateTargetedEntityFinish(float partialTick, CallbackInfo ci) {
-        if (Minecraft.getInstance().level != null) {
+        if (Minecraft.getInstance().level != null && !WorldRenderInfo.isRendering()) {
             BlockManipulationClient.updatePointedBlock(partialTick);
         }
     }

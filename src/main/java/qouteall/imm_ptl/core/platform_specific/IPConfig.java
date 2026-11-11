@@ -60,8 +60,6 @@ public class IPConfig implements ConfigData {
     @ConfigEntry.Gui.Excluded
     public boolean enableUpdateNotification = true;
     @ConfigEntry.Gui.Excluded
-    public boolean sharedBlockMeshBufferOptimization = true;
-    @ConfigEntry.Gui.Excluded
     public boolean enableClippingMechanism = true;
     @ConfigEntry.Gui.Excluded
     public boolean visibilityPrediction = true;
@@ -77,8 +75,6 @@ public class IPConfig implements ConfigData {
     public boolean shaderpackWarning = true;
     @ConfigEntry.Gui.Excluded
     public int portalWandCursorAlignment = 2; // zero for no align
-    @ConfigEntry.Gui.Excluded
-    public boolean saveMemoryInBufferPack = false;
     @ConfigEntry.Gui.Excluded
     public boolean initialScreenShown = false;
     
@@ -102,6 +98,8 @@ public class IPConfig implements ConfigData {
     @ConfigEntry.Gui.Tooltip
     public boolean enableServerPerformanceAdjustment = true;
     public boolean enableDatapackPortalGen = true;
+    @ConfigEntry.Gui.Tooltip
+    public boolean enableAlternateDimensions = true;
     @ConfigEntry.BoundedDiscrete(min = 1, max = 32)
     @ConfigEntry.Gui.Tooltip
     public int indirectLoadingRadiusCap = 8;
@@ -188,7 +186,6 @@ public class IPConfig implements ConfigData {
         IPGlobal.scaleLimit = scaleLimit;
         IPGlobal.easeCreativePermission = easeCreativePermission;
         IPGlobal.easeCommandStickPermission = easeCommandStickPermission;
-        IPGlobal.enableSharedBlockMeshBuffers = sharedBlockMeshBufferOptimization;
         IPGlobal.enableDatapackPortalGen = enableDatapackPortalGen;
         IPGlobal.enableCrossPortalView = enableCrossPortalView;
         IPGlobal.enableClippingMechanism = enableClippingMechanism;
@@ -203,7 +200,6 @@ public class IPConfig implements ConfigData {
         BlockPortalShape.defaultLengthLimit = regularPortalLengthLimit;
         IPGlobal.maxNormalPortalRadius = Math.max(regularPortalLengthLimit / 2, 16);
         IPGlobal.chunkPacketDebug = chunkPacketDebug;
-        IPGlobal.saveMemoryInBufferPack = saveMemoryInBufferPack;
         
         Helper.LOGGER.info("iPortal Config Applied");
     }

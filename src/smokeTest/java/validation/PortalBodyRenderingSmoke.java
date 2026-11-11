@@ -1,0 +1,574 @@
+package validation;
+
+import com.mojang.blaze3d.platform.NativeImage;
+
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+import net.minecraft.client.CameraType;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.Screenshot;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
+
+import org.joml.Vector4f;
+
+import qouteall.imm_ptl.core.IPGlobal;
+import qouteall.imm_ptl.core.portal.Portal;
+import qouteall.imm_ptl.core.render.NativeEntityPass;
+import qouteall.imm_ptl.core.render.context_management.RenderStates;
+import qouteall.imm_ptl.core.render.context_management.PortalRendering;
+import qouteall.imm_ptl.core.render.context_management.WorldRenderInfo;
+
+/** GPU observations of identifiable player geometry during real, reversible portal movement. */
+final class PortalBodyRenderingSmoke {
+    private enum Phase {
+        REMOTE_OFF, REMOTE_ON, SETUP_WALK, APPROACH, STRADDLE_DOWN,
+        F5_BACK, F5_FRONT, CROSS, EXIT_DOWN, F5_EXIT, RETURN, STAND, FINAL_CROSS, COMPLETE
+    }
+
+    private record Frame(Phase phase, int index, Vec3 feet, Vec3 camera, CameraType cameraType,
+            float pitch, double headX, double headY, Vec3 forward, Vec3 left, Vec3 up,
+            float projectionX, float projectionY) {}
+
+    private record Pixels(Frame frame, int width, int height, int headRegionPixels,
+            int helmetInHeadRegion, int helmet, int body, int helmetOutsideExpected,
+            int sampled, int sky, int floor) {}
+
+    private static Phase phase = Phase.REMOTE_OFF;
+    private static boolean initialized;
+    private static boolean started;
+    private static boolean complete;
+    private static boolean originalBobbing;
+    private static boolean originalRenderPlayer;
+    private static boolean originalHudHidden;
+    private static CameraType originalCamera;
+    private static int ticks;
+    private static int phaseTick;
+    private static int phaseFrames;
+    private static int captures;
+    private static int phaseCaptures;
+    private static int firstPersonPixels;
+    private static int movingPixels;
+    private static int thirdPersonPixels;
+    private static int remoteOffPixels = -1;
+    private static int remoteOnPixels = -1;
+    private static Frame remoteOnFrame;
+    private static int lastCaptured = -1;
+    private static int normalBodies;
+    private static int projectedBodies;
+    private static int independentlyClippedViews;
+    private static int fixtureReadyTicks;
+    private static int remoteViewExtractions;
+    private static int remotePlayerStates;
+    private static String lastRemoteView;
+    private static Frame lastFrame;
+    private static final java.util.concurrent.atomic.AtomicInteger PENDING =
+            new java.util.concurrent.atomic.AtomicInteger();
+    private static final java.util.concurrent.ConcurrentLinkedQueue<Pixels> RESULTS =
+            new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private static final java.util.EnumMap<Phase, Integer> CAPTURE_COUNTS =
+            new java.util.EnumMap<>(Phase.class);
+    private static volatile String readbackFailure;
+
+    private PortalBodyRenderingSmoke() {}
+
+    private static void require(boolean condition, String message) {
+        if (!condition) throw new AssertionError(message);
+    }
+
+    private static void initialize() {
+        if (initialized) return;
+        initialized = true;
+        // NativeEntityPass is populated by a separate extractor RETURN injection.
+        // Observe the states when drawn, after all extraction callbacks have finished.
+        LevelRenderEvents.END_MAIN.register(context -> {
+            if (!started || complete || phase.ordinal() < Phase.APPROACH.ordinal()) return;
+            var client = Minecraft.getInstance();
+            if (client.player == null) return;
+            for (var body : NativeEntityPass.snapshots(context.levelState())) {
+                if (!body.localPlayer()) continue;
+                boolean destination = client.player.getX() > 160;
+                double physicalX = destination ? PortalBodyRenderFixture.DESTINATION_X
+                        : PortalBodyRenderFixture.SOURCE_X;
+                double otherX = destination ? PortalBodyRenderFixture.SOURCE_X
+                        : PortalBodyRenderFixture.DESTINATION_X;
+                double expectedX = body.projected() ? otherX : physicalX;
+                require(Math.abs(body.position().x - expectedX) < .02,
+                        "A player body was rendered at an unrelated portal position: " + body);
+                require(body.clip() != null
+                                && Math.abs(body.clip().pos().x - expectedX) < .02
+                                && Math.abs(body.clip().pos().z) < .001
+                                && body.clip().normal().z
+                                        * (expectedX == PortalBodyRenderFixture.SOURCE_X ? 1 : -1)
+                                        > .99,
+                        "The rendered body clipping plane did not keep its physical portal side: " + body);
+                if (body.projected()) projectedBodies++;
+                else normalBodies++;
+                if (PortalRendering.isRendering()) {
+                    require(body.viewClip() != null,
+                            "A portal view replaced the rendered body's independent clipping plane: " + body
+                                    + " active=" + PortalRendering.getActiveClippingPlane());
+                    independentlyClippedViews++;
+                }
+            }
+        });
+        LevelExtractionEvents.END_EXTRACTION.register(context -> {
+            if (!started || complete) return;
+            var client = Minecraft.getInstance();
+            if (client.player == null) return;
+            if (WorldRenderInfo.isRendering()) {
+                if (phase == Phase.REMOTE_OFF || phase == Phase.REMOTE_ON) {
+                    int selfStates = 0;
+                    for (var entity : context.levelState().entityRenderStates)
+                        if (entity instanceof AvatarRenderState avatar
+                                && avatar.id == client.player.getId()) selfStates++;
+                    remoteViewExtractions++;
+                    remotePlayerStates += selfStates;
+                    lastRemoteView = "camera=" + context.camera().position()
+                            + " detached=" + context.camera().isDetached()
+                            + " selfStates=" + selfStates;
+                }
+                return;
+            }
+            if (phase == Phase.F5_FRONT && phaseFrames >= 4) {
+                require(context.camera().position().z > -2.2
+                                && context.camera().position().z < -1.5,
+                        "The front camera did not pass its aperture and stop at the real exit wall: "
+                                + context.camera().position());
+            }
+            Vec3 head = client.player.getEyePosition(
+                    context.deltaTracker().getGameTimeDeltaPartialTick(true)).add(0, -.12, 0);
+            // This real same-world view looks through the source aperture at the player
+            // ten blocks behind its virtual camera. Express that body in root-view space.
+            if (phase == Phase.REMOTE_OFF || phase == Phase.REMOTE_ON) head = head.add(0, 0, -10);
+            Vec3 relative = head.subtract(context.camera().position());
+            var clip = context.camera().getViewRotationProjectionMatrix(new org.joml.Matrix4f())
+                    .transform(new Vector4f((float) relative.x, (float) relative.y,
+                            (float) relative.z, 1));
+            var projection = context.levelState().cameraRenderState.projectionMatrix;
+            lastFrame = new Frame(phase, RenderStates.frameIndex, client.player.position(),
+                    context.camera().position(), client.options.getCameraType(),
+                    context.camera().xRot(), .5 + .5 * clip.x / clip.w,
+                    .5 - .5 * clip.y / clip.w, vector(context.camera().forwardVector()),
+                    vector(context.camera().leftVector()), vector(context.camera().upVector()),
+                    Math.abs(projection.m00()), Math.abs(projection.m11()));
+            phaseFrames++;
+        });
+        IPGlobal.PRE_GAME_RENDER_EVENT.register(() -> {
+            // This is the finalized previous frame, including Iris's final composite.
+            // Its camera metadata was saved during that frame's primary extraction.
+            Frame frame = lastFrame;
+            if (!started || complete || frame == null
+                    || frame.index == lastCaptured || PENDING.get() >= 4) return;
+            boolean moving = frame.phase == Phase.CROSS || frame.phase == Phase.RETURN
+                    || frame.phase == Phase.FINAL_CROSS;
+            if (frame.phase != phase && !moving) return;
+            boolean capture = switch (frame.phase) {
+                case REMOTE_OFF, REMOTE_ON -> phaseFrames >= 12 && phaseCaptures < 1
+                        && ticks - phaseTick >= 10
+                        && (frame.phase != Phase.REMOTE_OFF || fixtureReadyTicks >= 60)
+                        && fixtureReady(Minecraft.getInstance(), true);
+                case STRADDLE_DOWN, EXIT_DOWN, STAND -> phaseFrames >= 8 && phaseCaptures < 3;
+                case F5_BACK, F5_FRONT, F5_EXIT -> phaseFrames >= 8 && phaseCaptures < 2;
+                case CROSS, RETURN, FINAL_CROSS -> Math.abs(frame.feet.z) < .35
+                        && CAPTURE_COUNTS.getOrDefault(frame.phase, 0) < 4;
+                default -> false;
+            };
+            if (capture) capture(frame);
+        });
+    }
+
+    static boolean tick(Minecraft client, int currentTick) {
+        initialize();
+        ticks = currentTick;
+        if (!started) {
+            started = true;
+            originalCamera = client.options.getCameraType();
+            originalBobbing = client.options.bobView().get();
+            originalRenderPlayer = IPGlobal.renderYourselfInPortal;
+            originalHudHidden = client.gui.hud.isHidden();
+            if (!originalHudHidden) client.gui.hud.toggle();
+            client.getTutorial().setStep(net.minecraft.client.tutorial.TutorialSteps.NONE);
+            client.gui.toastManager().clear();
+            client.options.bobView().set(false);
+            client.options.setCameraType(CameraType.FIRST_PERSON);
+            IPGlobal.renderYourselfInPortal = false;
+            phaseTick = ticks;
+            client.player.connection.sendCommand("portal_smoke_body true");
+        }
+        require(readbackFailure == null, "The body screenshot could not be read: " + readbackFailure);
+        for (Pixels pixels; (pixels = RESULTS.poll()) != null; ) validate(pixels);
+        if (complete) return true;
+        require(ticks - phaseTick < 400,
+                "The body rendering probe stalled: " + phase + " feet=" + client.player.position()
+                        + " creative=" + client.player.isCreative()
+                        + " invisible=" + client.player.isInvisible()
+                        + " pose=" + client.player.getPose()
+                        + " screen=" + client.gui.screen() + " overlay=" + client.gui.overlay()
+                        + " readyTicks=" + fixtureReadyTicks + " lastRemote=" + lastRemoteView);
+        int elapsed = ticks - phaseTick;
+        boolean destination = client.player.getX() > 160;
+        switch (phase) {
+            case REMOTE_OFF -> {
+                // This scene follows the spectator-only wall probe. Wait for the
+                // complete native visibility/equipment state and its initial mesh
+                // publication, independently of whether the player model renders.
+                fixtureReadyTicks = fixtureReady(client, true) ? fixtureReadyTicks + 1 : 0;
+                if (elapsed < 30 || !fixtureReady(client, true) || remoteOffPixels < 0) return false;
+                IPGlobal.renderYourselfInPortal = true;
+                advance(client, Phase.REMOTE_ON, 0, CameraType.FIRST_PERSON);
+            }
+            case REMOTE_ON -> {
+                if (remoteOnPixels < 0) return false;
+                if (remoteOnPixels <= Math.max(20, remoteOffPixels + 20))
+                    failureThumbnail(remoteOnFrame);
+                require(remoteOnPixels > Math.max(20, remoteOffPixels + 20),
+                        "The genuine distant portal view did not render the player's helmet: off="
+                                + remoteOffPixels + " on=" + remoteOnPixels);
+                System.out.println("PORTAL_RENDER_BODY_REMOTE_OK off=" + remoteOffPixels
+                        + " on=" + remoteOnPixels);
+                advance(client, Phase.SETUP_WALK, 45, CameraType.FIRST_PERSON);
+                client.player.connection.sendCommand("portal_smoke_body false");
+            }
+            case SETUP_WALK -> {
+                if (elapsed < 30 || !fixtureReady(client, false)) return false;
+                require(Math.abs(client.player.getZ() - 1.5) < .05,
+                        "The natural body probe did not start before its portal");
+                advance(client, Phase.APPROACH, 45, CameraType.FIRST_PERSON);
+            }
+            case APPROACH -> {
+                keys(client, true, false, true);
+                require(!destination, "The player crossed before the body straddling probe");
+                if (client.player.getZ() < .16)
+                    advance(client, Phase.STRADDLE_DOWN, 89, CameraType.FIRST_PERSON);
+            }
+            case STRADDLE_DOWN -> {
+                keys(client, false, false, true);
+                require(!destination && client.player.getZ() > 0 && client.player.getZ() < .3,
+                        "The first-person body probe did not remain across the source plane");
+                if (elapsed >= 12 && phaseCaptures >= 3 && PENDING.get() == 0)
+                    advance(client, Phase.F5_BACK, 30, CameraType.THIRD_PERSON_BACK);
+            }
+            case F5_BACK -> {
+                keys(client, false, false, true);
+                if (elapsed >= 8 && phaseCaptures >= 2 && PENDING.get() == 0)
+                    advance(client, Phase.F5_FRONT, 30, CameraType.THIRD_PERSON_FRONT);
+            }
+            case F5_FRONT -> {
+                keys(client, false, false, true);
+                if (elapsed >= 8 && phaseCaptures >= 2 && PENDING.get() == 0)
+                    advance(client, Phase.CROSS, 45, CameraType.FIRST_PERSON);
+            }
+            case CROSS -> {
+                keys(client, true, false, true);
+                if (destination) advance(client, Phase.EXIT_DOWN, 89, CameraType.FIRST_PERSON);
+            }
+            case EXIT_DOWN -> {
+                keys(client, false, false, true);
+                require(destination && client.player.getZ() > -.3,
+                        "The first-person body probe was pushed away from the exit plane");
+                if (elapsed >= 12 && phaseCaptures >= 3 && PENDING.get() == 0)
+                    advance(client, Phase.F5_EXIT, 30, CameraType.THIRD_PERSON_BACK);
+            }
+            case F5_EXIT -> {
+                keys(client, false, false, true);
+                if (elapsed >= 8 && phaseCaptures >= 2 && PENDING.get() == 0)
+                    advance(client, Phase.RETURN, 45, CameraType.FIRST_PERSON);
+            }
+            case RETURN -> {
+                keys(client, false, true, true);
+                if (!destination) advance(client, Phase.STAND, 45, CameraType.FIRST_PERSON);
+            }
+            case STAND -> {
+                keys(client, false, false, false);
+                if (elapsed >= 12 && phaseCaptures >= 3 && PENDING.get() == 0)
+                    advance(client, Phase.FINAL_CROSS, 45, CameraType.FIRST_PERSON);
+            }
+            case FINAL_CROSS -> {
+                keys(client, true, false, false);
+                if (destination) advance(client, Phase.COMPLETE, 45, CameraType.FIRST_PERSON);
+            }
+            case COMPLETE -> {
+                keys(client, false, false, false);
+                if (elapsed < 3 || phaseFrames < 3 || PENDING.get() != 0) return false;
+                require(firstPersonPixels >= 9 && movingPixels >= 2 && thirdPersonPixels >= 6,
+                        "The GPU body probe missed a camera or movement mode: first="
+                                + firstPersonPixels + " moving=" + movingPixels
+                                + " third=" + thirdPersonPixels);
+                require(normalBodies > 0 && projectedBodies > 0 && independentlyClippedViews > 0,
+                        "The GPU probe missed a clipped body side: normal=" + normalBodies
+                                + " projected=" + projectedBodies
+                                + " combined=" + independentlyClippedViews);
+                requireWall(client);
+                complete = true;
+                client.options.bobView().set(originalBobbing);
+                client.options.setCameraType(originalCamera);
+                IPGlobal.renderYourselfInPortal = originalRenderPlayer;
+                if (client.gui.hud.isHidden() != originalHudHidden) client.gui.hud.toggle();
+                System.out.println("PORTAL_RENDER_BODY_CAMERA_OK first=" + firstPersonPixels
+                        + " moving=" + movingPixels + " third=" + thirdPersonPixels
+                        + " captures=" + captures + " normalBodies=" + normalBodies
+                        + " projectedBodies=" + projectedBodies
+                        + " independentlyClippedViews=" + independentlyClippedViews);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void advance(Minecraft client, Phase next, float pitch, CameraType camera) {
+        // The visibility comparison changes only renderYourselfInPortal. Keep
+        // its standing pose and camera fixed between the off and on pictures.
+        keys(client, false, false, next != Phase.REMOTE_ON);
+        phase = next;
+        phaseTick = ticks;
+        phaseFrames = phaseCaptures = 0;
+        remoteViewExtractions = remotePlayerStates = 0;
+        lastRemoteView = null;
+        client.player.setXRot(pitch);
+        client.player.xRotO = pitch;
+        client.player.setYRot(180);
+        client.player.yRotO = 180;
+        client.options.setCameraType(camera);
+        System.out.println("PORTAL_RENDER_BODY_STAGE " + phase + " feet="
+                + client.player.position());
+    }
+
+    private static void keys(Minecraft client, boolean forward, boolean backward, boolean crouch) {
+        client.options.keyUp.setDown(forward);
+        client.options.keyDown.setDown(backward);
+        client.options.keyShift.setDown(crouch);
+    }
+
+    private static boolean fixtureReady(Minecraft client, boolean remote) {
+        if (client.level.dimension() != Level.OVERWORLD
+                || client.gui.screen() != null || client.gui.overlay() != null
+                || !client.player.isCreative()
+                || client.player.isInvisible() || client.player.isSpectator()
+                || Math.abs(client.player.getX() - PortalBodyRenderFixture.SOURCE_X) > .05
+                || Math.abs(client.player.getY() - PortalBodyRenderFixture.FLOOR_Y - 1) > .05
+                || Math.abs(client.player.getZ() - (remote ? 5 : 1.5)) > .05
+                || client.gameRenderer.mainCamera().position()
+                        .distanceTo(client.player.getEyePosition()) > .02)
+            return false;
+        for (var slot : new EquipmentSlot[] {EquipmentSlot.HEAD, EquipmentSlot.CHEST,
+                EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
+            var color = client.player.getItemBySlot(slot).get(DataComponents.DYED_COLOR);
+            int expected = slot == EquipmentSlot.HEAD
+                    ? PortalBodyRenderFixture.MAGENTA : PortalBodyRenderFixture.CYAN;
+            if (color == null || color.rgb() != expected) return false;
+        }
+        int faces = 0, destinationFaces = 0;
+        for (var entity : client.level.entitiesForRendering())
+            if (entity instanceof Portal portal) {
+                if (portal.getOriginPos().distanceTo(new Vec3(
+                            PortalBodyRenderFixture.SOURCE_X,
+                            PortalBodyRenderFixture.FLOOR_Y + 3, 0)) < .01
+                    && Math.abs(portal.getDestPos().x
+                            - (remote ? PortalBodyRenderFixture.SOURCE_X
+                                    : PortalBodyRenderFixture.DESTINATION_X)) < .01) faces++;
+                if (portal.getOriginPos().distanceTo(new Vec3(
+                            remote ? PortalBodyRenderFixture.SOURCE_X : PortalBodyRenderFixture.DESTINATION_X,
+                            PortalBodyRenderFixture.FLOOR_Y + 3, remote ? 10 : 0)) < .01)
+                    destinationFaces++;
+            }
+        return faces == 2 && destinationFaces == 2;
+    }
+
+    private static void requireWall(Minecraft client) {
+        for (int x = -3; x <= 3; x++)
+            for (int y = PortalBodyRenderFixture.FLOOR_Y + 1;
+                    y <= PortalBodyRenderFixture.FLOOR_Y + 6; y++)
+                require(client.level.getBlockState(new BlockPos(
+                                PortalBodyRenderFixture.SOURCE_X + x, y, -1)).is(Blocks.STONE)
+                                && client.level.getBlockState(new BlockPos(
+                                        PortalBodyRenderFixture.DESTINATION_X + x, y, 0))
+                                        .is(Blocks.STONE)
+                                && client.level.getBlockState(new BlockPos(
+                                        PortalBodyRenderFixture.DESTINATION_X + x, y, -3))
+                                        .is(Blocks.STONE),
+                        "The player body probe removed a backing wall");
+    }
+
+    private static void capture(Frame frame) {
+        lastCaptured = frame.index;
+        CAPTURE_COUNTS.merge(frame.phase, 1, Integer::sum);
+        if (frame.phase == phase) phaseCaptures++;
+        captures++;
+        PENDING.incrementAndGet();
+        var client = Minecraft.getInstance();
+        System.out.println("PORTAL_RENDER_BODY_FRAME " + frame);
+        if (frame.phase == Phase.STRADDLE_DOWN || frame.phase == Phase.EXIT_DOWN)
+            requireDownwardFloor(client, frame);
+        if (frame.phase == Phase.REMOTE_OFF || frame.phase == Phase.REMOTE_ON)
+            System.out.println("PORTAL_RENDER_BODY_CAPTURE_READY phase=" + frame.phase
+                    + " readyTicks=" + fixtureReadyTicks + " phaseFrames=" + phaseFrames
+                    + " invisible=" + client.player.isInvisible()
+                    + " pose=" + client.player.getPose()
+                    + " remoteExtractions=" + remoteViewExtractions
+                    + " remotePlayerStates=" + remotePlayerStates
+                    + " lastRemote=" + lastRemoteView);
+        Screenshot.takeScreenshot(client.gameRenderer.mainRenderTarget(), image -> {
+            try (image) {
+                var directory = client.gameDirectory.toPath().resolve("screenshots");
+                java.nio.file.Files.createDirectories(directory);
+                image.writeToFile(directory.resolve("portal-body-"
+                        + frame.phase.name().toLowerCase(java.util.Locale.ROOT)
+                        + "-" + frame.index + ".png"));
+                RESULTS.add(pixels(frame, image));
+            } catch (Throwable failure) {
+                readbackFailure = failure.toString();
+            } finally {
+                PENDING.decrementAndGet();
+            }
+        });
+    }
+
+    private static Pixels pixels(Frame frame, NativeImage image) {
+        int width = image.getWidth(), height = image.getHeight();
+        int helmet = 0, body = 0, headRegion = 0, headPixels = 0, outside = 0;
+        int sampled = 0, sky = 0, floor = 0;
+        for (int y = height / 20; y < height * 9 / 10; y++)
+            for (int x = width / 10; x < width * 9 / 10; x++) {
+                int rgb = image.getPixel(x, y);
+                int red = rgb >> 16 & 255, green = rgb >> 8 & 255, blue = rgb & 255;
+                sampled++;
+                if (blue > 70 && blue > red * 1.2 && blue > green * 1.1
+                        && blue - green > 20) sky++;
+                int highest = Math.max(red, Math.max(green, blue));
+                int lowest = Math.min(red, Math.min(green, blue));
+                if (highest > 35 && highest - lowest <= Math.max(12, highest * .12)) floor++;
+                boolean magenta = red > 35 && blue > 35 && red > green * 1.45
+                        && blue > green * 1.25;
+                boolean cyan = green > 35 && blue > 35 && green > red * 1.45
+                        && blue > red * 1.25;
+                boolean head = x >= width / 4 && x < width * 3 / 4
+                        && y < height * 11 / 20;
+                if (head) {
+                    headPixels++;
+                    if (magenta) headRegion++;
+                }
+                if (magenta) {
+                    helmet++;
+                    if (Math.abs((double) x / width - frame.headX) > .13
+                            || Math.abs((double) y / height - frame.headY) > .16) outside++;
+                }
+                if (cyan) body++;
+            }
+        return new Pixels(frame, width, height, headPixels, headRegion, helmet, body, outside,
+                sampled, sky, floor);
+    }
+
+    private static Vec3 vector(org.joml.Vector3fc vector) {
+        return new Vec3(vector.x(), vector.y(), vector.z());
+    }
+
+    private static void requireDownwardFloor(Minecraft client, Frame frame) {
+        require(Math.abs(frame.pitch - 89) < .05 && frame.forward.y < -.99,
+                "The downward body view did not use its actual near-vertical camera: " + frame);
+        for (double screenX : new double[] {-.8, 0, .8})
+            for (double screenY : new double[] {-.8, 0, .9}) {
+                Vec3 direction = frame.forward.add(frame.left.scale(-screenX / frame.projectionX))
+                        .add(frame.up.scale(screenY / frame.projectionY));
+                require(direction.y < 0, "A downward witness ray escaped its floor: " + frame);
+                Vec3 floor = frame.camera.add(direction.scale(
+                        (PortalBodyRenderFixture.FLOOR_Y + 1 - frame.camera.y) / direction.y));
+                // The two finite same-world openings translate X by 64. Their
+                // floors continue across Z=0, including every sampled image ray.
+                if (frame.camera.z * floor.z < 0) {
+                    Vec3 entry = frame.camera.add(direction.scale(-frame.camera.z / direction.z));
+                    require(Math.abs(entry.x - frame.feet.x) < 2
+                                    && entry.y >= PortalBodyRenderFixture.FLOOR_Y + 1
+                                    && entry.y <= PortalBodyRenderFixture.FLOOR_Y + 5,
+                            "A downward witness ray missed the finite opening: " + frame + " " + entry);
+                    floor = floor.add(frame.feet.x < 160 ? 64 : -64, 0, 0);
+                }
+                require(client.level.getBlockState(BlockPos.containing(
+                                floor.x, PortalBodyRenderFixture.FLOOR_Y, floor.z))
+                                .is(Blocks.CONCRETE.white()),
+                        "The downward witness did not retain its opaque floor: " + frame + " " + floor);
+            }
+    }
+
+    private static void validate(Pixels pixels) {
+        try {
+            validatePixels(pixels);
+        } catch (AssertionError failure) {
+            failureThumbnail(pixels.frame);
+            throw failure;
+        }
+    }
+
+    private static void failureThumbnail(Frame frame) {
+        // Only the public fixture image named by this captured frame may enter logs.
+        // The bounded copy contains no original PNG metadata.
+        try {
+            var path = Minecraft.getInstance().gameDirectory.toPath().resolve("screenshots")
+                    .resolve("portal-body-" + frame.phase.name().toLowerCase(java.util.Locale.ROOT)
+                            + "-" + frame.index + ".png");
+            var source = javax.imageio.ImageIO.read(path.toFile());
+            int width = Math.min(320, source.getWidth());
+            int height = Math.max(1, source.getHeight() * width / source.getWidth());
+            byte[] bytes;
+            do {
+                var thumbnail = new java.awt.image.BufferedImage(width, height,
+                        java.awt.image.BufferedImage.TYPE_INT_RGB);
+                var graphics = thumbnail.createGraphics();
+                graphics.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
+                        java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                graphics.drawImage(source, 0, 0, width, height, null);
+                graphics.dispose();
+                var encoded = new java.io.ByteArrayOutputStream();
+                javax.imageio.ImageIO.write(thumbnail, "PNG", encoded);
+                bytes = encoded.toByteArray();
+                width = Math.max(1, width * 3 / 4);
+                height = Math.max(1, height * 3 / 4);
+            } while (bytes.length > 28 * 1024);
+            System.out.println("PORTAL_BODY_THUMBNAIL name=" + frame.phase
+                    + " data=" + java.util.Base64.getEncoder().encodeToString(bytes));
+        } catch (java.io.IOException | RuntimeException exception) {
+            System.out.println("PORTAL_BODY_THUMBNAIL_ERROR " + exception);
+        }
+    }
+
+    private static void validatePixels(Pixels pixels) {
+        Phase captured = pixels.frame.phase;
+        if (captured == Phase.STRADDLE_DOWN || captured == Phase.EXIT_DOWN) {
+            require(pixels.sky <= Math.max(3, pixels.sampled * .002)
+                            && pixels.floor >= pixels.sampled * .98,
+                    "The near-vertical portal view exposed a screen/sky instead of its opaque floor: "
+                            + pixels);
+            System.out.println("PORTAL_RENDER_BODY_FLOOR_OK phase=" + captured
+                    + " frame=" + pixels.frame.index + " sky=" + pixels.sky
+                    + " floor=" + pixels.floor + " sampled=" + pixels.sampled);
+        }
+        if (captured == Phase.REMOTE_OFF) remoteOffPixels = pixels.helmet;
+        else if (captured == Phase.REMOTE_ON) {
+            remoteOnPixels = pixels.helmet;
+            remoteOnFrame = pixels.frame;
+        }
+        else if (pixels.frame.cameraType == CameraType.FIRST_PERSON) {
+            require(pixels.helmetInHeadRegion <= Math.max(2, pixels.headRegionPixels * .002),
+                    "The first-person camera saw the inside of its own helmet: " + pixels);
+            firstPersonPixels++;
+            if (captured == Phase.CROSS || captured == Phase.RETURN
+                    || captured == Phase.FINAL_CROSS) movingPixels++;
+        } else {
+            require(pixels.helmet >= 20 && pixels.body >= 50,
+                    "The third-person portal view lost the visible player body: " + pixels);
+            require(pixels.helmetOutsideExpected <= Math.max(3, pixels.helmet * .05),
+                    "The third-person player helmet appeared away from its projected head: "
+                            + pixels);
+            thirdPersonPixels++;
+        }
+        System.out.println("PORTAL_RENDER_BODY_PIXELS phase=" + captured
+                + " frame=" + pixels.frame.index + " helmet=" + pixels.helmet
+                + " cyan=" + pixels.body + " interior=" + pixels.helmetInHeadRegion
+                + " outside=" + pixels.helmetOutsideExpected);
+    }
+}

@@ -5,13 +5,13 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.Lifecycle;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.Util;
+import net.minecraft.util.Util;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -33,12 +33,12 @@ import java.util.stream.Collectors;
 public class CustomPortalGeneration {
     public static final ResourceKey<Level> THE_SAME_DIMENSION = ResourceKey.create(
         Registries.DIMENSION,
-        McHelper.newResourceLocation("imm_ptl:the_same_dimension")
+        McHelper.newIdentifier("imm_ptl:the_same_dimension")
     );
     
     public static final ResourceKey<Level> ANY_DIMENSION = ResourceKey.create(
         Registries.DIMENSION,
-        McHelper.newResourceLocation("imm_ptl:any_dimension")
+        McHelper.newIdentifier("imm_ptl:any_dimension")
     );
     
     public static final Codec<List<ResourceKey<Level>>> DIMENSION_LIST_CODEC =
@@ -51,16 +51,16 @@ public class CustomPortalGeneration {
         STRING_LIST_CODEC.listOf();
     
     public static final ResourceKey<Registry<MapCodec<CustomPortalGeneration>>> SCHEMA_KEY = ResourceKey.createRegistryKey(
-        McHelper.newResourceLocation("imm_ptl:custom_portal_gen_schema")
+        McHelper.newIdentifier("imm_ptl:custom_portal_gen_schema")
     );
     
     // the contents are in /data/<namespace>/immersive_portals/custom_portal_generation/
     public static final ResourceKey<Registry<CustomPortalGeneration>> REGISTRY_KEY =
-        ResourceKey.createRegistryKey(McHelper.newResourceLocation("immersive_portals:custom_portal_generation"));
+        ResourceKey.createRegistryKey(McHelper.newIdentifier("immersive_portals:custom_portal_generation"));
     
     // for old datapacks, the contents are in /data/<namespace>/custom_portal_generation/
     public static final ResourceKey<Registry<CustomPortalGeneration>> LEGACY_REGISTRY_KEY =
-        ResourceKey.createRegistryKey(McHelper.newResourceLocation("custom_portal_generation"));
+        ResourceKey.createRegistryKey(McHelper.newIdentifier("custom_portal_generation"));
     
     public static final MapCodec<CustomPortalGeneration> codecV1 =
         RecordCodecBuilder.mapCodec(instance -> {
@@ -85,7 +85,7 @@ public class CustomPortalGeneration {
                 SCHEMA_KEY, Lifecycle.stable()
             );
             Registry.register(
-                registry, McHelper.newResourceLocation("imm_ptl:v1"), codecV1
+                registry, McHelper.newIdentifier("imm_ptl:v1"), codecV1
             );
             return registry;
         });
@@ -107,7 +107,7 @@ public class CustomPortalGeneration {
     public final List<String> postInvokeCommands;
     public final List<List<String>> commandsOnGenerated;
     
-    public ResourceLocation identifier = null;
+    public Identifier identifier = null;
     
     public CustomPortalGeneration(
         List<ResourceKey<Level>> fromDimensions, ResourceKey<Level> toDimension,
@@ -190,7 +190,7 @@ public class CustomPortalGeneration {
     ) implements InitializationResult {
         @Override
         public String toString() {
-            return "Destination dimension %s not loaded".formatted(dimId.location());
+            return "Destination dimension %s not loaded".formatted(dimId.identifier());
         }
     }
     
@@ -200,7 +200,7 @@ public class CustomPortalGeneration {
         @Override
         public String toString() {
             return "No source dimension is loaded %s"
-                .formatted(srcDimIds.stream().map(ResourceKey::location).collect(Collectors.toList()));
+                .formatted(srcDimIds.stream().map(ResourceKey::identifier).collect(Collectors.toList()));
         }
     }
     
@@ -258,13 +258,13 @@ public class CustomPortalGeneration {
         ServerLevel toWorld = MiscHelper.getServer().getLevel(destDimension);
         
         if (toWorld == null) {
-            Helper.err("Missing dimension " + destDimension.location());
+            Helper.err("Missing dimension " + destDimension.identifier());
             return false;
         }
         
-        world.getProfiler().push("custom_portal_gen_perform");
+        net.minecraft.util.profiling.Profiler.get().push("custom_portal_gen_perform");
         boolean result = form.perform(this, world, startPos, toWorld, triggeringEntity);
-        world.getProfiler().pop();
+        net.minecraft.util.profiling.Profiler.get().pop();
         return result;
     }
     

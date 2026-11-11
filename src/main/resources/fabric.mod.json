@@ -1,17 +1,23 @@
 {
   "schemaVersion": 1,
   "id": "immersive_portals",
-  "provides": ["iportal", "imm_ptl_core", "immersive_portals_core"],
+  "provides": [
+    "iportal",
+    "imm_ptl_core",
+    "immersive_portals_core"
+  ],
   "version": "${version}",
   "name": "Immersive Portals",
   "description": "See through portals and travel between dimensions seamlessly.",
   "authors": [
-    "qouteall", "Other Contributors (see GitHub)"
+    "qouteall",
+    "Other Contributors (see GitHub)",
+    "N4TH4NOT and contributors (Minecraft 26.2 port)"
   ],
   "contact": {
     "homepage": "https://qouteall.fun/immptl",
-    "sources": "https://github.com/iPortalTeam/ImmersivePortalsMod",
-    "issues": "https://github.com/iPortalTeam/ImmersivePortalsMod/discussions",
+    "sources": "https://github.com/N4TH4NOT/Immersive-Portals",
+    "issues": "https://github.com/N4TH4NOT/Immersive-Portals/issues",
     "email": "qouteall@163.com",
     "discord": "https://discord.gg/BZxgURK"
   },
@@ -20,11 +26,13 @@
   "environment": "*",
   "entrypoints": {
     "main": [
+      "qouteall.dimlib.DimLibEntry",
       "qouteall.imm_ptl.peripheral.platform_specific.PeripheralModEntry",
       "qouteall.imm_ptl.core.platform_specific.IPModEntry",
       "qouteall.q_misc_util.MiscUtilModEntry"
     ],
     "client": [
+      "qouteall.dimlib.DimLibEntryClient",
       "qouteall.imm_ptl.peripheral.platform_specific.PeripheralModEntryClient",
       "qouteall.imm_ptl.core.platform_specific.IPModEntryClient",
       "qouteall.q_misc_util.MiscUtilModEntryClient"
@@ -41,13 +49,15 @@
     "imm_ptl.mixins.json",
     "imm_ptl_fabric.mixins.json",
     "imm_ptl_compat.mixins.json",
-    "q_misc_util.mixins.json"
+    "q_misc_util.mixins.json",
+    "dimlib.mixins.json"
   ],
   "depends": {
-    "fabricloader": ">=0.7.4",
-    "fabric-api": ">=0.109.0",
-    "minecraft": ["1.21", "1.21.1"],
-    "dimlib": "*"
+    "fabricloader": ">=0.20.1",
+    "fabric-api": ">=0.161.0+26.2",
+    "minecraft": "26.2",
+    "java": ">=25",
+    "immersive_portals_gravity": ">=1.0.0-alpha.1"
   },
   "breaks": {
     "optifabric": "*",
@@ -56,9 +66,8 @@
     "resolutioncontrol": "*",
     "canvas": "*",
     "cardboard": "*",
-    "iris": ["<1.8.0", ">1.8.0"],
-    "sodium": ["<0.6.0", ">0.6.0"],
-    "gravity_api": "*",
+    "iris": "<1.11.4",
+    "sodium": "<0.9.2",
     "vmp": "*"
   },
   "custom": {
@@ -69,7 +78,6 @@
     },
     "fabric-renderer-indigo:force_compatibility": true,
     "lithium:options": {
-      "mixin.world.player_chunk_tick": false,
       "mixin.world.combined_heightmap_update": false
     },
     "dashloader:disableoption": [

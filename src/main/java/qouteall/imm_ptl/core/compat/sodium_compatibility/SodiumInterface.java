@@ -1,18 +1,16 @@
 package qouteall.imm_ptl.core.compat.sodium_compatibility;
 
-import net.caffeinemc.mods.sodium.client.render.SodiumWorldRenderer;
-import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
 import net.caffeinemc.mods.sodium.client.render.chunk.map.ChunkStatus;
 import net.caffeinemc.mods.sodium.client.render.chunk.map.ChunkTrackerHolder;
+import net.caffeinemc.mods.sodium.client.render.viewport.CameraTransform;
 import net.caffeinemc.mods.sodium.client.render.texture.SpriteUtil;
-import net.caffeinemc.mods.sodium.client.world.LevelRendererExtension;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
-import qouteall.imm_ptl.core.compat.mixin.sodium.IESodiumWorldRenderer;
+
 import qouteall.imm_ptl.core.render.FrustumCuller;
 
 @Environment(EnvType.CLIENT)
@@ -20,18 +18,18 @@ public class SodiumInterface {
     
     @Nullable
     public static FrustumCuller frustumCuller = null;
+
+    static Vec3 fromSplitCamera(int x, int y, int z, float fracX, float fracY, float fracZ) {
+        return new Vec3((double) x + fracX, (double) y + fracY, (double) z + fracZ);
+    }
     
     public static class Invoker {
         public boolean isSodiumPresent() {
             return false;
         }
-        
-        public Object createNewContext(int renderDistance) {
-            return null;
-        }
-        
-        public void switchContextWithCurrentWorldRenderer(Object context) {
-        
+
+        public Vec3 getTerrainRenderCamera(Vec3 camera) {
+            return camera;
         }
         
         public void markSpriteActive(TextureAtlasSprite sprite) {
@@ -54,25 +52,15 @@ public class SodiumInterface {
         public boolean isSodiumPresent() {
             return true;
         }
-        
+
         @Override
-        public Object createNewContext(int renderDistance) {
-            return new SodiumRenderingContext(renderDistance);
-        }
-        
-        @Override
-        public void switchContextWithCurrentWorldRenderer(Object context) {
-            SodiumWorldRenderer swr =
-                ((LevelRendererExtension) Minecraft.getInstance().levelRenderer).sodium$getWorldRenderer();
-            swr.scheduleTerrainUpdate();
-            
-            RenderSectionManager renderSectionManager =
-                ((IESodiumWorldRenderer) swr).ip_getRenderSectionManager();
-            
-            ((IESodiumRenderSectionManager) renderSectionManager)
-                .ip_swapContext(((SodiumRenderingContext) context));
-            
-            swr.scheduleTerrainUpdate();
+        public Vec3 getTerrainRenderCamera(Vec3 camera) {
+            // Sodium rounds the fractional camera against its 128-block region basis.
+            // Use that same origin for aperture vertices so coplanar terrain cannot move
+            // in front of a portal when its depth is below the near-plane clamp.
+            var transform = new CameraTransform(camera.x, camera.y, camera.z);
+            return fromSplitCamera(transform.intX, transform.intY, transform.intZ,
+                    transform.fracX, transform.fracY, transform.fracZ);
         }
         
         @Override

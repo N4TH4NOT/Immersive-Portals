@@ -20,13 +20,7 @@ import qouteall.imm_ptl.core.portal.animation.StableClientTimer;
 import qouteall.imm_ptl.core.render.CrossPortalEntityRenderer;
 import qouteall.imm_ptl.core.render.ForceMainThreadRebuild;
 import qouteall.imm_ptl.core.render.GuiPortalRendering;
-import qouteall.imm_ptl.core.render.ImmPtlViewArea;
 import qouteall.imm_ptl.core.render.MyRenderHelper;
-import qouteall.imm_ptl.core.render.ShaderCodeTransformation;
-import qouteall.imm_ptl.core.render.VisibleSectionDiscovery;
-import qouteall.imm_ptl.core.render.context_management.CloudContext;
-import qouteall.imm_ptl.core.render.optimization.GLResourceCache;
-import qouteall.imm_ptl.core.render.optimization.SharedBlockMeshBuffers;
 import qouteall.imm_ptl.core.render.renderer.RendererUsingFrameBuffer;
 import qouteall.imm_ptl.core.render.renderer.RendererUsingStencil;
 import qouteall.imm_ptl.core.teleportation.ClientTeleportationManager;
@@ -74,7 +68,7 @@ public class IPModMainClient {
         ClientTeleportationManager.init();
         
         Minecraft.getInstance().execute(() -> {
-            ShaderCodeTransformation.init();
+
             
             MyRenderHelper.init();
             
@@ -87,16 +81,12 @@ public class IPModMainClient {
         DubiousThings.init();
         
         CrossPortalEntityRenderer.init();
-        
-        GLResourceCache.init();
+
         
         CollisionHelper.initClient();
         
         PortalRenderInfo.init();
-        
-        CloudContext.init();
-        
-        SharedBlockMeshBuffers.init();
+
         
         GcMonitor.initClient();
         
@@ -113,10 +103,7 @@ public class IPModMainClient {
         StableClientTimer.init();
         
         ClientPortalAnimationManagement.init();
-        
-        VisibleSectionDiscovery.init();
-        
-        ImmPtlViewArea.init();
+
         
         IPFlywheelCompat.init();
     

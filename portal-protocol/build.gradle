@@ -1,0 +1,16 @@
+plugins { id 'java-library'; id 'maven-publish' }
+group = rootProject.group
+version = rootProject.version
+java { toolchain.languageVersion = JavaLanguageVersion.of(25); withSourcesJar() }
+repositories { mavenCentral() }
+dependencies {
+    api 'io.github.n4th4not.gravity:gravity-api:1.0.0-alpha.1'
+    testImplementation platform('org.junit:junit-bom:5.14.1')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+test { useJUnitPlatform() }
+publishing { publications { mavenJava(MavenPublication) { from components.java } } }
+
+sourceSets.test.java.srcDir new File(gradle.ext.gravitySources, 'compat-tests/protocol/test/java')
+sourceSets.test.resources.srcDir new File(gradle.ext.gravitySources, 'compat-tests/protocol/test/resources')

@@ -17,11 +17,12 @@ public interface IENoiseRouterData {
         throw new RuntimeException();
     }
     
-    @Invoker("noNewCaves")
-    public static NoiseRouter ip_noNewCaves(HolderGetter<DensityFunction> holderGetter, HolderGetter<NormalNoise.NoiseParameters> holderGetter2, DensityFunction densityFunction){
-        throw new RuntimeException();
-    }
-    
+    @Invoker("floatingIslands")
+    static NoiseRouter ip_floatingIslands(HolderGetter<DensityFunction> densities, HolderGetter<NormalNoise.NoiseParameters> noises) { throw new AssertionError(); }
+
+    @Invoker("postProcess")
+    static DensityFunction ip_postProcess(DensityFunction densityFunction) { throw new AssertionError(); }
+
     @Invoker("slideEndLike")
     public static DensityFunction ip_slideEndLike(DensityFunction densityFunction, int i, int j) {
         throw new RuntimeException();

@@ -1,9 +1,11 @@
 package qouteall.imm_ptl.core.platform_specific.mixin.common;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.portal.DimensionTransition;
+import net.minecraft.world.level.portal.TeleportTransition;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -16,41 +18,42 @@ import qouteall.imm_ptl.core.portal.custom_portal_gen.CustomPortalGenManager;
 
 @Mixin(ServerPlayer.class)
 public class MixinServerPlayerEntity_MA {
-    @Inject(method = "changeDimension", at = @At("HEAD"))
-    private void onChangeDimensionByVanilla(
-        DimensionTransition dimensionTransition, CallbackInfoReturnable<Entity> cir
+    @WrapMethod(method = "teleport(Lnet/minecraft/world/level/portal/TeleportTransition;)Lnet/minecraft/server/level/ServerPlayer;")
+    private ServerPlayer ip_resyncAfterVanillaDimensionChange(
+        TeleportTransition transition, Operation<ServerPlayer> original
     ) {
-        ServerPlayer this_ = (ServerPlayer) (Object) this;
-        onBeforeDimensionTravel(this_);
-    }
-    
-    // update chunk visibility data
-    @Inject(method = "Lnet/minecraft/server/level/ServerPlayer;teleportTo(Lnet/minecraft/server/level/ServerLevel;DDDFF)V", at = @At("HEAD"))
-    private void onTeleported(
-        ServerLevel targetWorld,
-        double x,
-        double y,
-        double z,
-        float yaw,
-        float pitch,
-        CallbackInfo ci
-    ) {
-        ServerPlayer this_ = (ServerPlayer) (Object) this;
-        
-        if (this_.level() != targetWorld) {
-            onBeforeDimensionTravel(this_);
+        ServerPlayer player = (ServerPlayer) (Object) this;
+        var previousWorld = player.level();
+        ServerPlayer result = original.call(transition);
+        if (result != null && result.level() != previousWorld) {
+            // Vanilla respawn replaces every client world. Pairings retained for
+            // remote dimensions would otherwise suppress their spawn/chunk packets.
+            // Send the reset and rebuilt views after the respawn packet, so none
+            // of their newly delivered entities is discarded by client cleanup.
+            ImmPtlChunkTracking.resetPlayerViews(result);
+            ImmPtlChunkTracking.immediatelyUpdateForPlayer(result);
         }
+        return result;
+    }
+
+    @Inject(method = "teleport(Lnet/minecraft/world/level/portal/TeleportTransition;)Lnet/minecraft/server/level/ServerPlayer;", at = @At("HEAD"))
+    private void onChangeDimensionByVanilla(
+        TeleportTransition dimensionTransition, CallbackInfoReturnable<ServerPlayer> cir
+    ) {
+        ServerPlayer this_ = (ServerPlayer) (Object) this;
+        // Unlike 1.21's changeDimension, teleport also handles moves within one level.
+        if (dimensionTransition.newLevel() == this_.level()) return;
+        onBeforeDimensionTravel(this_);
     }
     
     private static void onBeforeDimensionTravel(ServerPlayer player) {
         CustomPortalGenManager customPortalGenManager =
-            IPPerServerInfo.of(player.server).customPortalGenManager;
+            IPPerServerInfo.of(player.level().getServer()).customPortalGenManager;
         
         if (customPortalGenManager != null) {
             customPortalGenManager.onBeforeConventionalDimensionChange(player);
-            ImmPtlChunkTracking.removePlayerFromChunkTrackersAndEntityTrackers(player);
             
-            ServerTaskList.of(player.server).addTask(() -> {
+            ServerTaskList.of(player.level().getServer()).addTask(() -> {
                 customPortalGenManager.onAfterConventionalDimensionChange(player);
                 return true;
             });

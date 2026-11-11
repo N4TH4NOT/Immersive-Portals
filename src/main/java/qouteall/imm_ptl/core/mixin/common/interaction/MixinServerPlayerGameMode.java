@@ -2,6 +2,7 @@ package qouteall.imm_ptl.core.mixin.common.interaction;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
@@ -23,6 +24,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import qouteall.imm_ptl.core.block_manipulation.BlockManipulationServer;
+import qouteall.imm_ptl.core.network.PacketRedirection;
 
 @Mixin(ServerPlayerGameMode.class)
 public class MixinServerPlayerGameMode {
@@ -49,6 +51,22 @@ public class MixinServerPlayerGameMode {
             return redirect.world();
         }
         return level;
+    }
+
+    @WrapMethod(method = "tick")
+    private void ip_tickDestroyInRecordedWorld(Operation<Void> original) {
+        ServerLevel world = ip_destroyPosLevel;
+        if (world == null) {
+            original.call();
+            return;
+        }
+        var previous = BlockManipulationServer.REDIRECT_CONTEXT.get();
+        BlockManipulationServer.REDIRECT_CONTEXT.set(new BlockManipulationServer.Context(world, null));
+        try {
+            // tick calls incrementDestroyProgress and destroyBlock. Their world reads and
+            // callbacks need the same context as tick's direct reads, including delayed STOPs.
+            PacketRedirection.withForceRedirect(world, () -> original.call());
+        } finally { BlockManipulationServer.REDIRECT_CONTEXT.set(previous); }
     }
     
     // use the actual dimension
@@ -79,10 +97,10 @@ public class MixinServerPlayerGameMode {
         },
         at = @At(
             value = "INVOKE",
-            target = "Lnet/minecraft/server/level/ServerPlayer;level()Lnet/minecraft/world/level/Level;"
+            target = "Lnet/minecraft/server/level/ServerPlayer;level()Lnet/minecraft/server/level/ServerLevel;"
         )
     )
-    private Level redirectGetLevel(ServerPlayer instance) {
+    private ServerLevel redirectGetLevel(ServerPlayer instance) {
         return ip_getActualWorld();
     }
     
@@ -108,7 +126,7 @@ public class MixinServerPlayerGameMode {
         method = "handleBlockBreakAction",
         at = @At(
             value = "INVOKE",
-            target = "Lnet/minecraft/server/level/ServerPlayer;canInteractWithBlock(Lnet/minecraft/core/BlockPos;D)Z"
+            target = "Lnet/minecraft/server/level/ServerPlayer;isWithinBlockInteractionRange(Lnet/minecraft/core/BlockPos;D)Z"
         )
     )
     private boolean wrapDistanceInHandleBlockBreakAction(

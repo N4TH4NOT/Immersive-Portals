@@ -15,11 +15,6 @@ import qouteall.imm_ptl.peripheral.ducks.IECreateWorldScreen;
 
 @Mixin(CreateWorldScreen.MoreTab.class)
 public class MixinCreateWorldScreenMoreTab_CVB {
-    // the implicit parent object reference
-    @Final
-    @Shadow
-    CreateWorldScreen field_42178;
-    
     @Inject(
         method = "<init>",
         at = @At("RETURN"),
@@ -32,7 +27,7 @@ public class MixinCreateWorldScreenMoreTab_CVB {
         rowHelper.addChild(
             Button.builder(
                 Component.translatable("imm_ptl.altius_screen_button"),
-                button -> ((IECreateWorldScreen) field_42178).ip_openDimStackScreen()
+                button -> ((IECreateWorldScreen) createWorldScreen).ip_openDimStackScreen()
             ).width(210).build()
         );
     }

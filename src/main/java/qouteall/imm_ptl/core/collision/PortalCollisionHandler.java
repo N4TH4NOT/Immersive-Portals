@@ -17,6 +17,7 @@ import qouteall.imm_ptl.core.McHelper;
 import qouteall.imm_ptl.core.compat.GravityChangerInterface;
 import qouteall.imm_ptl.core.ducks.IEEntity;
 import qouteall.imm_ptl.core.portal.Portal;
+import qouteall.imm_ptl.core.portal.global_portals.GlobalPortalStorage;
 import qouteall.q_misc_util.Helper;
 import qouteall.q_misc_util.my_util.Plane;
 import qouteall.q_misc_util.my_util.Range;
@@ -51,12 +52,14 @@ public class PortalCollisionHandler {
                 return true;
             }
             
-            // because that teleportation is based on rendering camera pos,
-            // the camera pos is behind this tick pos,
-            // this tick pos may go behind the portal before teleportation.
-            // use last tick pos to check whether it should collide
+            // Rendering can cross the portal between ticks. Before teleportation the
+            // previous eye position is in front; afterwards the transformed current
+            // eye position is in front of the reverse portal. Keep either contact
+            // while the body still straddles the plane.
             if (!CollisionHelper.mayEntityCollideWithPortal(
                 entity, p.portal, entity.getEyePosition(0), entity.getBoundingBox()
+            ) && !CollisionHelper.mayEntityCollideWithPortal(
+                entity, p.portal, entity.getEyePosition(1), entity.getBoundingBox()
             )) {
                 return true;
             }
@@ -76,7 +79,7 @@ public class PortalCollisionHandler {
             return attemptedMove;
         }
         
-        entity.level().getProfiler().push("cross_portal_collision");
+        net.minecraft.util.profiling.Profiler.get().push("cross_portal_collision");
         
         portalCollisions.sort(
             Comparator.comparingLong((PortalCollisionEntry p) -> p.activeTime).reversed()
@@ -84,7 +87,7 @@ public class PortalCollisionHandler {
         
         Vec3 result = doHandleCollision(entity, attemptedMove, 1, portalCollisions, entity.getBoundingBox());
         
-        entity.level().getProfiler().pop();
+        net.minecraft.util.profiling.Profiler.get().pop();
         
         return result;
     }
@@ -296,8 +299,10 @@ public class PortalCollisionHandler {
             Plane clipping = portal.getPortalShape().getOuterClipping(portal.getThisSideState());
             
             if (clipping != null) {
+                // A portal placed on a wall shares the backing blocks' face. Include
+                // that contact in the exclusion, allowing for collision rounding.
                 boolean boxFullyBehindPlane = CollisionHelper.isBoxFullyBehindPlane(
-                    clipping.pos(), clipping.normal(), shapeBounds
+                    clipping.pos(), clipping.normal(), shapeBounds, 1.0E-7
                 );
                 
                 // it's a workaround for diagonal portals
@@ -356,20 +361,33 @@ public class PortalCollisionHandler {
     public static void updateCollidingPortalAfterTeleportation(
         Entity entity, Vec3 newEyePos, Vec3 newLastTickEyePos, float partialTicks
     ) {
+        PortalFluidInteraction.clearContact(entity);
+        McHelper.setEyePos(entity, newEyePos, newLastTickEyePos);
+        McHelper.updateBoundingBox(entity);
         ((IEEntity) entity).ip_clearCollidingPortal();
+
+        AABB stretchedBoundingBox = CollisionHelper.getStretchedBoundingBox(entity);
         
+        // setEyePos deliberately bypasses entity-section callbacks. A same-world
+        // teleport can therefore leave the entity indexed at its source until its
+        // next move. Discover destination portals, then notify this entity directly.
         McHelper.findEntitiesByBox(
             Portal.class,
             entity.level(),
-            CollisionHelper.getStretchedBoundingBox(entity),
+            stretchedBoundingBox,
             IPGlobal.maxNormalPortalRadius,
-            p -> true
-        ).forEach(p -> CollisionHelper.notifyCollidingPortals(p, partialTicks));
+            p -> CollisionHelper.canCollideWithPortal(entity, p, partialTicks)
+        ).forEach(p -> ((IEEntity) entity).ip_notifyCollidingWithPortal(p));
+
+        for (Portal portal : GlobalPortalStorage.getGlobalPortals(entity.level())) {
+            if (stretchedBoundingBox.intersects(portal.getBoundingBox())
+                && CollisionHelper.canCollideWithPortal(entity, portal, partialTicks)
+            ) {
+                ((IEEntity) entity).ip_notifyCollidingWithPortal(portal);
+            }
+        }
         
         // don't tickCollidingPortal() as it only removes collisions
-        
-        McHelper.setEyePos(entity, newEyePos, newLastTickEyePos);
-        McHelper.updateBoundingBox(entity);
     }
     
     public boolean hasCollisionEntry() {
@@ -517,7 +535,7 @@ public class PortalCollisionHandler {
         }
     }
     
-    private static boolean isBoxTooBig(AABB aabb) {
+    static boolean isBoxTooBig(AABB aabb) {
         return aabb.getXsize() > 100 || aabb.getYsize() > 100 || aabb.getZsize() > 100;
     }
 }

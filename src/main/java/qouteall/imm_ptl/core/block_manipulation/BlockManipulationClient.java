@@ -3,25 +3,16 @@ package qouteall.imm_ptl.core.block_manipulation;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.util.Tuple;
-import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.ClipContext;
+import qouteall.q_misc_util.my_util.Tuple;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.VoxelShape;
 import org.apache.commons.lang3.Validate;
 import org.jetbrains.annotations.Nullable;
 import qouteall.imm_ptl.core.ClientWorldLoader;
 import qouteall.imm_ptl.core.portal.Portal;
-import qouteall.imm_ptl.core.portal.PortalPlaceholderBlock;
-import qouteall.imm_ptl.core.portal.PortalUtils;
 
 import java.util.function.Supplier;
 
@@ -30,6 +21,9 @@ public class BlockManipulationClient {
     
     public static ResourceKey<Level> remotePointedDim;
     public static HitResult remoteHitResult;
+    public static java.util.List<java.util.UUID> remotePortalPath = java.util.List.of();
+    static java.util.List<Portal> remotePortals = java.util.List.of();
+    @Nullable public static Portal remoteProjectionPortal;
     
     public static boolean isPointingToPortal() {
         return remotePointedDim != null;
@@ -43,154 +37,57 @@ public class BlockManipulationClient {
         return ClientWorldLoader.getWorld(BlockManipulationClient.remotePointedDim);
     }
     
-    private static BlockHitResult createMissedHitResult(Vec3 from, Vec3 to) {
-        Vec3 dir = to.subtract(from).normalize();
-        
-        return BlockHitResult.miss(to, Direction.getNearest(dir.x, dir.y, dir.z), BlockPos.containing(to));
-    }
-    
-    private static boolean hitResultIsMissedOrNull(HitResult bhr) {
-        return bhr == null || bhr.getType() == HitResult.Type.MISS;
-    }
-    
+    public static double remoteHitDistance;
+
     public static void updatePointedBlock(float partialTick) {
-        if (client.gameMode == null || client.level == null || client.player == null) {
-            return;
-        }
-        
         remotePointedDim = null;
         remoteHitResult = null;
-        
-        if (!BlockManipulationServer.canDoCrossPortalInteractionEvent.invoker().test(client.player)) {
-            return;
-        }
-        
-        Vec3 cameraPos = client.gameRenderer.getMainCamera().getPosition();
-        
-        double reachDistance = client.player.blockInteractionRange();
-        
-        PortalUtils.raytracePortalFromEntityView(client.player, partialTick, reachDistance, true, portal1 -> portal1.isInteractableBy(client.player)).ifPresent(pair -> {
-            Portal portal = pair.getFirst();
-            Vec3 hitPos = pair.getSecond().hitPos();
-            double distanceToPortalPointing = hitPos.distanceTo(cameraPos);
-            if (distanceToPortalPointing < getCurrentTargetDistance() + 0.2) {
-                client.hitResult = createMissedHitResult(cameraPos, hitPos);
-                
-                updateTargetedBlockThroughPortal(
-                    cameraPos,
-                    client.player.getViewVector(partialTick),
-                    client.player.level().dimension(),
-                    distanceToPortalPointing,
-                    reachDistance,
-                    portal
-                );
-            }
-        });
+        remotePortalPath = java.util.List.of();
+        remotePortals = java.util.List.of();
+        remoteProjectionPortal = null;
+        remoteHitDistance = Double.POSITIVE_INFINITY;
+        if (client.gameMode == null || !ClientWorldLoader.isPrimaryWorldReady()) return;
+        if (!BlockManipulationServer.canDoCrossPortalInteractionEvent.invoker().test(client.player)) return;
+        RemoteInteractionClient.updateTarget(partialTick);
     }
-    
-    private static double getCurrentTargetDistance() {
-        Vec3 cameraPos = client.gameRenderer.getMainCamera().getPosition();
-        
-        if (hitResultIsMissedOrNull(client.hitResult)) {
-            return 23333;
-        }
-        
-        if (client.hitResult instanceof BlockHitResult) {
-            BlockPos hitPos = ((BlockHitResult) client.hitResult).getBlockPos();
-            if (client.level.getBlockState(hitPos).getBlock() == PortalPlaceholderBlock.instance) {
-                return 23333;
-            }
-        }
-        
-        return cameraPos.distanceTo(client.hitResult.getLocation());
+
+    static BlockHitResult clipBlocks(ClientLevel world, Vec3 from, Vec3 to) {
+        return PortalInteractionTarget.clipBlocks(world, client.player, from, to);
     }
-    
-    private static void updateTargetedBlockThroughPortal(
-        Vec3 cameraPos,
-        Vec3 viewVector,
-        ResourceKey<Level> playerDimension,
-        double beginDistance,
-        double endDistance,
-        Portal portal
-    ) {
-        
-        Vec3 from = portal.transformPoint(
-            cameraPos.add(viewVector.scale(beginDistance))
-        );
-        Vec3 to = portal.transformPoint(
-            cameraPos.add(viewVector.scale(endDistance))
-        );
-        
-        ClipContext context = new ClipContext(
-            from,
-            to,
-            ClipContext.Block.OUTLINE,
-            ClipContext.Fluid.NONE,
-            client.player
-        );
-        
-        ClientLevel world = ClientWorldLoader.getWorld(portal.getDestDim());
-        
-        remoteHitResult = BlockGetter.traverseBlocks(
-            from, to,
-            context,
-            (rayTraceContext, blockPos) -> {
-                BlockState blockState = world.getBlockState(blockPos);
-                
-                if (blockState.getBlock() == PortalPlaceholderBlock.instance) {
-                    return null;
-                }
-                if (blockState.getBlock() == Blocks.BARRIER) {
-                    return null;
-                }
-                
-                FluidState fluidState = world.getFluidState(blockPos);
-                Vec3 start = rayTraceContext.getFrom();
-                Vec3 end = rayTraceContext.getTo();
-                
-                //correct the start pos to avoid being considered inside block
-                Vec3 correctedStart = start.subtract(end.subtract(start).scale(0.0015));
-//                Vec3d correctedStart = start;
-                VoxelShape solidShape = rayTraceContext.getBlockShape(blockState, world, blockPos);
-                BlockHitResult blockHitResult = world.clipWithInteractionOverride(
-                    correctedStart, end, blockPos, solidShape, blockState
-                );
-                VoxelShape fluidShape = rayTraceContext.getFluidShape(fluidState, world, blockPos);
-                BlockHitResult fluidHitResult = fluidShape.clip(start, end, blockPos);
-                double d = blockHitResult == null ? Double.MAX_VALUE :
-                    rayTraceContext.getFrom().distanceToSqr(blockHitResult.getLocation());
-                double e = fluidHitResult == null ? Double.MAX_VALUE :
-                    rayTraceContext.getFrom().distanceToSqr(fluidHitResult.getLocation());
-                return d <= e ? blockHitResult : fluidHitResult;
-            },
-            (rayTraceContext) -> {
-                Vec3 vec3d = rayTraceContext.getFrom().subtract(rayTraceContext.getTo());
-                return BlockHitResult.miss(
-                    rayTraceContext.getTo(),
-                    Direction.getNearest(vec3d.x, vec3d.y, vec3d.z),
-                    BlockPos.containing(rayTraceContext.getTo())
-                );
-            }
-        );
-        
-        if (remoteHitResult.getLocation().y < world.getMinBuildHeight() + 0.1) {
-            remoteHitResult = new BlockHitResult(
-                remoteHitResult.getLocation(),
-                Direction.DOWN,
-                ((BlockHitResult) remoteHitResult).getBlockPos(),
-                ((BlockHitResult) remoteHitResult).isInside()
-            );
-        }
-        
-        if (remoteHitResult != null) {
-            if (!world.getBlockState(((BlockHitResult) remoteHitResult).getBlockPos()).isAir()) {
-                client.hitResult = createMissedHitResult(from, to);
-                remotePointedDim = portal.getDestDim();
-            }
-        }
-        
+
+    public static boolean isRemoteEntity(net.minecraft.world.entity.Entity entity) {
+        return ClientWorldLoader.getIsWorldSwitched()
+                && remoteHitResult instanceof net.minecraft.world.phys.EntityHitResult hit
+                && hit.getEntity() == entity
+                && (!remotePortalPath.isEmpty() || remoteProjectionPortal != null);
     }
-    
+
+    public static boolean isRemoteEntityWithinInteractionRange(net.minecraft.world.entity.Entity entity) {
+        return isRemoteEntity(entity) && remoteHitDistance <= client.player.entityInteractionRange();
+    }
+
+    public static boolean isRemoteEntityWithinAttackRange(
+            net.minecraft.world.item.component.AttackRange range) {
+        return remoteHitResult instanceof net.minecraft.world.phys.EntityHitResult hit
+                && isRemoteEntity(hit.getEntity())
+                && remoteHitDistance >= range.effectiveMinRange(client.player)
+                && remoteHitDistance <= range.effectiveMaxRange(client.player);
+    }
+
+    public static HitResult outlineHitForView(ClientLevel world, HitResult original) {
+        if (!qouteall.imm_ptl.core.render.context_management.WorldRenderInfo.isRendering()) return original;
+        if (world.dimension() == remotePointedDim && remoteHitResult instanceof BlockHitResult
+                && qouteall.imm_ptl.core.render.context_management.PortalRendering
+                        .matchesPortalPath(remotePortalPath)) return remoteHitResult;
+        return null;
+    }
+
+    public static <T> T withRemoteRotation(Supplier<T> action) {
+        if (qouteall.imm_ptl.core.network.bridge.BridgeClient.isActive()) return action.get();
+        return PortalInteractionTarget.withRotation(client.player, remotePortals,
+                remoteProjectionPortal, action);
+    }
+
     /**
      * It will not switch the dimension of client player
      */
@@ -237,7 +134,7 @@ public class BlockManipulationClient {
         }
         if (remoteHitResult instanceof BlockHitResult blockHitResult) {
             return "Point:%s %d %d %d".formatted(
-                remotePointedDim.location(),
+                remotePointedDim.identifier(),
                 blockHitResult.getBlockPos().getX(),
                 blockHitResult.getBlockPos().getY(),
                 blockHitResult.getBlockPos().getZ()

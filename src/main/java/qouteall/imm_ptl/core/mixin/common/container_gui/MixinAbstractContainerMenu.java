@@ -14,10 +14,10 @@ import qouteall.imm_ptl.core.block_manipulation.BlockManipulationServer;
 @Mixin(AbstractContainerMenu.class)
 public class MixinAbstractContainerMenu {
     @WrapOperation(
-        method = "method_17696",
+        method = "lambda$stillValid$0",
         at = @At(
             value = "INVOKE",
-            target = "Lnet/minecraft/world/entity/player/Player;canInteractWithBlock(Lnet/minecraft/core/BlockPos;D)Z"
+            target = "Lnet/minecraft/world/entity/player/Player;isWithinBlockInteractionRange(Lnet/minecraft/core/BlockPos;D)Z"
         )
     )
     private static boolean wrapDistanceToSqr(
@@ -26,10 +26,10 @@ public class MixinAbstractContainerMenu {
         @Local(argsOnly = true) Level world
     ) {
         boolean canInteract = operation.call(player, blockPos, distance);
-        if (canInteract) {
+        if (canInteract && player.level() == world) {
             return true;
         }
         
-        return BlockManipulationServer.validateReach(player, world, blockPos);
+        return BlockManipulationServer.validateReach(player, world, blockPos, distance);
     }
 }

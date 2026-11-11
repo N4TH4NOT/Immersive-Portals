@@ -31,7 +31,7 @@ public class PortalShapeSerialization {
     }
     
     public static @Nullable PortalShape deserialize(CompoundTag tag) {
-        String typeName = tag.getString("type");
+        String typeName = tag.getString("type").orElse("");
         Serializer<? extends PortalShape> serializer = FROM_TYPE_NAME.get(typeName);
         if (serializer == null) {
             LOGGER.warn("unknown portal shape type {} {}", typeName, tag);

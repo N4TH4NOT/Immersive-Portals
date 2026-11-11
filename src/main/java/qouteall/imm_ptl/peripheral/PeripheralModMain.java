@@ -3,10 +3,10 @@ package qouteall.imm_ptl.peripheral;
 import com.mojang.serialization.MapCodec;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
-import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
+import net.fabricmc.fabric.api.creativetab.v1.FabricCreativeModeTab;
+import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
@@ -14,7 +14,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.chunk.ChunkGenerator;
-import qouteall.dimlib.api.DimensionAPI;
+import qouteall.q_misc_util.dimension.DimensionLifecycle;
 import qouteall.imm_ptl.core.McHelper;
 import qouteall.imm_ptl.peripheral.alternate_dimension.AlternateDimensions;
 import qouteall.imm_ptl.peripheral.alternate_dimension.ChaosBiomeSource;
@@ -32,13 +32,13 @@ import java.util.function.BiConsumer;
 public class PeripheralModMain {
     
     public static final Block portalHelperBlock =
-        new Block(FabricBlockSettings.of().noOcclusion().isRedstoneConductor((a, b, c) -> false));
+        new Block(BlockBehaviour.Properties.of().setId(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BLOCK, Identifier.fromNamespaceAndPath("immersive_portals", "portal_helper"))).noOcclusion().isRedstoneConductor((a, b, c) -> false));
     
     public static final BlockItem portalHelperBlockItem =
-        new PortalHelperItem(PeripheralModMain.portalHelperBlock, new Item.Properties());
+        new PortalHelperItem(PeripheralModMain.portalHelperBlock, new Item.Properties().setId(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.ITEM, Identifier.fromNamespaceAndPath("immersive_portals", "portal_helper"))));
     
     public static final CreativeModeTab TAB =
-        FabricItemGroup.builder()
+        FabricCreativeModeTab.builder()
             .icon(() -> new ItemStack(PortalWandItem.instance))
             .title(Component.translatable("imm_ptl.item_group"))
             .displayItems((enabledFeatures, entries) -> {
@@ -68,7 +68,6 @@ public class PeripheralModMain {
         
         AlternateDimensions.init();
         
-        DimensionAPI.suppressExperimentalWarningForNamespace("immersive_portals");
         
         PortalWandItem.init();
         
@@ -80,57 +79,57 @@ public class PeripheralModMain {
         
     }
     
-    public static void registerItems(BiConsumer<ResourceLocation, Item> regFunc) {
+    public static void registerItems(BiConsumer<Identifier, Item> regFunc) {
         regFunc.accept(
-            McHelper.newResourceLocation("immersive_portals", "portal_helper"),
+            McHelper.newIdentifier("immersive_portals", "portal_helper"),
             portalHelperBlockItem
         );
         
         regFunc.accept(
-            McHelper.newResourceLocation("immersive_portals:command_stick"),
+            McHelper.newIdentifier("immersive_portals:command_stick"),
             CommandStickItem.instance
         );
         
         regFunc.accept(
-            McHelper.newResourceLocation("immersive_portals:portal_wand"),
+            McHelper.newIdentifier("immersive_portals:portal_wand"),
             PortalWandItem.instance
         );
     }
     
-    public static void registerBlocks(BiConsumer<ResourceLocation, Block> regFunc) {
+    public static void registerBlocks(BiConsumer<Identifier, Block> regFunc) {
         regFunc.accept(
-            McHelper.newResourceLocation("immersive_portals", "portal_helper"),
+            McHelper.newIdentifier("immersive_portals", "portal_helper"),
             portalHelperBlock
         );
     }
     
     public static void registerChunkGenerators(
-        BiConsumer<ResourceLocation, MapCodec<? extends ChunkGenerator>> regFunc
+        BiConsumer<Identifier, MapCodec<? extends ChunkGenerator>> regFunc
     ) {
         regFunc.accept(
-            McHelper.newResourceLocation("immersive_portals:error_terrain_generator"),
+            McHelper.newIdentifier("immersive_portals:error_terrain_generator"),
             ErrorTerrainGenerator.MAP_CODEC
         );
         regFunc.accept(
-            McHelper.newResourceLocation("immersive_portals:normal_skyland_generator"),
+            McHelper.newIdentifier("immersive_portals:normal_skyland_generator"),
             NormalSkylandGenerator.MAP_CODEC
         );
     }
     
     public static void registerBiomeSources(
-        BiConsumer<ResourceLocation, MapCodec<? extends BiomeSource>> regFunc
+        BiConsumer<Identifier, MapCodec<? extends BiomeSource>> regFunc
     ) {
         regFunc.accept(
-            McHelper.newResourceLocation("immersive_portals:chaos_biome_source"),
+            McHelper.newIdentifier("immersive_portals:chaos_biome_source"),
             ChaosBiomeSource.MAP_CODEC
         );
     }
     
     public static void registerCreativeTabs(
-        BiConsumer<ResourceLocation, CreativeModeTab> regFunc
+        BiConsumer<Identifier, CreativeModeTab> regFunc
     ) {
         regFunc.accept(
-            McHelper.newResourceLocation("immersive_portals", "general"),
+            McHelper.newIdentifier("immersive_portals", "general"),
             TAB
         );
     }

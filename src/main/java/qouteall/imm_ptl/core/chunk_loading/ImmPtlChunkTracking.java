@@ -18,7 +18,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
-import qouteall.dimlib.api.DimensionAPI;
+import qouteall.q_misc_util.dimension.DimensionLifecycle;
 import qouteall.imm_ptl.core.IPGlobal;
 import qouteall.imm_ptl.core.ducks.IEChunkMap;
 import qouteall.imm_ptl.core.mixin.common.chunk_sync.IEServerCommonPacketListenerImpl;
@@ -45,7 +45,7 @@ public class ImmPtlChunkTracking {
         ServerTickEvents.END_SERVER_TICK.register(ImmPtlChunkTracking::tick);
         IPGlobal.SERVER_CLEANUP_EVENT.register(ImmPtlChunkTracking::cleanup);
         
-        DimensionAPI.SERVER_PRE_REMOVE_DIMENSION_EVENT.register(
+        DimensionLifecycle.SERVER_PRE_REMOVE_DIMENSION_EVENT.register(
             ImmPtlChunkTracking::onDimensionRemove
         );
     }
@@ -56,14 +56,30 @@ public class ImmPtlChunkTracking {
     
     // if the player object is recreated, pass in the old player object
     public static void removePlayerFromChunkTrackersAndEntityTrackers(ServerPlayer oldPlayer) {
-        for (ServerLevel world : oldPlayer.server.getAllLevels()) {
+        stopTrackingEntitiesForPlayer(oldPlayer);
+        forceRemovePlayer(oldPlayer);
+    }
+
+    /** Rebuild client worlds after native travel without losing connection/API state. */
+    public static void resetPlayerViews(ServerPlayer player) {
+        stopTrackingEntitiesForPlayer(player);
+        PlayerChunkLoading info = getPlayerInfo(player);
+        info.distanceToPendingChunks.clear();
+        info.visibleDimensions.clear();
+        info.loadedChunks = 0;
+        // Keep additional API loaders, performance estimates and in-flight batch
+        // accounting: these belong to the surviving player connection, not its views.
+        removePlayerWatchRecords(player);
+    }
+
+    private static void stopTrackingEntitiesForPlayer(ServerPlayer oldPlayer) {
+        for (ServerLevel world : oldPlayer.level().getServer().getAllLevels()) {
             ServerChunkCache chunkManager = world.getChunkSource();
             IEChunkMap storage =
                 (IEChunkMap) chunkManager.chunkMap;
-            storage.ip_onPlayerUnload(oldPlayer);
+            PacketRedirection.withForceRedirect(world, () -> storage.ip_onPlayerUnload(oldPlayer));
         }
         
-        forceRemovePlayer(oldPlayer);
     }
     
     public static void onDimensionRemove(ServerLevel world) {
@@ -106,7 +122,7 @@ public class ImmPtlChunkTracking {
         public String toString() {
             return String.format(
                 "%s (%d,%d) distance:%d valid:%s loaded:%s",
-                dimension.location(),
+                dimension.identifier(),
                 ChunkPos.getX(chunkPos),
                 ChunkPos.getZ(chunkPos),
                 distanceToSource,
@@ -154,7 +170,7 @@ public class ImmPtlChunkTracking {
         // (not sending chunk packet disallows entity tracking)
         // we need to send add entity packet early,
         // otherwise player will fall when standing on cross-portal-collision when logging in
-        EntitySync.update(player.server);
+        EntitySync.update(player.level().getServer());
     }
     
     public static void updateForPlayer(ServerPlayer player) {
@@ -172,7 +188,7 @@ public class ImmPtlChunkTracking {
         
         chunkLoaders.addAll(playerInfo.additionalChunkLoaders);
         
-        MinecraftServer server = player.server;
+        MinecraftServer server = player.level().getServer();
         
         for (ChunkLoader chunkLoader : chunkLoaders) {
             ResourceKey<Level> dimension = chunkLoader.dimension();
@@ -189,7 +205,7 @@ public class ImmPtlChunkTracking {
             ImmPtlChunkTickets ticketInfo = ImmPtlChunkTickets.get(world);
             
             chunkLoader.foreachChunkPos((dim, x, z, distanceToSource) -> {
-                long chunkPos = ChunkPos.asLong(x, z);
+                long chunkPos = ChunkPos.pack(x, z);
                 var records =
                     chunkRecordMap.computeIfAbsent(chunkPos, k -> new Object2ObjectOpenHashMap<>());
                 
@@ -262,10 +278,10 @@ public class ImmPtlChunkTracking {
                         if (record.isLoadedToPlayer) {
                             player.connection.send(
                                 PacketRedirection.createRedirectedMessage(
-                                    player.getServer(),
+                                    player.level().getServer(),
                                     record.dimension,
                                     new ClientboundForgetLevelChunkPacket(
-                                        new ChunkPos(record.chunkPos)
+                                        ChunkPos.unpack(record.chunkPos)
                                     )
                                 )
                             );
@@ -336,7 +352,7 @@ public class ImmPtlChunkTracking {
             ServerLevel world = server.getLevel(dimension);
             
             if (world == null) {
-                LOGGER.error("Missing dimension in chunk loader {}", dimension.location());
+                LOGGER.error("Missing dimension in chunk loader {}", dimension.identifier());
                 return true;
             }
             
@@ -347,7 +363,7 @@ public class ImmPtlChunkTracking {
             chunkLoader.foreachChunkPos(new ChunkLoader.ChunkPosConsumer() {
                 @Override
                 public void consume(ResourceKey<Level> dimension, int x, int z, int distanceToSource) {
-                    long chunkPos = ChunkPos.asLong(x, z);
+                    long chunkPos = ChunkPos.pack(x, z);
                     dimTicketManager.markForLoading(chunkPos, distanceToSource, generationCounter);
                     set.add(chunkPos);
                 }
@@ -360,7 +376,7 @@ public class ImmPtlChunkTracking {
     }
     
     private static void tick(MinecraftServer server) {
-        server.getProfiler().push("portal_chunk_tracking");
+        net.minecraft.util.profiling.Profiler.get().push("portal_chunk_tracking");
         
         boolean updates = false;
         long gameTime = server.overworld().getGameTime();
@@ -389,7 +405,7 @@ public class ImmPtlChunkTracking {
             dimTicketManager.tick(world);
         }
         
-        server.getProfiler().pop();
+        net.minecraft.util.profiling.Profiler.get().pop();
         
         if (updates) {
             EntitySync.update(server);
@@ -404,7 +420,7 @@ public class ImmPtlChunkTracking {
         int x, int z,
         Predicate<PlayerWatchRecord> predicate
     ) {
-        long chunkPos = ChunkPos.asLong(x, z);
+        long chunkPos = ChunkPos.pack(x, z);
         
         var recordMap = getDimChunkWatchRecords(dimension).get(chunkPos);
         if (recordMap == null) {
@@ -476,12 +492,16 @@ public class ImmPtlChunkTracking {
             return Collections.emptyList();
         }
         
-        // the boundaryOnly parameter is only true when sending light update packets
-        // the client can calculate the light by the block data, but not accurate on loading boundary
+        // Vanilla requests boundary-only light corrections for the primary world.
+        // A remote chunk snapshot can precede asynchronous server relighting, and
+        // loading that snapshot does not seed block-light emission on the client.
+        // Send authoritative corrections to every loaded remote view so a native
+        // dimension change cannot leave its newly recreated worlds permanently dark.
         
         ArrayList<ServerPlayer> result = new ArrayList<>();
         for (ImmPtlChunkTracking.PlayerWatchRecord rec : recs.values()) {
-            if (rec.isLoadedToPlayer && (!boundaryOnly || rec.isBoundary)) {
+            if (rec.isLoadedToPlayer && (!boundaryOnly || rec.isBoundary
+                    || rec.player.level().dimension() != dimension)) {
                 result.add(rec.player);
             }
         }
@@ -494,20 +514,24 @@ public class ImmPtlChunkTracking {
     public static Object2ObjectOpenHashMap<ServerPlayer, PlayerWatchRecord> getWatchRecordForChunk(
         ResourceKey<Level> dimension, int x, int z
     ) {
-        return getDimChunkWatchRecords(dimension).get(ChunkPos.asLong(x, z));
+        return getDimChunkWatchRecords(dimension).get(ChunkPos.pack(x, z));
     }
     
     public static void forceRemovePlayer(ServerPlayer oldPlayer) {
         playerInfoMap.remove(oldPlayer);
-        
+        removePlayerWatchRecords(oldPlayer);
+    }
+
+    private static void removePlayerWatchRecords(ServerPlayer oldPlayer) {
         chunkWatchRecords.forEach((dim, dimMap) -> {
             dimMap.long2ObjectEntrySet().removeIf(e -> {
                 long chunkPos = e.getLongKey();
                 Object2ObjectOpenHashMap<ServerPlayer, PlayerWatchRecord> records = e.getValue();
                 PlayerWatchRecord rec = records.remove(oldPlayer);
                 if (rec != null) {
+                    rec.isValid = false;
                     PacketRedirection.sendRedirectedMessage(
-                        oldPlayer, dim, new ClientboundForgetLevelChunkPacket(new ChunkPos(chunkPos))
+                        oldPlayer, dim, new ClientboundForgetLevelChunkPacket(ChunkPos.unpack(chunkPos))
                     );
                 }
                 
@@ -530,7 +554,7 @@ public class ImmPtlChunkTracking {
         map.forEach((chunkPos, records) -> {
             var unloadPacket = PacketRedirection.createRedirectedMessage(
                 server,
-                dim, new ClientboundForgetLevelChunkPacket(new ChunkPos(chunkPos))
+                dim, new ClientboundForgetLevelChunkPacket(ChunkPos.unpack(chunkPos))
             );
             for (PlayerWatchRecord record : records.values()) {
                 if (record.isValid && record.isLoadedToPlayer) {
@@ -570,14 +594,14 @@ public class ImmPtlChunkTracking {
         ServerLevel world = server.getLevel(dimension);
         
         if (world == null) {
-            LOGGER.error("Missing dimension in chunk loader {}", dimension.location());
+            LOGGER.error("Missing dimension in chunk loader {}", dimension.identifier());
             return;
         }
         
         ImmPtlChunkTickets dimTicketManager = ImmPtlChunkTickets.get(world);
         
         chunkLoader.foreachChunkPos((dim, x, z, distanceToSource) -> {
-            dimTicketManager.markForLoading(ChunkPos.asLong(x, z), distanceToSource, generationCounter);
+            dimTicketManager.markForLoading(ChunkPos.pack(x, z), distanceToSource, generationCounter);
         });
     }
     
@@ -617,14 +641,14 @@ public class ImmPtlChunkTracking {
     }
     
     public static void syncBlockUpdateToClientImmediately(ServerLevel world, IntBox box) {
-        ChunkPos lowPos = new ChunkPos(box.l);
-        ChunkPos highPos = new ChunkPos(box.h);
+        ChunkPos lowPos = ChunkPos.containing(box.l);
+        ChunkPos highPos = ChunkPos.containing(box.h);
         
         // flush pending-sending chunks
         Set<ServerPlayer> playersViewingRegion = new HashSet<>();
         ResourceKey<Level> dimension = world.dimension();
-        for (int x = lowPos.x; x <= highPos.x; x++) {
-            for (int z = lowPos.z; z <= highPos.z; z++) {
+        for (int x = lowPos.x(); x <= highPos.x(); x++) {
+            for (int z = lowPos.z(); z <= highPos.z(); z++) {
                 Object2ObjectOpenHashMap<ServerPlayer, PlayerWatchRecord> rec =
                     getWatchRecordForChunk(dimension, x, z);
                 if (rec != null) {
@@ -642,9 +666,9 @@ public class ImmPtlChunkTracking {
         
         IEChunkMap chunkMap = (IEChunkMap) world.getChunkSource().chunkMap;
         
-        for (int x = lowPos.x; x <= highPos.x; x++) {
-            for (int z = lowPos.z; z <= highPos.z; z++) {
-                long chunkPosLong = ChunkPos.asLong(x, z);
+        for (int x = lowPos.x(); x <= highPos.x(); x++) {
+            for (int z = lowPos.z(); z <= highPos.z(); z++) {
+                long chunkPosLong = ChunkPos.pack(x, z);
                 
                 ChunkHolder chunkHolder = chunkMap.ip_getChunkHolder(chunkPosLong);
                 if (chunkHolder != null) {

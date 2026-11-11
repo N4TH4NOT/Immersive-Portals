@@ -139,7 +139,7 @@ public class DimStackInfo {
             if (value != null && value.size() > 1) {
                 McHelper.sendMessageToFirstLoggedPlayer(server, Component.literal(
                     "Failed to apply dimension stack because of connection conflict. There are multiple connections in the %s of %s"
-                        .formatted(key.connectorType, key.dimension.location())
+                        .formatted(key.connectorType, key.dimension.identifier())
                 ).withStyle(ChatFormatting.RED));
                 return;
             }
@@ -169,7 +169,7 @@ public class DimStackInfo {
                 bedrockReplacementMap.put(dimId, bedrockReplacement);
             }
             ServerLevel world = server.getLevel(dimId);
-            Validate.notNull(world, "Missing dimension %s", dimId.location());
+            Validate.notNull(world, "Missing dimension %s", dimId.identifier());
             GlobalPortalStorage gps = GlobalPortalStorage.get(world);
             gps.bedrockReplacement = bedrockReplacement;
             gps.onDataChanged();
@@ -269,7 +269,7 @@ public class DimStackInfo {
         }
         
         try {
-            Optional<Block> block = BuiltInRegistries.BLOCK.getOptional(McHelper.newResourceLocation(str));
+            Optional<Block> block = BuiltInRegistries.BLOCK.getOptional(McHelper.newIdentifier(str));
             return block.map(Block::defaultBlockState).orElse(null);
         }
         catch (Exception e) {

@@ -7,6 +7,7 @@ import net.minecraft.client.player.LocalPlayer;
 import qouteall.imm_ptl.core.IPGlobal;
 import qouteall.imm_ptl.core.chunk_loading.PerformanceLevel;
 import qouteall.imm_ptl.core.commands.PortalDebugCommands;
+import qouteall.imm_ptl.core.network.ImmPtlNetworkConfig;
 import qouteall.q_misc_util.api.McRemoteProcedureCall;
 
 import java.util.ArrayDeque;
@@ -33,9 +34,13 @@ public class ClientPerformanceMonitor {
     private static final int sampleNum = 20;
     
     private static int counter = 0;
+    private static net.minecraft.client.multiplayer.ClientPacketListener lastConnection;
+    private static PerformanceLevel lastSentLevel;
     
     public static void updateEverySecond(int newFps) {
         if (Minecraft.getInstance().player == null) {
+            lastConnection = null;
+            lastSentLevel = null;
             return;
         }
         
@@ -89,9 +94,15 @@ public class ClientPerformanceMonitor {
             level = PerformanceLevel.getClientPerformanceLevel(averageFps, averageFreeMemoryMB);
         }
         
+        var connection = Minecraft.getInstance().getConnection();
+        // This RPC belongs to the Fabric server; a Minestom bridge has no such receiver.
+        if (connection == null || !ImmPtlNetworkConfig.doesServerHaveImmPtl()) return;
+        if (connection == lastConnection && level == lastSentLevel) return;
         McRemoteProcedureCall.tellServerToInvoke(
             "qouteall.imm_ptl.core.chunk_loading.ImmPtlChunkTracking.RemoteCallables.acceptClientPerformanceInfo",
             level
         );
+        lastConnection = connection;
+        lastSentLevel = level;
     }
 }

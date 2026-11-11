@@ -5,7 +5,7 @@ import net.minecraft.util.SortedArraySet;
 
 public interface IEDistanceManager {
     
-    SortedArraySet<Ticket<?>> portal_getTicketSet(long chunkPos);
+    java.util.List<Ticket> portal_getTicketSet(long chunkPos);
     
     
 }

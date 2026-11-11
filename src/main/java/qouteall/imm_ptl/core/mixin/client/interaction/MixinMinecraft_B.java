@@ -13,8 +13,30 @@ import qouteall.imm_ptl.core.block_manipulation.BlockManipulationClient;
 
 @Mixin(Minecraft.class)
 public abstract class MixinMinecraft_B {
+    @WrapOperation(method = "startUseItem", at = @At(value = "INVOKE",
+        target = "Lnet/minecraft/client/player/LocalPlayer;isWithinEntityInteractionRange(Lnet/minecraft/world/entity/Entity;D)Z"))
+    private boolean ip_remoteEntityReach(net.minecraft.client.player.LocalPlayer player,
+        net.minecraft.world.entity.Entity entity, double padding, Operation<Boolean> original) {
+        // The picker measures reach along the transformed ray. Source-world coordinates
+        // cannot be compared directly with an entity in the destination world.
+        return BlockManipulationClient.isRemoteEntity(entity)
+                ? BlockManipulationClient.isRemoteEntityWithinInteractionRange(entity)
+                : original.call(player, entity, padding);
+    }
+
+    @WrapOperation(method = "startAttack", at = @At(value = "INVOKE",
+        target = "Lnet/minecraft/world/item/component/AttackRange;isInRange(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/phys/Vec3;)Z"))
+    private boolean ip_remoteAttackReach(net.minecraft.world.item.component.AttackRange range,
+        net.minecraft.world.entity.LivingEntity player, net.minecraft.world.phys.Vec3 position,
+        Operation<Boolean> original) {
+        return BlockManipulationClient.remoteHitResult instanceof net.minecraft.world.phys.EntityHitResult hit
+                && BlockManipulationClient.isRemoteEntity(hit.getEntity())
+                ? BlockManipulationClient.isRemoteEntityWithinAttackRange(range)
+                : original.call(range, player, position);
+    }
+
     @Shadow
-    protected abstract void pickBlock();
+    protected abstract void pickBlockOrEntity();
     
     @Shadow
     public ClientLevel level;
@@ -44,11 +66,10 @@ public abstract class MixinMinecraft_B {
     private boolean wrapStartAttack(Minecraft instance, Operation<Boolean> original) {
         ClientLevel remoteWorld = BlockManipulationClient.getRemotePointedWorld();
         if (BlockManipulationClient.isPointingToPortal()) {
-            BlockManipulationClient.withSwitchedContext(
+            return BlockManipulationClient.withSwitchedContext(
                 () -> original.call(instance),
                 false
             );
-            return false;
         }
         else {
             return original.call(instance);
@@ -104,7 +125,7 @@ public abstract class MixinMinecraft_B {
         method = "handleKeybinds",
         at = @At(
             value = "INVOKE",
-            target = "Lnet/minecraft/client/Minecraft;pickBlock()V"
+            target = "Lnet/minecraft/client/Minecraft;pickBlockOrEntity()V"
         )
     )
     private void wrapPickBlock(Minecraft instance, Operation<Void> original) {

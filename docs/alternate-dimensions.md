@@ -1,0 +1,13 @@
+# Alternate dimensions
+
+[English](alternate-dimensions.md) · [Français](alternate-dimensions.fr.md)
+
+The Fabric 26.2 port provides `immersive_portals:skyland`, `bright_skyland`, `chaos`, `void` and `bright_void` through Minecraft's native dimension registry. No additional datapack or external DimLib installation is required. DimLib's [dimension API, commands and templates](dimension-library.md) are adapted internally; its Apache-2.0 license and attribution are retained in [licenses](../licenses/DimLib-NOTICE.txt).
+
+`enableAlternateDimensions` defaults to `true`. At world loading, the mod adds missing definitions before the server registry layers are assembled and includes them in saved world-generation settings. Saved definitions and datapacks take precedence, preserving existing terrain generators. Setting the option to `false` stops automatic default creation at loading; it does not remove saved dimensions, their chunks, datapack definitions, or the ability to add dimensions explicitly through commands, templates, dimension stacks or the API.
+
+Native skyland defaults use the world's seed and preserve that choice when the generator is saved. Datapacks can supply a fixed `seed`; `use_world_seed: true` selects the server's seed at initialization instead. Chaos terrain retains the upstream intentionally nondeterministic regional generator. Both void variants use an empty flat generator. `void` uses the vanilla Overworld dimension type, while `bright_void` and `bright_skyland` use `surface_type_bright`. Dimensions with the mod's surface dimension types synchronize weather from the Overworld.
+
+All five dimensions are offered as dimension-stack candidates. Before a stack update, its missing alternate dimensions are created through the internal dimension API. Templates `skyland`, `bright_skyland`, `chaos`, `void` and `bright_void` are also available for explicit creation. Disabling automatic defaults does not disable these actions.
+
+GitHub-only tests check disabled registration, saved/datapack precedence, missing void variants, registry metadata and saved world-generation settings. Runtime scenarios generate chunks in all five dimensions, round-trip their codecs and compare skyland noise against the real world seed. A dedicated-server restart with `enableAlternateDimensions=false` checks that saved dimensions and fixture blocks remain. Required evidence includes `PORTAL_SMOKE_ALTERNATE_DIMENSIONS_OK`, `PORTAL_SMOKE_SKYLAND_WORLD_SEED_OK` and `PORTAL_SMOKE_DIMENSION_RELOAD_OK`. Confirm these assertions in the [GitHub Actions run](port-26.2.md) for the matching commit; compilation alone does not establish dimension generation or persistence.

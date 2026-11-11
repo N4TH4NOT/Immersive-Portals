@@ -1,4 +1,4 @@
-accessWidener v2 named
+accessWidener v2 official
 
 transitive-accessible field net/minecraft/server/MinecraftServer storageSource Lnet/minecraft/world/level/storage/LevelStorageSource$LevelStorageAccess;
 
@@ -9,9 +9,8 @@ transitive-mutable field net/minecraft/util/profiling/ActiveProfiler WARNING_TIM
 
 transitive-accessible class net/minecraft/server/level/ChunkMap$TrackedEntity
 
-transitive-accessible method net/minecraft/world/level/GameRules register (Ljava/lang/String;Lnet/minecraft/world/level/GameRules$Category;Lnet/minecraft/world/level/GameRules$Type;)Lnet/minecraft/world/level/GameRules$Key;
 
-transitive-accessible method net/minecraft/world/level/GameRules$BooleanValue create (Z)Lnet/minecraft/world/level/GameRules$Type;
+
 
 transitive-extendable method net/minecraft/world/entity/Entity getBoundingBox ()Lnet/minecraft/world/phys/AABB;
 
@@ -19,11 +18,9 @@ transitive-extendable method net/minecraft/world/entity/Entity getBoundingBox ()
 
 #transitive-accessible method net/minecraft/client/renderer/LevelRenderer$RenderChunkInfo <init> (Lnet/minecraft/client/renderer/chunk/ChunkRenderDispatcher$RenderChunk;Lnet/minecraft/core/Direction;I)V
 
-transitive-accessible class net/minecraft/client/renderer/chunk/SectionRenderDispatcher$RenderSection$CompileTask
 
 transitive-extendable class net/minecraft/world/level/levelgen/NoiseBasedChunkGenerator
 
-transitive-accessible class net/minecraft/resources/RegistryDataLoader$Loader
 
 transitive-accessible class net/minecraft/client/gui/screens/worldselection/CreateWorldScreen$MoreTab
 

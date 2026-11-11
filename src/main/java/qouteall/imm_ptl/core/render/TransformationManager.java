@@ -7,7 +7,7 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.Direction;
-import net.minecraft.util.Tuple;
+import qouteall.q_misc_util.my_util.Tuple;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
@@ -228,14 +228,8 @@ public class TransformationManager {
     }
     
     private static void updateCamera(Minecraft client) {
-        Camera camera = client.gameRenderer.getMainCamera();
-        camera.setup(
-            client.level,
-            client.player,
-            !client.options.getCameraType().isFirstPerson(),
-            client.options.getCameraType().isMirrored(),
-            RenderStates.getPartialTick()
-        );
+        Camera camera = client.gameRenderer.mainCamera();
+        camera.update(client.getDeltaTracker());
     }
     
     public static Matrix4f getMirrorTransformation(Vec3 normal) {
@@ -256,32 +250,19 @@ public class TransformationManager {
     
     // https://docs.microsoft.com/en-us/windows/win32/opengl/glortho
     public static Matrix4f getIsometricProjection() {
-        int w = client.getWindow().getWidth();
-        int h = client.getWindow().getHeight();
-        
-        float wView = (isometricViewLength / h) * w;
-        
-        float near = -2000;
-        float far = 2000;
-        
-        float left = -wView / 2;
-        float right = wView / 2;
-        
-        float top = isometricViewLength / 2;
-        float bottom = -isometricViewLength / 2;
-        
-        float[] arr = new float[]{
-            2.0f / (right - left), 0, 0, -(right + left) / (right - left),
-            0, 2.0f / (top - bottom), 0, -(top + bottom) / (top - bottom),
-            0, 0, -2.0f / (far - near), -(far + near) / (far - near),
-            0, 0, 0, 1
-        };
-        Matrix4f m1 = new Matrix4f();
-        m1.set(arr);
-        
-        return m1;
+        return isometricProjection(true, com.mojang.blaze3d.systems.RenderSystem.getDevice().getDeviceInfo().isZZeroToOne());
     }
-    
+    public static Matrix4f getIsometricCullingProjection() { return isometricProjection(false, false); }
+    private static Matrix4f isometricProjection(boolean reverse, boolean zeroToOne) {
+        float width=isometricViewLength*client.getWindow().getWidth()/client.getWindow().getHeight();
+        return new Matrix4f().ortho(-width/2,width/2,-isometricViewLength/2,isometricViewLength/2,
+            reverse?2000:-2000, reverse?-2000:2000, zeroToOne);
+    }
+    public static Matrix4f applyAnimation(Matrix4f matrix) {
+        DQuaternion delta=getCurrentAnimationDelta();
+        return delta == null ? matrix : matrix.rotate(delta.toMcQuaternion());
+    }
+
     public static boolean isCalculatingViewBobbingOffset = false;
     
     @Environment(EnvType.CLIENT)
@@ -302,12 +283,12 @@ public class TransformationManager {
     
     // isometric is equivalent to the camera being in infinitely far place
     public static Vec3 getIsometricAdjustedCameraPos() {
-        Camera camera = client.gameRenderer.getMainCamera();
+        Camera camera = client.gameRenderer.mainCamera();
         return getIsometricAdjustedCameraPos(camera);
     }
     
     public static Vec3 getIsometricAdjustedCameraPos(Camera camera) {
-        Vec3 cameraPos = camera.getPosition();
+        Vec3 cameraPos = camera.position();
         
         if (!isIsometricView) {
             return cameraPos;

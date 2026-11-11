@@ -71,7 +71,7 @@ public class PortalGenInfo {
     public <T extends Portal> T createTemplatePortal(EntityType<T> entityType) {
         ServerLevel fromWorld = McHelper.getServerWorld(from);
         
-        T portal = entityType.create(fromWorld);
+        T portal = entityType.create(fromWorld, net.minecraft.world.entity.EntitySpawnReason.LOAD);
         assert portal != null;
         fromShape.initPortalPosAxisShape(portal, Direction.AxisDirection.POSITIVE);
         portal.setDestDim(to);

@@ -34,7 +34,7 @@ public class MixinItem_Interaction {
 //
 //        return BlockHitResult.miss(
 //            clipContext.getTo(),
-//            Direction.getNearest(direction.x, direction.y, direction.z),
+//            Direction.getApproximateNearest(direction.x, direction.y, direction.z),
 //            BlockPos.containing(clipContext.getTo())
 //        );
 //    }

@@ -7,8 +7,8 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
+import qouteall.imm_ptl.core.render.NativeLineBuffer;
+import qouteall.imm_ptl.core.render.NativeLineBuffer.Mode;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
@@ -284,7 +284,7 @@ public class ClientPortalWandPortalCopy {
     
     public static void render(
         PoseStack matrixStack,
-        MultiBufferSource.BufferSource bufferSource,
+        NativeLineBuffer bufferSource,
         double camX, double camY, double camZ
     ) {
         LocalPlayer player = Minecraft.getInstance().player;
@@ -299,7 +299,7 @@ public class ClientPortalWandPortalCopy {
         
         ResourceKey<Level> currDim = player.level().dimension();
         Vec3 cameraPos = new Vec3(camX, camY, camZ);
-        VertexConsumer vertexConsumer = bufferSource.getBuffer(RenderType.lines());
+        VertexConsumer vertexConsumer = bufferSource.getBuffer(Mode.lines());
         
         Vec3 cursorPos = null;
         RenderedPoint currentCursor = cursor.getCurrent();

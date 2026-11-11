@@ -4,8 +4,6 @@ import com.mojang.datafixers.DataFixer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.Services;
 import net.minecraft.server.WorldStem;
-import net.minecraft.server.level.progress.ChunkProgressListener;
-import net.minecraft.server.level.progress.ChunkProgressListenerFactory;
 import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.util.thread.ReentrantBlockableEventLoop;
 import net.minecraft.world.level.storage.LevelStorageSource;
@@ -27,7 +25,7 @@ import java.util.concurrent.Executor;
 @Mixin(MinecraftServer.class)
 public abstract class MixinMinecraftServer_Misc extends ReentrantBlockableEventLoop implements IEMinecraftServer_Misc {
     public MixinMinecraftServer_Misc(String string) {
-        super(string);
+        super(string, false);
         throw new RuntimeException();
     }
     
@@ -50,14 +48,17 @@ public abstract class MixinMinecraftServer_Misc extends ReentrantBlockableEventL
         at = @At("RETURN")
     )
     private void onConstruct(
-        Thread thread, LevelStorageSource.LevelStorageAccess levelStorageAccess, PackRepository packRepository, WorldStem worldStem, Proxy proxy, DataFixer dataFixer, Services services, ChunkProgressListenerFactory chunkProgressListenerFactory, CallbackInfo ci
+        CallbackInfo ci
     ) {
         MiscGlobals.refMinecraftServer = new WeakReference<>((MinecraftServer) ((Object) this));
     }
     
     @Inject(method = "createLevels", at = @At("RETURN"))
-    private void onWorldsCreated(ChunkProgressListener listener, CallbackInfo ci) {
-        DimensionIntId.onServerStarted((MinecraftServer) (Object) this);
+    private void onWorldsCreated(CallbackInfo ci) {
+        MinecraftServer server = (MinecraftServer)(Object)this;
+        DimensionIntId.onServerStarted(server);
+        qouteall.q_misc_util.dimension.DimensionLifecycle.SERVER_DIMENSIONS_LOAD_EVENT.invoker().accept(server);
+        qouteall.imm_ptl.peripheral.dim_stack.DimStackManagement.onServerCreatedWorlds(server);
     }
     
     @Override

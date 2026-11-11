@@ -1694,39 +1694,28 @@ public class Mesh2D {
     }
     
     public static @Nullable Mesh2D fromTag(CompoundTag tag) {
-        ListTag pointCoords = tag.getList("pointCoords", Tag.TAG_DOUBLE);
-        ListTag triangles = tag.getList("triangles", Tag.TAG_INT);
-        
-        if (pointCoords.isEmpty() || pointCoords.size() % 2 != 0) {
-            return null;
+        ListTag points = tag.getListOrEmpty("pointCoords");
+        ListTag triangles = tag.getListOrEmpty("triangles");
+        if (points.isEmpty() || points.size() % 2 != 0 || points.size() > 2_000_000 ||
+            triangles.isEmpty() || triangles.size() % 3 != 0 || triangles.size() > 3_000_000) return null;
+        double[] coordinates = new double[points.size()];
+        for (int i = 0; i < coordinates.length; i++) {
+            var value = points.getDouble(i);
+            if (value.isEmpty() || !Double.isFinite(value.get())) return null;
+            coordinates[i] = value.get();
         }
-        
-        if (triangles.isEmpty() || triangles.size() % 3 != 0) {
-            return null;
-        }
-        
-        int pointNum = pointCoords.size() / 2;
-        
         Mesh2D mesh = new Mesh2D();
-        
-        for (int i = 0; i < triangles.size() / 3; i++) {
-            int p0Index = triangles.getInt(i * 3);
-            int p1Index = triangles.getInt(i * 3 + 1);
-            int p2Index = triangles.getInt(i * 3 + 2);
-            
-            mesh.addTriangle(
-                pointCoords.getDouble(p0Index * 2),
-                pointCoords.getDouble(p0Index * 2 + 1),
-                pointCoords.getDouble(p1Index * 2),
-                pointCoords.getDouble(p1Index * 2 + 1),
-                pointCoords.getDouble(p2Index * 2),
-                pointCoords.getDouble(p2Index * 2 + 1)
-            );
+        for (int i = 0; i < triangles.size(); i += 3) {
+            int a = triangles.getInt(i).orElse(-1);
+            int b = triangles.getInt(i+1).orElse(-1);
+            int c = triangles.getInt(i+2).orElse(-1);
+            int count = coordinates.length / 2;
+            if (a < 0 || b < 0 || c < 0 || a >= count || b >= count || c >= count) return null;
+            mesh.addTriangle(coordinates[a*2], coordinates[a*2+1], coordinates[b*2], coordinates[b*2+1], coordinates[c*2], coordinates[c*2+1]);
         }
-        
         return mesh;
     }
-    
+
     public void debugVisualize() {
         JsonObject jsonObject = toJson();
         

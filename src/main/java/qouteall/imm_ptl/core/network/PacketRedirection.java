@@ -16,7 +16,7 @@ import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBundlePacket;
 import net.minecraft.network.protocol.game.GameProtocols;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -44,8 +44,8 @@ public class PacketRedirection {
     
     // most game packets sent are redirected, so that payload id will be used very frequently
     // use a short id to reduce packet size
-    public static final ResourceLocation payloadId =
-        McHelper.newResourceLocation("i:r");
+    public static final Identifier payloadId =
+        McHelper.newIdentifier("i:r");
     
     private static final ThreadLocal<ResourceKey<Level>> serverPacketRedirection =
         ThreadLocal.withInitial(() -> null);
@@ -61,7 +61,7 @@ public class PacketRedirection {
         ThreadLocal.withInitial(() -> null);
     
     public static void init() {
-        PayloadTypeRegistry.playS2C().register(Payload.TYPE, Payload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(Payload.TYPE, Payload.CODEC);
     }
     
     public static void withForceRedirect(ServerLevel world, Runnable func) {
@@ -97,6 +97,14 @@ public class PacketRedirection {
             }
         }
     }
+
+    /** Runs real player transfers outside a temporary remote-action packet destination. */
+    public static <T> T withoutForceRedirect(Supplier<T> func) {
+        ResourceKey<Level> previous = serverPacketRedirection.get();
+        serverPacketRedirection.set(null);
+        try { return func.get(); }
+        finally { serverPacketRedirection.set(previous); }
+    }
     
     /**
      * If it's not null, all sent packets will be wrapped into redirected packet
@@ -119,7 +127,7 @@ public class PacketRedirection {
         else {
             serverPlayNetworkHandler.send(
                 createRedirectedMessage(
-                    serverPlayNetworkHandler.player.server,
+                    serverPlayNetworkHandler.player.level().getServer(),
                     dimension,
                     packet
                 )
@@ -178,7 +186,7 @@ public class PacketRedirection {
         ResourceKey<Level> dimension,
         Packet<ClientGamePacketListener> packet
     ) {
-        player.connection.send(createRedirectedMessage(player.server, dimension, packet));
+        player.connection.send(createRedirectedMessage(player.level().getServer(), dimension, packet));
     }
     
     // Note this doesn't consider bundle packet
@@ -274,6 +282,18 @@ public class PacketRedirection {
             return new Payload(dimensionIntId, packet);
         }
         
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        @Environment(EnvType.CLIENT)
+        public void handle(ClientboundCustomPayloadPacket wrapper, ClientGamePacketListener listener) {
+            // 26.2 schedules vanilla respawn and batch boundaries on PacketProcessor.
+            // Queue this original wrapper there too: Minecraft.execute uses a separate
+            // task queue and can deliver redirected chunks/entities before respawn.
+            net.minecraft.network.protocol.PacketUtils.ensureRunningOnSameThread(
+                wrapper, listener, net.minecraft.client.Minecraft.getInstance().packetProcessor()
+            );
+            handle(listener);
+        }
+
         @SuppressWarnings({"unchecked", "rawtypes"})
         @Environment(EnvType.CLIENT)
         public void handle(ClientGamePacketListener listener) {

@@ -1,0 +1,14 @@
+{
+  "schema_version": "imm_ptl:v1",
+  "from": [
+    "minecraft:overworld"
+  ],
+  "to": "minecraft:the_nether",
+  "form": {
+    "type": "imm_ptl:convert_conventional_portal",
+    "portal_block": "minecraft:nether_portal"
+  },
+  "trigger": {
+    "type": "imm_ptl:conventional_dimension_change"
+  }
+}

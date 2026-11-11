@@ -1,0 +1,7 @@
+{
+  "type": "immersive_portals:surface_type",
+  "generator": {
+    "type": "immersive_portals:normal_skyland_generator",
+    "seed": 0
+  }
+}

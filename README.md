@@ -1,35 +1,30 @@
-# Immersive Portals Mod
+# Immersive Portals — Minecraft 26.2 / Fabric
 
-It's a Minecraft mod that provides see-through portals and seamless teleportation. It also can create "Non-Euclidean" (Uneuclidean) space effect.
+[English](README.md) · [Français](README.fr.md)
 
-![immptl.png](https://i.loli.net/2021/09/30/chHMG45dsnZNqep.png)
+Fabric port of [Immersive Portals](https://github.com/iPortalTeam/ImmersivePortalsMod): see through portals and travel between worlds seamlessly. The renderer targets Minecraft's native OpenGL and Vulkan backends. This repository distributes the Fabric mod; the Minestom server SDK remains in its [own repository](https://github.com/N4TH4NOT/immersive-portals-minestom).
 
-[On CurseForge](https://www.curseforge.com/minecraft/mc-mods/immersive-portals-mod)     [On Modrinth](https://modrinth.com/mod/immersiveportals)     [Website](https://qouteall.fun/immptl/)
+## Installation
 
-This mod changes a lot of underlying Minecraft mechanics. This mod allows the client to load multiple dimensions at the same time and synchronize remote world information(blocks/entities) to client. It can render portal-in-portals. The portal rendering is roughly compatible with some versions of Sodium and Iris. The portal can transform player scale and gravity direction.  [Implementation Details](https://qouteall.fun/immptl/wiki/Implementation-Details)
+Use Minecraft Java **26.2**, Java **25**, Fabric Loader and Fabric API. Exact dependency versions are pinned in [gradle.properties](gradle.properties).
 
-(This is the Fabric version of Immersive Portals. [The Forge version](https://github.com/iPortalTeam/ImmersivePortalsModForNeo))
+Download a successful revision's mod JAR from [GitHub Actions](https://github.com/N4TH4NOT/Immersive-Portals/actions), then place it in the client's and Fabric server's `mods` directory with Fabric API. Cloth Config and the gravity adapter/API are bundled. Directional player gravity additionally requires [Gravity Changer](https://github.com/N4TH4NOT/gravity-changer#fabric-installation-and-use). Development artifacts are not stable releases.
 
-## API
+Install the same mod build on the client and Fabric server. The portal-crossing packet includes the player's source feet and pose, so earlier alpha builds have a different crossing payload.
 
-This mod also provides some API for:
+Select Vulkan through Minecraft's `--graphicsBackend vulkan` option. Iris uses the OpenGL adapter; compatibility with an arbitrary shaderpack or GPU requires separate verification.
 
-* Manage see-through portals
-* Dynamically add dimensions
-* Synchronize remote chunks to client
-* Render the world into GUI
-* Other utilities
+## Development and status
 
-[API description](https://qouteall.fun/immptl/wiki/API-for-Other-Mods.html).
+All compilation, automated tests and runtime scenarios run **exclusively on GitHub Actions**. See the [validation guide](docs/port-26.2.md) for required checks, retained evidence and limits. A successful build does not establish complete gameplay compatibility.
 
-## How to run this code
-https://fabricmc.net/wiki/tutorial:setup
+- [Source provenance and scope](docs/provenance.md), [upstream review](docs/upstream-1.21-review.md) and [migration findings](docs/migration-audit-26.2.md).
+- [Rendering design](docs/rendering-26.2.md), [network compatibility](docs/network-audit-26.2.md) and [gravity integration](docs/gravity-repository.md).
+- [Alpha.6 seamless portal follow-up](docs/seamless-26.2.md): implementation scope and expanded validation still pending.
+- [Built-in alternate dimensions](docs/alternate-dimensions.md) and [dimension API/commands](docs/dimension-library.md).
+- [Troubleshooting portal-render crashes](docs/troubleshooting.md).
+- [Optional generation datapack](examples/custom_portal_gen/README.md).
 
-## Other
+Dimension management, including the DimLib API and templates, is adapted internally without an external DimLib dependency. Legacy Pehkui, Flywheel, Porting Lib and Requiem adapters are not supplied as 26.2 integrations. Native entity scaling does not require Pehkui. Remaining differences and the evidence required before declaring the migration complete are documented in the [migration findings](docs/migration-audit-26.2.md).
 
-[Wiki](https://qouteall.fun/immptl/wiki/)
-
-[Discord Server](https://discord.gg/BZxgURK)
-
-[Support qouteall on Patreon](https://www.patreon.com/qouteall)
-
+Original work by qouteall and contributors, under [Apache-2.0](LICENSE). This port preserves their source history and reuses the 26.2 adaptations from N4TH4NOT's [Fabric/Minestom fork](https://github.com/N4TH4NOT/immersive-portals-minestom/tree/67bf29333b82b0d6c594c65d84256c881f0182b4). The [upstream wiki](https://qouteall.fun/immptl/wiki/) describes earlier engine versions.

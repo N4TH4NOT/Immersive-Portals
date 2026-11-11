@@ -2,38 +2,71 @@ package qouteall.imm_ptl.core.compat.mixin.sodium;
 
 import net.caffeinemc.mods.sodium.client.render.viewport.Viewport;
 import net.caffeinemc.mods.sodium.client.render.viewport.frustum.Frustum;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
-import qouteall.imm_ptl.core.compat.sodium_compatibility.SodiumInterface;
+import net.minecraft.client.Minecraft;
 
-@Mixin(value = Viewport.class, remap = false)
-public class MixinSodiumViewport {
-    @Redirect(
-        method = "isBoxVisible",
-        at = @At(
-            value = "INVOKE",
-            target = "Lnet/caffeinemc/mods/sodium/client/render/viewport/frustum/Frustum;testAab(FFFFFF)Z"
-        )
-    )
-    private boolean redirectTestAab(
-        Frustum instance,
-        float minX, float minY, float minZ, float maxX, float maxY, float maxZ
-    ) {
-        boolean inFrustum = instance.testAab(
-            minX, minY, minZ, maxX, maxY, maxZ
-        );
-        
-        if (inFrustum) {
-            if (SodiumInterface.frustumCuller != null) {
-                boolean canDetermineInvisible =
-                    SodiumInterface.frustumCuller.canDetermineInvisibleWithCameraCoord(
-                        minX, minY, minZ, maxX, maxY, maxZ
-                    );
-                return !canDetermineInvisible;
-            }
-        }
-        
-        return inFrustum;
+import org.joml.FrustumIntersection;
+import org.joml.Vector3d;
+import org.spongepowered.asm.mixin.*;
+import org.spongepowered.asm.mixin.injection.*;
+import org.spongepowered.asm.mixin.injection.callback.*;
+
+import qouteall.imm_ptl.core.compat.sodium_compatibility.PortalViewport;
+import qouteall.imm_ptl.core.render.FrustumCuller;
+import qouteall.imm_ptl.core.render.MyGameRenderer;
+import qouteall.imm_ptl.core.render.context_management.PortalRendering;
+
+@Mixin(Viewport.class)
+public abstract class MixinSodiumViewport implements PortalViewport {
+    @Unique private FrustumCuller ip_culler;
+    @Unique private boolean ip_caveCulling = true;
+
+    @Inject(method = "<init>", at = @At("RETURN"))
+    private void ip_snapshot(Frustum frustum, Vector3d position, CallbackInfo ci) {
+        if (!Minecraft.getInstance().isSameThread()) return;
+        ip_culler = new FrustumCuller();
+        ip_culler.update(position.x, position.y, position.z);
+        ip_caveCulling =
+                !PortalRendering.isRendering()
+                        || (MyGameRenderer.enablePortalCaveCulling
+                                && Minecraft.getInstance()
+                                        .gameRenderer
+                                        .gameRenderState()
+                                        .levelRenderState
+                                        .cameraRenderState
+                                        .smartCull);
+        qouteall.imm_ptl.core.render.RenderDiagnostics.sodiumViewport();
+    }
+
+    @Inject(
+            method = {"isBoxVisible(III)Z", "isBoxVisibleLooser(III)Z"},
+            at = @At("HEAD"),
+            cancellable = true)
+    private void ip_section(int x, int y, int z, CallbackInfoReturnable<Boolean> cir) {
+        if (ip_culler != null
+                && ip_culler.canDetermineInvisibleWithWorldCoord(
+                        x - 10, y - 10, z - 10, x + 10, y + 10, z + 10)) cir.setReturnValue(false);
+    }
+
+    @Inject(method = "isBoxVisibleDirect", at = @At("HEAD"), cancellable = true)
+    private void ip_box(
+            float x, float y, float z, float radius, CallbackInfoReturnable<Boolean> cir) {
+        if (ip_culler != null
+                && ip_culler.canDetermineInvisibleWithCameraCoord(
+                        x - radius, y - radius, z - radius, x + radius, y + radius, z + radius))
+            cir.setReturnValue(false);
+    }
+
+    @Inject(method = "getBoxIntersectionDirect", at = @At("HEAD"), cancellable = true)
+    private void ip_intersection(
+            float x, float y, float z, float radius, CallbackInfoReturnable<Integer> cir) {
+        if (ip_culler != null
+                && ip_culler.canDetermineInvisibleWithCameraCoord(
+                        x - radius, y - radius, z - radius, x + radius, y + radius, z + radius))
+            cir.setReturnValue(FrustumIntersection.PLANE_NX);
+    }
+
+    @Override
+    public boolean ip_allowCaveCulling() {
+        return ip_caveCulling;
     }
 }

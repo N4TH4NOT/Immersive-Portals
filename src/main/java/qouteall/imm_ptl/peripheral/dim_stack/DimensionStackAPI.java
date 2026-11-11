@@ -4,13 +4,13 @@ import net.fabricmc.fabric.api.event.Event;
 import net.fabricmc.fabric.api.event.EventFactory;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import org.jetbrains.annotations.Nullable;
-import qouteall.dimlib.api.DimensionAPI;
+import qouteall.q_misc_util.dimension.DimensionLifecycle;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -51,7 +51,9 @@ public class DimensionStackAPI {
      * 1.
      * When initializing a server and is initializing dimension stack, this event will fire.
      * In this case, the `dimStackInfo` parameter will not be null.
-     * It will fire inside {@link DimensionAPI#SERVER_DIMENSIONS_LOAD_EVENT} so you can add dimensions via {@link DimensionAPI#addDimension(MinecraftServer, ResourceLocation, LevelStem)} at this time.
+     * It fires inside {@link DimensionLifecycle#SERVER_DIMENSIONS_LOAD_EVENT}; integrations
+     * may add missing dimensions with {@link qouteall.dimlib.api.DimensionAPI#addDimension}
+     * before the stack's portals are created.
      *
      * 2.
      * After using `/portal dimension_stack` command, this event will also fire,

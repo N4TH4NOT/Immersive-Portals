@@ -1,0 +1,10 @@
+DimLib compatibility and native dimension management
+
+Based on iPortalTeam/DimLib, branch 1.21.3, by qouteall and contributors.
+Source revision: 467e83b50a3aeaee31322369859ee7a6bf17bcf9
+https://github.com/iPortalTeam/DimLib
+
+The original DimensionTemplate and public API design are reused under the
+Apache License, Version 2.0, supplied as DimLib-LICENSE.txt. The Minecraft 26.2
+adaptation uses native saved world-generation data and the Immersive Portals
+networking/lifecycle implementation. Original copyright notices are retained.

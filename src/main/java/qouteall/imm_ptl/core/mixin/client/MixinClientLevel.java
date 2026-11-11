@@ -62,17 +62,17 @@ public abstract class MixinClientLevel implements IEClientWorld {
     @Mutable
     @Shadow
     @Final
-    private LevelRenderer levelRenderer;
+    private net.minecraft.client.renderer.extract.LevelExtractor levelExtractor;
     
     @Shadow
     @Final
     private EntityTickList tickingEntities;
     
     @Shadow
-    protected abstract Map<String, MapItemSavedData> getAllMapData();
+    protected abstract Map<net.minecraft.world.level.saveddata.maps.MapId, MapItemSavedData> getAllMapData();
     
     @Shadow
-    protected abstract void addMapData(Map<String, MapItemSavedData> map);
+    protected abstract void addMapData(Map<net.minecraft.world.level.saveddata.maps.MapId, MapItemSavedData> map);
     
     @Shadow
     @Final
@@ -100,8 +100,8 @@ public abstract class MixinClientLevel implements IEClientWorld {
     )
     void onConstructed(
         ClientPacketListener clientPacketListener, ClientLevel.ClientLevelData clientLevelData,
-        ResourceKey resourceKey, Holder holder, int loadDistance, int j, Supplier supplier,
-        LevelRenderer levelRenderer, boolean bl, long l, CallbackInfo ci
+        ResourceKey resourceKey, Holder holder, int loadDistance, int simulationDistance,
+        net.minecraft.client.renderer.extract.LevelExtractor levelExtractor, boolean debug, long seed, int seaLevel, CallbackInfo ci
     ) {
         ClientLevel clientWorld = (ClientLevel) (Object) this;
         ClientChunkCache myClientChunkManager =
@@ -147,7 +147,7 @@ public abstract class MixinClientLevel implements IEClientWorld {
     @Inject(method = "Lnet/minecraft/client/multiplayer/ClientLevel;toString()Ljava/lang/String;", at = @At("HEAD"), cancellable = true)
     private void onToString(CallbackInfoReturnable<String> cir) {
         ClientLevel this_ = (ClientLevel) (Object) this;
-        cir.setReturnValue("ClientWorld " + this_.dimension().location());
+        cir.setReturnValue("ClientWorld " + this_.dimension().identifier());
     }
     
     @Inject(
@@ -161,7 +161,7 @@ public abstract class MixinClientLevel implements IEClientWorld {
     
     @Override
     public void ip_resetWorldRendererRef() {
-        levelRenderer = null;
+        levelExtractor = null;
     }
     
     @Override
@@ -170,12 +170,12 @@ public abstract class MixinClientLevel implements IEClientWorld {
     }
     
     @Override
-    public Map<String, MapItemSavedData> ip_getAllMapData() {
+    public Map<net.minecraft.world.level.saveddata.maps.MapId, MapItemSavedData> ip_getAllMapData() {
         return getAllMapData();
     }
     
     @Override
-    public void ip_addMapData(Map<String, MapItemSavedData> map) {
+    public void ip_addMapData(Map<net.minecraft.world.level.saveddata.maps.MapId, MapItemSavedData> map) {
         addMapData(map);
     }
     

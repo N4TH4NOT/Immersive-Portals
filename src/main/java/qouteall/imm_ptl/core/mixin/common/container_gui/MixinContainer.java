@@ -21,7 +21,7 @@ public interface MixinContainer {
         method = "stillValidBlockEntity(Lnet/minecraft/world/level/block/entity/BlockEntity;Lnet/minecraft/world/entity/player/Player;F)Z",
         at = @At(
             value = "INVOKE",
-            target = "Lnet/minecraft/world/entity/player/Player;canInteractWithBlock(Lnet/minecraft/core/BlockPos;D)Z"
+            target = "Lnet/minecraft/world/entity/player/Player;isWithinBlockInteractionRange(Lnet/minecraft/core/BlockPos;D)Z"
         )
     )
     private static boolean wrapCanInteractWithBlock(
@@ -30,11 +30,11 @@ public interface MixinContainer {
     ) {
         Boolean originalResult = operation.call(player, blockPos, distance);
         
-        if (!originalResult) {
+        if (!originalResult || player.level() != blockEntity.getLevel()) {
             BlockPos targetPos = blockEntity.getBlockPos();
             Level targetWorld = blockEntity.getLevel();
             
-            return BlockManipulationServer.validateReach(player, targetWorld, targetPos);
+            return BlockManipulationServer.validateReach(player, targetWorld, targetPos, distance);
         }
         else {
             return true;

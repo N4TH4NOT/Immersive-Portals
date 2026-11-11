@@ -29,8 +29,7 @@ public abstract class MixinDistanceManager implements IEDistanceManager {
     @Final
     private Long2ObjectMap<ObjectSet<ServerPlayer>> playersPerChunk;
     
-    @Shadow
-    protected abstract SortedArraySet<Ticket<?>> getTickets(long position);
+    @Shadow @Final private net.minecraft.world.level.TicketStorage ticketStorage;
     
     // avoid NPE
     @Inject(method = "Lnet/minecraft/server/level/DistanceManager;removePlayer(Lnet/minecraft/core/SectionPos;Lnet/minecraft/server/level/ServerPlayer;)V", at = @At("HEAD"))
@@ -39,7 +38,7 @@ public abstract class MixinDistanceManager implements IEDistanceManager {
         ServerPlayer serverPlayer,
         CallbackInfo ci
     ) {
-        long chunkPos = sectionPos.chunk().toLong();
+        long chunkPos = sectionPos.chunk().pack();
         playersPerChunk.computeIfAbsent(chunkPos, k -> new ObjectOpenHashSet<>());
     }
     
@@ -55,7 +54,7 @@ public abstract class MixinDistanceManager implements IEDistanceManager {
     }
     
     @Override
-    public SortedArraySet<Ticket<?>> portal_getTicketSet(long chunkPos) {
-        return getTickets(chunkPos);
+    public java.util.List<Ticket> portal_getTicketSet(long chunkPos) {
+        return ticketStorage.getTickets(chunkPos);
     }
 }

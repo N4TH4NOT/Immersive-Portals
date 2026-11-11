@@ -61,17 +61,17 @@ public class WireRenderingHelper {
         float green = ((color >> 8) & 0xff) / 255f;
         float blue = (color & 0xff) / 255f;
         
-        LevelRenderer.renderLineBox(
-            matrixStack,
-            vertexConsumer,
-            -boxSize / 2,
-            -boxSize / 2,
-            -boxSize / 2,
-            boxSize / 2,
-            boxSize / 2,
-            boxSize / 2,
-            red, green, blue, alpha
-        );
+        for (int axis = 0; axis < 3; axis++) {
+            for (int a = -1; a <= 1; a += 2) for (int b = -1; b <= 1; b += 2) {
+                float[] low = new float[3];
+                low[axis] = (float)-boxSize / 2;
+                low[(axis+1)%3] = (float)(a*boxSize/2);
+                low[(axis+2)%3] = (float)(b*boxSize/2);
+                float[] high = low.clone(); high[axis] = (float)boxSize / 2;
+                vertexConsumer.addVertex(matrix,low[0],low[1],low[2]).setColor(red,green,blue,alpha);
+                vertexConsumer.addVertex(matrix,high[0],high[1],high[2]).setColor(red,green,blue,alpha);
+            }
+        }
         matrixStack.popPose();
     }
     

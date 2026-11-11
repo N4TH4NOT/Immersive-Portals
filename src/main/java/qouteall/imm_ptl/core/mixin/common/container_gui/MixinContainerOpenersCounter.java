@@ -1,39 +1,20 @@
 package qouteall.imm_ptl.core.mixin.common.container_gui;
-
 import net.minecraft.core.BlockPos;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.ContainerUser;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.ContainerOpenersCounter;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.*;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
-import java.util.ArrayList;
-import java.util.List;
-
+import java.util.*;
 @Mixin(ContainerOpenersCounter.class)
 public abstract class MixinContainerOpenersCounter {
-    @Shadow
-    protected abstract boolean isOwnContainer(Player player);
-    
-    // the container could be opened via portal. the player could be anywhere in any dimension
-    // check all players
-    @Inject(method = "getPlayersWithContainerOpen", at = @At("HEAD"), cancellable = true)
-    private void getOpenCount(Level level, BlockPos pos, CallbackInfoReturnable<List<Player>> cir) {
-        List<Player> list = new ArrayList<>();
-        
-        MinecraftServer server = level.getServer();
-        assert server != null;
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            if (isOwnContainer(player)) {
-                list.add(player);
-            }
-        }
-        
-        cir.setReturnValue(list);
+    @Inject(method="getEntitiesWithContainerOpen",at=@At("RETURN"),cancellable=true)
+    private void ip_remoteOpeners(Level level,BlockPos pos,CallbackInfoReturnable<List<ContainerUser>> cir) {
+        if(level.getServer()==null)return;
+        var result=new ArrayList<ContainerUser>(cir.getReturnValue());
+        for(var player:level.getServer().getPlayerList().getPlayers())
+            if(!player.isSpectator() && player.hasContainerOpen((ContainerOpenersCounter)(Object)this,pos) && !result.contains(player)) result.add(player);
+        cir.setReturnValue(result);
     }
 }

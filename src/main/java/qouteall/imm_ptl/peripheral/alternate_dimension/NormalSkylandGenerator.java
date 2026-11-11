@@ -14,7 +14,7 @@ import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.progress.ChunkProgressListener;
+
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.thread.BlockableEventLoop;
 import net.minecraft.world.level.StructureManager;
@@ -66,17 +66,19 @@ public class NormalSkylandGenerator extends NoiseBasedChunkGenerator {
                 RegistryOps.retrieveGetter(Registries.NOISE),
                 RegistryOps.retrieveGetter(Registries.NOISE_SETTINGS),
                 RegistryOps.retrieveGetter(Registries.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST),
-                Codec.LONG.optionalFieldOf("seed", 0L).forGetter(g -> g.seed)
+                Codec.LONG.optionalFieldOf("seed", 0L).forGetter(g -> g.seed),
+                Codec.BOOL.optionalFieldOf("use_world_seed", false).forGetter(g -> g.useWorldSeed)
             )
             .apply(instance, NormalSkylandGenerator::create)
     );
     
     private RandomState delegatedRandomState;
     
-    private final HolderGetter<Biome> biomeHolderGetter;
-    private final HolderGetter<DensityFunction> densityFunctionHolderGetter;
-    private final HolderGetter<NormalNoise.NoiseParameters> noiseParametersHolderGetter;
+    private final net.minecraft.core.HolderGetter<Biome> biomeHolderGetter;
+    private final net.minecraft.core.HolderGetter<DensityFunction> densityFunctionHolderGetter;
+    private final net.minecraft.core.HolderGetter<NormalNoise.NoiseParameters> noiseParametersHolderGetter;
     private final long seed;
+    private boolean useWorldSeed;
     
     public NormalSkylandGenerator(
         BiomeSource biomeSource,
@@ -84,9 +86,9 @@ public class NormalSkylandGenerator extends NoiseBasedChunkGenerator {
         
         NoiseBasedChunkGenerator delegate,
         
-        HolderGetter<Biome> biomeHolderGetter,
-        HolderGetter<DensityFunction> densityFunctionHolderGetter,
-        HolderGetter<NormalNoise.NoiseParameters> noiseParametersHolderGetter,
+        net.minecraft.core.HolderGetter<Biome> biomeHolderGetter,
+        net.minecraft.core.HolderGetter<DensityFunction> densityFunctionHolderGetter,
+        net.minecraft.core.HolderGetter<NormalNoise.NoiseParameters> noiseParametersHolderGetter,
         long seed
     ) {
         super(biomeSource, noiseGeneratorSettings);
@@ -105,11 +107,11 @@ public class NormalSkylandGenerator extends NoiseBasedChunkGenerator {
     }
     
     public static NormalSkylandGenerator create(
-        HolderGetter<Biome> biomeHolderGetter,
-        HolderGetter<DensityFunction> densityFunctionHolderGetter,
-        HolderGetter<NormalNoise.NoiseParameters> noiseParametersHolderGetter,
-        HolderGetter<NoiseGeneratorSettings> noiseGeneratorSettingsHolderGetter,
-        HolderGetter<MultiNoiseBiomeSourceParameterList> biomeParamListLookup,
+        net.minecraft.core.HolderGetter<Biome> biomeHolderGetter,
+        net.minecraft.core.HolderGetter<DensityFunction> densityFunctionHolderGetter,
+        net.minecraft.core.HolderGetter<NormalNoise.NoiseParameters> noiseParametersHolderGetter,
+        net.minecraft.core.HolderGetter<NoiseGeneratorSettings> noiseGeneratorSettingsHolderGetter,
+        net.minecraft.core.HolderGetter<MultiNoiseBiomeSourceParameterList> biomeParamListLookup,
         long seed
     ) {
         Holder.Reference<MultiNoiseBiomeSourceParameterList> overworldBiomeParamList =
@@ -130,7 +132,7 @@ public class NormalSkylandGenerator extends NoiseBasedChunkGenerator {
             intrinsicSkylandNGS.noiseSettings(),
             intrinsicSkylandNGS.defaultBlock(),
             intrinsicSkylandNGS.defaultFluid(),
-            IENoiseRouterData.ip_noNewCaves(
+            createNoiseRouter(
                 densityFunctionHolderGetter,
                 noiseParametersHolderGetter,
                 IENoiseRouterData.ip_slideEndLike(IENoiseRouterData.ip_getFunction(
@@ -178,6 +180,20 @@ public class NormalSkylandGenerator extends NoiseBasedChunkGenerator {
         
         return result;
     }
+
+    public static NormalSkylandGenerator create(
+        HolderGetter<Biome> biomes,
+        HolderGetter<DensityFunction> densities,
+        HolderGetter<NormalNoise.NoiseParameters> noises,
+        HolderGetter<NoiseGeneratorSettings> settings,
+        HolderGetter<MultiNoiseBiomeSourceParameterList> biomeParameters,
+        long seed, boolean useWorldSeed
+    ) {
+        NormalSkylandGenerator generator =
+            create(biomes, densities, noises, settings, biomeParameters, seed);
+        generator.useWorldSeed = useWorldSeed;
+        return generator;
+    }
     
     private final NoiseBasedChunkGenerator delegate;
     
@@ -203,13 +219,20 @@ public class NormalSkylandGenerator extends NoiseBasedChunkGenerator {
     
     @Override
     public ChunkGeneratorStructureState createState(HolderLookup<StructureSet> structureSetLookup, RandomState randomState, long seed) {
+        if (useWorldSeed) {
+            delegatedRandomState = RandomState.create(
+                delegate.generatorSettings().value(),
+                (HolderLookup.RegistryLookup<NormalNoise.NoiseParameters>) noiseParametersHolderGetter,
+                seed
+            );
+        }
         // filter the mineshaft out
         // cannot use HolderLookup.filterElements because it does not provide id in predicate
         HolderLookup<StructureSet> structureSetLookupDelegate = new HolderLookup<StructureSet>() {
             @Override
             public Stream<Holder.Reference<StructureSet>> listElements() {
                 return structureSetLookup.listElements().filter(
-                    holder -> !holder.key().location().getPath().equals("mineshafts")
+                    holder -> !holder.key().identifier().getPath().equals("mineshafts")
                 );
             }
             
@@ -231,4 +254,10 @@ public class NormalSkylandGenerator extends NoiseBasedChunkGenerator {
         
         return super.createState(structureSetLookupDelegate, randomState, seed);
     }
+    private static net.minecraft.world.level.levelgen.NoiseRouter createNoiseRouter(net.minecraft.core.HolderGetter<DensityFunction> densities, net.minecraft.core.HolderGetter<NormalNoise.NoiseParameters> noises, DensityFunction density) {
+        var zero = net.minecraft.world.level.levelgen.DensityFunctions.zero();
+        var climate = IENoiseRouterData.ip_floatingIslands(densities, noises);
+        return new net.minecraft.world.level.levelgen.NoiseRouter(zero, zero, zero, zero, climate.temperature(), climate.vegetation(), zero, zero, zero, zero, zero, IENoiseRouterData.ip_postProcess(density), zero, zero, zero);
+    }
+
 }

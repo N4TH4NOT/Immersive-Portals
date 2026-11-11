@@ -1,6 +1,6 @@
 package qouteall.imm_ptl.core.mixin.common.entity_sync;
 
-import net.minecraft.network.PacketSendListener;
+import io.netty.channel.ChannelFutureListener;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.server.MinecraftServer;
@@ -21,11 +21,16 @@ public class MixinServerGamePacketListenerImpl_Redirect {
     
     @SuppressWarnings({"rawtypes", "unchecked"})
     @ModifyVariable(
-        method = "send(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketSendListener;)V",
+        method = "send(Lnet/minecraft/network/protocol/Packet;Lio/netty/channel/ChannelFutureListener;)V",
         at = @At("HEAD"),
         argsOnly = true
     )
     private Packet modifyPacket(Packet originalPacket) {
+        if (originalPacket instanceof net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket position &&
+            (Object)this instanceof net.minecraft.server.network.ServerGamePacketListenerImpl gameListener) {
+            ((qouteall.imm_ptl.core.ducks.IEPlayerPositionLookS2CPacket)(Object)position).ip_setPlayerDimension(gameListener.player.level().dimension());
+            return originalPacket;
+        }
         if (PacketRedirection.getForceRedirectDimension() == null) {
             return originalPacket;
         }
@@ -39,15 +44,15 @@ public class MixinServerGamePacketListenerImpl_Redirect {
     
     @SuppressWarnings("unchecked")
     @Inject(
-        method = "send(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketSendListener;)V",
+        method = "send(Lnet/minecraft/network/protocol/Packet;Lio/netty/channel/ChannelFutureListener;)V",
         at = @At(
             value = "INVOKE",
-            target = "Lnet/minecraft/network/Connection;send(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketSendListener;Z)V"
+            target = "Lnet/minecraft/network/Connection;send(Lnet/minecraft/network/protocol/Packet;Lio/netty/channel/ChannelFutureListener;Z)V"
         ),
         cancellable = true
     )
     private void onSend(
-        Packet<?> packet, @Nullable PacketSendListener packetSendListener, CallbackInfo ci
+        Packet<?> packet, @Nullable ChannelFutureListener packetSendListener, CallbackInfo ci
     ) {
         PacketRedirection.ForceBundleCallback forceBundleCallback = PacketRedirection.getForceBundleCallback();
         if (forceBundleCallback != null) {

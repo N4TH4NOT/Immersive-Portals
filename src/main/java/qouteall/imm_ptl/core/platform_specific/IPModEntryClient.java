@@ -65,6 +65,11 @@ public class IPModEntryClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         IPModMainClient.init();
+        qouteall.imm_ptl.core.network.bridge.BridgeClient.init();
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+            qouteall.imm_ptl.core.IPCGlobal.CLIENT_CLEANUP_EVENT.invoker().run();
+            qouteall.imm_ptl.core.ClientWorldLoader.cleanUp();
+        });
         
         initPortalRenderers();
         

@@ -13,9 +13,7 @@ import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
-import qouteall.imm_ptl.core.portal.PortalUtils;
-
-import java.util.ArrayList;
+import qouteall.imm_ptl.core.block_manipulation.PortalInteractionTarget;
 
 @Mixin(BucketItem.class)
 public class MixinBucketItem {
@@ -30,31 +28,14 @@ public class MixinBucketItem {
         Level level, Player player, ClipContext.Fluid fluid,
         @Local(argsOnly = true) LocalRef<Level> worldRef
     ) {
-        double distance = 5.0;
-        Vec3 eyePos = player.getEyePosition();
-        Vec3 viewVector = player.getViewVector(1);
-        PortalUtils.PortalAwareRaytraceResult r = PortalUtils.portalAwareRayTraceFull(
-            player.level(),
-            eyePos,
-            viewVector,
-            distance, // TODO un-hardcode in future versions
-            player,
-            ClipContext.Block.OUTLINE, fluid,
-            new ArrayList<>(),
-            1
-        );
-        
-        if (r != null) {
-            worldRef.set(r.world());
-            return r.hitResult();
+        var target = PortalInteractionTarget.traceBlocks(player, fluid);
+        if (target != null && target.hit() instanceof BlockHitResult hit) {
+            worldRef.set(target.world());
+            return hit;
         }
-        else {
-            Vec3 dest = eyePos.add(viewVector.scale(distance));
-            return BlockHitResult.miss(
-                dest,
-                Direction.getNearest(viewVector.x, viewVector.y, viewVector.z),
-                BlockPos.containing(dest)
-            );
-        }
+        Vec3 view = player.getViewVector(1);
+        Vec3 end = player.getEyePosition().add(view.scale(player.blockInteractionRange()));
+        return BlockHitResult.miss(end, Direction.getApproximateNearest(view.x, view.y, view.z),
+                BlockPos.containing(end));
     }
 }

@@ -42,10 +42,10 @@ import qouteall.imm_ptl.core.portal.Portal;
 import qouteall.imm_ptl.core.portal.PortalExtension;
 import qouteall.imm_ptl.core.portal.animation.ClientPortalAnimationManagement;
 import qouteall.imm_ptl.core.portal.animation.StableClientTimer;
-import qouteall.imm_ptl.core.render.FrontClipping;
+
 import qouteall.imm_ptl.core.render.MyGameRenderer;
 import qouteall.imm_ptl.core.render.TransformationManager;
-import qouteall.imm_ptl.core.render.context_management.FogRendererContext;
+import qouteall.imm_ptl.core.render.NativeWorldRenderer;
 import qouteall.imm_ptl.core.render.context_management.RenderStates;
 import qouteall.imm_ptl.core.render.context_management.WorldRenderInfo;
 import qouteall.q_misc_util.Helper;
@@ -139,7 +139,7 @@ public class ClientTeleportationManager {
             return;
         }
         
-        client.getProfiler().push("ip_teleport");
+        net.minecraft.util.profiling.Profiler.get().push("ip_teleport");
         
         ClientPortalAnimationManagement.foreachCustomAnimatedPortals(
             portal -> {
@@ -199,7 +199,7 @@ public class ClientTeleportationManager {
         lastRecordStableTickTime = StableClientTimer.getStableTickTime();
         lastRecordStablePartialTicks = StableClientTimer.getStablePartialTicks();
         
-        client.getProfiler().pop();
+        net.minecraft.util.profiling.Profiler.get().pop();
     }
     
     private static record TeleportationRec(
@@ -291,9 +291,9 @@ public class ClientTeleportationManager {
             Portal portal = teleportation.portal();
             Vec3 collidingPos = teleportation.worldCollisionPoint();
             
-            client.getProfiler().push("portal_teleport");
+            net.minecraft.util.profiling.Profiler.get().push("portal_teleport");
             teleportPlayer(teleportation, partialTicks);
-            client.getProfiler().pop();
+            net.minecraft.util.profiling.Profiler.get().pop();
             
             boolean allowOverlappedTeleport = portal.respectParallelOrientedPortal();
             
@@ -340,6 +340,8 @@ public class ClientTeleportationManager {
         
         Vec3 thisTickEyePos = McHelper.getEyePos(player);
         Vec3 lastTickEyePos = McHelper.getLastTickEyePos(player);
+        Vec3 sourceFeet = player.position();
+        var sourcePose = player.getPose();
         
         Vec3 newThisTickEyePos = teleportation.newThisTickEyePos();
         Vec3 newLastTickEyePos = teleportation.newLastTickEyePos();
@@ -369,14 +371,19 @@ public class ClientTeleportationManager {
         
         ScaleUtils.onClientPlayerTeleported(portal);
         
-        player.connection.send(ClientPlayNetworking.createC2SPacket(
+        if (!qouteall.imm_ptl.core.network.bridge.BridgeClient.teleport(portal,
+            teleportation.lastWorldEyePos(), teleportation.currentWorldEyePos())) {
+        player.connection.send(ClientPlayNetworking.createServerboundPacket(
             new ImmPtlNetworking.TeleportPacket(
                 PortalAPI.clientDimKeyToInt(fromDimension),
-                thisTickEyePos,
+                sourceFeet,
+                sourcePose,
                 portal.getUUID()
             )
         ));
         
+        }
+
         PortalCollisionHandler.updateCollidingPortalAfterTeleportation(
             player, newThisTickEyePos, newLastTickEyePos, RenderStates.getPartialTick()
         );
@@ -430,7 +437,7 @@ public class ClientTeleportationManager {
     }
     
     public static void forceTeleportPlayer(ResourceKey<Level> toDimension, Vec3 destination) {
-        LOGGER.info("client player force teleported {} {}", toDimension.location(), destination);
+        LOGGER.info("client player force teleported {} {}", toDimension.identifier(), destination);
         
         ClientLevel fromWorld = client.level;
         assert fromWorld != null;
@@ -459,7 +466,7 @@ public class ClientTeleportationManager {
         LocalPlayer player, ClientLevel fromWorld, ClientLevel toWorld, Vec3 newEyePos
     ) {
         Validate.isTrue(!WorldRenderInfo.isRendering());
-        Validate.isTrue(!FrontClipping.isClippingEnabled);
+        Validate.isTrue(!NativeWorldRenderer.isRenderingScene());
         Validate.isTrue(!PacketRedirectionClient.getIsProcessingRedirectedMessage());
         
         Entity vehicle = player.getVehicle();
@@ -482,22 +489,13 @@ public class ClientTeleportationManager {
         toWorld.addEntity(player);
         ((IEAbstractClientPlayer) player).ip_setClientLevel(toWorld);
         
-        IEGameRenderer gameRenderer = (IEGameRenderer) Minecraft.getInstance().gameRenderer;
-        gameRenderer.ip_setLightmapTextureManager(ClientWorldLoader
-            .getDimensionRenderHelper(toDimension).lightmapTexture);
-        
         client.level = toWorld;
-        ((IEMinecraftClient) client).ip_setWorldRenderer(
-            ClientWorldLoader.getWorldRenderer(toDimension)
-        );
-        
-        if (client.particleEngine != null) {
-            // avoid clearing all particles
-            ((IEParticleManager) client.particleEngine).ip_setWorld(toWorld);
-        }
-        
-        client.getBlockEntityRenderDispatcher().setLevel(toWorld);
-        
+        IEMinecraftClient access = (IEMinecraftClient) client;
+        access.ip_setWorldRenderer(ClientWorldLoader.getWorldRenderer(toDimension));
+        access.ip_setLevelExtractor(NativeWorldRenderer.primary(toWorld).extractor);
+        access.ip_setParticleEngine(NativeWorldRenderer.particles(toWorld));
+        client.gameRenderer.setLevel(toWorld);
+
         if (vehicle != null) {
             Vec3 offset = McHelper.getVehicleOffsetFromPassenger(vehicle, player);
             Vec3 vehiclePos = player.position().add(offset);
@@ -510,18 +508,17 @@ public class ClientTeleportationManager {
                 player.position().add(offset),
                 McHelper.lastTickPosOf(player).add(offset)
             );
-            player.startRiding(vehicle, true);
+            player.startRiding(vehicle, true, false);
         }
         
         Helper.log(String.format(
             "Client Changed Dimension from %s to %s time: %s age: %s",
-            fromDimension.location(),
-            toDimension.location(),
+            fromDimension.identifier(),
+            toDimension.identifier(),
             tickTimeForTeleportation,
             player.tickCount
         ));
         
-        FogRendererContext.onPlayerTeleport(fromDimension, toDimension);
         
         O_O.onPlayerChangeDimensionClient(fromDimension, toDimension);
     }
@@ -634,7 +631,7 @@ public class ClientTeleportationManager {
             return;
         }
         
-        Vec3 levitationVec = Vec3.atLowerCornerOf(levitationDir.getNormal());
+        Vec3 levitationVec = Vec3.atLowerCornerOf(levitationDir.getUnitVec3i());
         
         Vec3 offset = levitationVec.scale(delta);
         
@@ -691,6 +688,28 @@ public class ClientTeleportationManager {
     }
     
     public static class RemoteCallables {
+        public static void updateEntityPortalPos(
+            ResourceKey<Level> dim,
+            int entityId,
+            Vec3 pos,
+            Vec3 lastTickPos,
+            Vec3 worldVelocity
+        ) {
+            ClientLevel world = ClientWorldLoader.getWorld(dim);
+            Entity entity = world.getEntity(entityId);
+            if (entity == null) {
+                Helper.err("cannot find portal entity to update position");
+                return;
+            }
+            entity.setPos(pos);
+            if (entity.getInterpolation() != null) entity.getInterpolation().cancel();
+            McHelper.setPosAndLastTickPos(entity, pos, lastTickPos);
+            McHelper.setWorldVelocity(entity, worldVelocity);
+            PortalCollisionHandler.updateCollidingPortalAfterTeleportation(
+                entity, McHelper.getEyePos(entity), McHelper.getLastTickEyePos(entity), 1
+            );
+        }
+
         // living entities do position interpolation
         // it may interpolate into unloaded chunks and stuck
         // avoid position interpolation
@@ -710,11 +729,7 @@ public class ClientTeleportationManager {
             
             // both of them are important for Minecart
             entity.setPos(pos);
-            entity.lerpTo(
-                pos.x, pos.y, pos.z,
-                entity.getYRot(), entity.getXRot(),
-                0
-            );
+            if (entity.getInterpolation() != null) entity.getInterpolation().cancel();
             entity.setPos(pos);
         }
     }

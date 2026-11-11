@@ -8,7 +8,9 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+
 import org.jetbrains.annotations.Nullable;
+
 import qouteall.imm_ptl.core.IPGlobal;
 import qouteall.imm_ptl.core.collision.CollisionHelper;
 import qouteall.imm_ptl.core.collision.PortalCollisionHandler;
@@ -40,7 +42,7 @@ public final class BoxPortalShape implements PortalShape {
     }
     
     private static BoxPortalShape deserialize(CompoundTag tag) {
-        boolean facingOutwards1 = tag.getBoolean("facingOutwards");
+        boolean facingOutwards1 = tag.getBoolean("facingOutwards").orElse(false);
         if (facingOutwards1) {
             return FACING_OUTWARDS;
         }
@@ -423,15 +425,11 @@ public final class BoxPortalShape implements PortalShape {
         float hx = (float) ((innerSectionRange.hInclusive.x() + 1) * 16 - cameraPos.x);
         float hy = (float) ((innerSectionRange.hInclusive.y() + 1) * 16 - cameraPos.y);
         float hz = (float) ((innerSectionRange.hInclusive.z() + 1) * 16 - cameraPos.z);
-        
+
         return (minX, minY, minZ, maxX, maxY, maxZ) -> {
-            float midX = (minX + maxX) / 2;
-            float midY = (minY + maxY) / 2;
-            float midZ = (minZ + maxZ) / 2;
-            
-            return !(midX > lx && midX < hx &&
-                midY > ly && midY < hy &&
-                midZ > lz && midZ < hz);
+            // 26.2 traverses octree branches as well as individual sections. A branch
+            // center can be outside the portal while some of its children remain visible.
+            return maxX < lx || minX > hx || maxY < ly || minY > hy || maxZ < lz || minZ > hz;
         };
     }
 }

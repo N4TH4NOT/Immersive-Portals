@@ -21,3 +21,15 @@ pluginManagement {
 //        }
 //    }
 }
+
+rootProject.name = "immersive-portals"
+include "portal-protocol"
+
+
+def gravitySources = providers.gradleProperty('gravitySourceDir')
+    .map { file(it) }.getOrElse(file('dependencies/gravity'))
+if (!new File(gravitySources, 'settings.gradle').isFile()) {
+    throw new GradleException('Gravity sources missing: run git submodule update --init --recursive, or pass -PgravitySourceDir=/path/to/immersive-portals-gravity')
+}
+includeBuild(gravitySources) { name = 'immersive-portals-gravity' }
+gradle.ext.gravitySources = gravitySources

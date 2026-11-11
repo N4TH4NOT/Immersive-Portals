@@ -15,4 +15,8 @@ public interface IEMinecraftClient {
     void ip_setRenderBuffers(RenderBuffers arg);
     
     Thread ip_getRunningThread();
+
+    void ip_setGameRenderer(net.minecraft.client.renderer.GameRenderer renderer);
+    void ip_setLevelExtractor(net.minecraft.client.renderer.extract.LevelExtractor extractor);
+    void ip_setParticleEngine(net.minecraft.client.particle.ParticleEngine particles);
 }

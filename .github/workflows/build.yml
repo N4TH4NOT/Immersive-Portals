@@ -1,0 +1,179 @@
+name: Minecraft 26.2 Fabric validation
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: fabric-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build, unit tests and access widener
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/ci
+          chmod +x gradlew
+          ./gradlew build validateAccessWidener -PportalSmoke compileSmokeTestJava \
+            --no-daemon --stacktrace --console=plain 2>&1 | tee build/ci/build.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: immersive-portals-26.2-fabric
+          if-no-files-found: error
+          path: |
+            build/libs/*.jar
+            build/examples/*.zip
+            portal-protocol/build/libs/*.jar
+            dependencies/gravity/gravity-*/build/libs/*.jar
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics
+          if-no-files-found: warn
+          path: |
+            build/ci/**
+            **/build/reports/**
+            **/build/test-results/**
+            **/hs_err_pid*.log
+
+  fabric-runtime:
+    name: Fabric ${{ matrix.backend }} / ${{ matrix.scenario }} / ${{ matrix.modset }}
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        # Start the independent compatibility paths early, alongside the dynamic-world
+        # and vanilla-rendering scenarios, so each iteration exposes useful failures.
+        include:
+          - backend: opengl
+            scenario: interaction
+            modset: vanilla
+          - backend: opengl
+            scenario: interaction
+            modset: sodium
+          - backend: vulkan
+            scenario: interaction
+            modset: vanilla
+          - backend: opengl
+            scenario: quality
+            modset: vanilla
+          - backend: opengl
+            scenario: quality
+            modset: sodium
+          - backend: opengl
+            scenario: multiplayer
+            modset: vanilla
+          - backend: opengl
+            scenario: singleplayer
+            modset: vanilla
+          - backend: opengl
+            scenario: rendering
+            modset: sodium
+          - backend: opengl
+            scenario: optics
+            modset: iris
+          - backend: vulkan
+            scenario: optics
+            modset: vanilla
+          - backend: opengl
+            scenario: optics
+            modset: vanilla
+          - backend: opengl
+            scenario: multiplayer
+            modset: sodium
+          - backend: opengl
+            scenario: rendering
+            modset: vanilla
+          - backend: opengl
+            scenario: rendering
+            modset: iris
+          - backend: vulkan
+            scenario: rendering
+            modset: vanilla
+          - backend: vulkan
+            scenario: multiplayer
+            modset: vanilla
+          - backend: opengl
+            scenario: scaled
+            modset: vanilla
+          - backend: opengl
+            scenario: optics
+            modset: sodium
+          - backend: vulkan
+            scenario: scaled
+            modset: vanilla
+          - backend: vulkan
+            scenario: singleplayer
+            modset: vanilla
+    env:
+      LIBGL_ALWAYS_SOFTWARE: 'true'
+      GALLIUM_DRIVER: llvmpipe
+      ALSOFT_DRIVERS: 'null'
+      SDL_AUDIODRIVER: dummy
+      PORTAL_CI_MODSET: ${{ matrix.modset }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install the headless display and Mesa software drivers
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            xvfb xauth mesa-utils mesa-vulkan-drivers vulkan-tools libgl1-mesa-dri \
+            libasound2t64 libflite1 libxrandr2 libxi6 libxcursor1 libxinerama1 python3-pil
+      - name: Run the game and assert the selected graphics backend
+        shell: bash
+        run: bash .github/ci/run-fabric-scenario.sh '${{ matrix.backend }}' '${{ matrix.scenario }}'
+      - name: Upload runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fabric-${{ matrix.backend }}-${{ matrix.scenario }}-${{ matrix.modset }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            build/ci/**
+            run/smoke-client/logs/**
+            run/smoke-client/crash-reports/**
+            run/smoke-client/screenshots/**
+            run/smoke-client/options.txt
+            run/smoke-client/saves/**/portal-smoke-dimensions.json
+            run/smoke-client/saves/**/portal-smoke-dynamic-dimensions.json
+            run/smoke-client/hs_err_pid*.log
+            run/smoke-client-*/logs/**
+            run/smoke-client-*/crash-reports/**
+            run/smoke-client-*/screenshots/**
+            run/smoke-client-*/options.txt
+            run/smoke-client-*/hs_err_pid*.log
+            run/smoke-server/logs/**
+            run/smoke-server/crash-reports/**
+            run/smoke-server/hs_err_pid*.log
+            run/smoke-server/**/portal-smoke-dimensions.json
+            run/smoke-server/**/portal-smoke-dynamic-dimensions.json
+            run/smoke-server/**/portal-quality-*.json
+            run/smoke-server/**/portal-smoke-quality.json
+            **/build/reports/**
+            **/build/test-results/**

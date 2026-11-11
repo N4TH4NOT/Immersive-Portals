@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"imm_ptl_smoke","version":"1.0.0","name":"Immersive Portals runtime verification","environment":"*","entrypoints":{"main":["validation.PortalSmoke"],"client":["validation.PortalSmokeClient"]},"mixins":["portal-smoke.mixins.json"],"depends":{"immersive_portals":"*"}}

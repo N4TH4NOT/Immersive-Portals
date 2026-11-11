@@ -4,7 +4,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.Tuple;
+import qouteall.q_misc_util.my_util.Tuple;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -28,7 +28,7 @@ import java.util.function.Predicate;
 public class BreakableMirror extends Mirror {
     
     public static final EntityType<BreakableMirror> ENTITY_TYPE =
-        createPortalEntityType(BreakableMirror::new);
+        createPortalEntityType("breakable_mirror", BreakableMirror::new);
     
     @Nullable
     public IntBox wallArea;
@@ -46,14 +46,14 @@ public class BreakableMirror extends Mirror {
         if (tag.contains("boxXL")) {
             wallArea = new IntBox(
                 new BlockPos(
-                    tag.getInt("boxXL"),
-                    tag.getInt("boxYL"),
-                    tag.getInt("boxZL")
+                    tag.getInt("boxXL").orElse(0),
+                    tag.getInt("boxYL").orElse(0),
+                    tag.getInt("boxZL").orElse(0)
                 ),
                 new BlockPos(
-                    tag.getInt("boxXH"),
-                    tag.getInt("boxYH"),
-                    tag.getInt("boxZH")
+                    tag.getInt("boxXH").orElse(0),
+                    tag.getInt("boxYH").orElse(0),
+                    tag.getInt("boxZH").orElse(0)
                 )
             );
         }
@@ -61,13 +61,13 @@ public class BreakableMirror extends Mirror {
             wallArea = null;
         }
         if (tag.contains("blockPortalShape")) {
-            blockPortalShape = BlockPortalShape.fromTag(tag.getCompound("blockPortalShape"));
+            blockPortalShape = BlockPortalShape.fromTag(tag.getCompoundOrEmpty("blockPortalShape"));
         }
         else {
             blockPortalShape = null;
         }
         if (tag.contains("unbreakable")) {
-            unbreakable = tag.getBoolean("unbreakable");
+            unbreakable = tag.getBoolean("unbreakable").orElse(false);
         }
     }
     
@@ -93,7 +93,7 @@ public class BreakableMirror extends Mirror {
     @Override
     public void tick() {
         super.tick();
-        if (!level().isClientSide) {
+        if (!level().isClientSide()) {
             if (!unbreakable) {
                 if (level().getGameTime() % 10 == getId() % 10) {
                     checkWallIntegrity();
@@ -170,7 +170,7 @@ public class BreakableMirror extends Mirror {
             return null;
         }
         
-        BreakableMirror breakableMirror = BreakableMirror.ENTITY_TYPE.create(world);
+        BreakableMirror breakableMirror = BreakableMirror.ENTITY_TYPE.create(world, net.minecraft.world.entity.EntitySpawnReason.LOAD);
         assert breakableMirror != null;
         double distanceToCenter = isPane ? (1.0 / 16) : 0.5;
         
@@ -187,7 +187,7 @@ public class BreakableMirror extends Mirror {
             pos, facing.getAxis(),
             Helper.getCoordinate(
                 shape.innerAreaBox.getCenterVec().add(
-                    Vec3.atLowerCornerOf(facing.getNormal()).scale(distanceToCenter)
+                    Vec3.atLowerCornerOf(facing.getUnitVec3i()).scale(distanceToCenter)
                 ),
                 facing.getAxis()
             )
@@ -201,8 +201,8 @@ public class BreakableMirror extends Mirror {
         Direction hDirection = perpendicularDirections.getB();
         breakableMirror.setWidth(Helper.getCoordinate(Helper.getBoxSize(wallBox), wDirection.getAxis()));
         breakableMirror.setHeight(Helper.getCoordinate(Helper.getBoxSize(wallBox), hDirection.getAxis()));
-        breakableMirror.setAxisW(Vec3.atLowerCornerOf(wDirection.getNormal()));
-        breakableMirror.setAxisH(Vec3.atLowerCornerOf(hDirection.getNormal()));
+        breakableMirror.setAxisW(Vec3.atLowerCornerOf(wDirection.getUnitVec3i()));
+        breakableMirror.setAxisH(Vec3.atLowerCornerOf(hDirection.getUnitVec3i()));
         
         initializeMirrorGeometryShape(breakableMirror, facing, shape);
         

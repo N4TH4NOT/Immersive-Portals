@@ -85,17 +85,31 @@ public final class RectangularPortalShape implements PortalShape {
     ) {
         double width = portalState.width();
         double height = portalState.height();
+
+        // Rotating a tangent movement can leave a few rounding bits along the
+        // normal. Scale the uncertainty with this aperture's local coordinates,
+        // so tiny portals retain the same crossing precision as ordinary ones.
+        double coordinateScale = Math.max(Math.max(width, height), Math.max(
+            Math.max(Math.abs(localFrom.x()), Math.abs(localFrom.y())),
+            Math.max(Math.abs(localTo.x()), Math.abs(localTo.y()))
+        ));
+        double normalUncertainty = Math.ulp(coordinateScale) * 8;
+        double fromZ = Math.abs(localFrom.z()) <= normalUncertainty ? 0 : localFrom.z();
+        double toZ = Math.abs(localTo.z()) <= normalUncertainty ? 0 : localTo.z();
         
-        if (localFrom.z() > 0 && localTo.z() < 0) {
-            double deltaZ = localTo.z() - localFrom.z();
+        // A rendered frame can stop exactly on the plane. The next inward move
+        // must still cross it; staying on the plane or moving away must not.
+        if (fromZ >= 0 && toZ < 0) {
+            double deltaZ = toZ - fromZ;
             
             // localFrom + (localTo - localFrom) * t = 0
             // localFrom.z() + deltaZ * t = 0
             // t = -localFrom.z() / deltaZ
             // Note: do not trust GitHub copilot. It may use z as up axis.
             
-            double t = -localFrom.z() / deltaZ;
-            Vec3 hit = localFrom.add(localTo.subtract(localFrom).scale(t));
+            double t = -fromZ / deltaZ;
+            Vec3 interpolatedHit = localFrom.add(localTo.subtract(localFrom).scale(t));
+            Vec3 hit = new Vec3(interpolatedHit.x(), interpolatedHit.y(), 0);
             if (Math.abs(hit.x()) < width / 2 + leniency &&
                 Math.abs(hit.y()) < height / 2 + leniency
             ) {

@@ -1,0 +1,13 @@
+{
+  "pack": {
+    "min_format": [
+      107,
+      1
+    ],
+    "max_format": [
+      107,
+      1
+    ],
+    "description": "Immersive Portals 26.2 \u2014 custom portal generation examples"
+  }
+}

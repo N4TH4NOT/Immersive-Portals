@@ -2,7 +2,6 @@ package qouteall.imm_ptl.core.mixin.client.sound;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
@@ -49,23 +48,21 @@ public class MixinClientLevel_Sound {
         ClientLevel this_ = (ClientLevel) (Object) this;
         Vec3 soundPos = new Vec3(x, y, z);
         
-        if (!portal_isPosNearPlayer(soundPos)) {
-            SimpleSoundInstance crossPortalSound = CrossPortalSound.createCrossPortalSound(
-                this_, soundEvent, soundSource, soundPos, volume, pitch, seed
-            );
-            if (crossPortalSound != null) {
-                portal_playSound(crossPortalSound, distanceDelay);
-                ci.cancel();
-            }
-            else if (!CrossPortalSound.isPlayerWorld(this_)) {
-                // do not play remote sound when no portal can transfer the sound
-                ci.cancel();
-            }
+        SimpleSoundInstance crossPortalSound = CrossPortalSound.createCrossPortalSound(
+            this_, soundEvent, soundSource, soundPos, volume, pitch, seed
+        );
+        if (crossPortalSound != null) {
+            portal_playSound(crossPortalSound, distanceDelay);
+            ci.cancel();
+        }
+        else if (!CrossPortalSound.isPlayerWorld(this_)) {
+            // Do not play a remote sound when no portal can transfer it.
+            ci.cancel();
         }
     }
     
     private void portal_playSound(SimpleSoundInstance sound, boolean distanceDelay) {
-        double d = minecraft.gameRenderer.getMainCamera().getPosition().distanceToSqr(sound.getX(), sound.getY(), sound.getZ());
+        double d = minecraft.gameRenderer.mainCamera().position().distanceToSqr(sound.getX(), sound.getY(), sound.getZ());
         if (distanceDelay && d > 100.0D) {
             double e = Math.sqrt(d) / 40.0D;
             minecraft.getSoundManager().playDelayed(sound, (int) (e * 20.0D));
@@ -73,22 +70,6 @@ public class MixinClientLevel_Sound {
         else {
             minecraft.getSoundManager().play(sound);
         }
-    }
-    
-    private boolean portal_isPosNearPlayer(Vec3 pos) {
-        ClientLevel this_ = (ClientLevel) (Object) this;
-        
-        LocalPlayer player = minecraft.player;
-        
-        if (player == null) {
-            return false;
-        }
-        
-        if (this_ != player.level()) {
-            return false;
-        }
-        
-        return pos.distanceToSqr(player.position()) < 64 * 64;
     }
     
 }

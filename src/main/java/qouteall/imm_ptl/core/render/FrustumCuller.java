@@ -4,9 +4,12 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
+
 import org.jetbrains.annotations.Nullable;
+
 import qouteall.imm_ptl.core.CHelper;
 import qouteall.imm_ptl.core.IPCGlobal;
+import qouteall.imm_ptl.core.IPGlobal;
 import qouteall.imm_ptl.core.compat.iris_compatibility.IrisInterface;
 import qouteall.imm_ptl.core.compat.sodium_compatibility.SodiumInterface;
 import qouteall.imm_ptl.core.portal.Mirror;
@@ -27,7 +30,16 @@ public class FrustumCuller {
     
     public FrustumCuller() {
     }
-    
+
+    public FrustumCuller copy() {
+        FrustumCuller result = new FrustumCuller();
+        result.canDetermineInvisibleFunc = canDetermineInvisibleFunc;
+        result.camX = camX;
+        result.camY = camY;
+        result.camZ = camZ;
+        return result;
+    }
+
     public void update(double cameraX, double cameraY, double cameraZ) {
         canDetermineInvisibleFunc = getCanDetermineInvisibleFunc(cameraX, cameraY, cameraZ);
         camX = cameraX;
@@ -41,11 +53,10 @@ public class FrustumCuller {
         if (canDetermineInvisibleFunc == null) {
             return false;
         }
-        
-        return canDetermineInvisibleFunc.test(
-            minX, minY, minZ,
-            maxX, maxY, maxZ
-        );
+
+        boolean rejected = canDetermineInvisibleFunc.test(minX, minY, minZ, maxX, maxY, maxZ);
+        RenderDiagnostics.frustum(rejected);
+        return rejected;
     }
     
     public boolean canDetermineInvisibleWithCameraCoord(
@@ -54,11 +65,17 @@ public class FrustumCuller {
         if (canDetermineInvisibleFunc == null) {
             return false;
         }
-        
-        return canDetermineInvisibleFunc.test(
-            (float) minX, (float) minY, (float) minZ,
-            (float) maxX, (float) maxY, (float) maxZ
-        );
+
+        boolean rejected =
+                canDetermineInvisibleFunc.test(
+                        (float) minX,
+                        (float) minY,
+                        (float) minZ,
+                        (float) maxX,
+                        (float) maxY,
+                        (float) maxZ);
+        RenderDiagnostics.frustum(rejected);
+        return rejected;
     }
     
     public boolean canDetermineInvisibleWithWorldCoord(
@@ -88,12 +105,24 @@ public class FrustumCuller {
         
         if (PortalRendering.isRendering()) {
             Portal renderingPortal = PortalRendering.getRenderingPortal();
-            
+
             // do inner frustum culling
-            
-            return renderingPortal.getPortalShape().getInnerFrustumCullingFunc(
-                renderingPortal, new Vec3(cameraX, cameraY, cameraZ)
-            );
+
+            BoxPredicateF inner =
+                    renderingPortal
+                            .getPortalShape()
+                            .getInnerFrustumCullingFunc(
+                                    renderingPortal, new Vec3(cameraX, cameraY, cameraZ));
+            Plane clip = PortalRendering.getActiveClippingPlane();
+            if (!IPGlobal.cullSectionsBehind || clip == null) return inner;
+            Vec3 relativeOrigin = clip.pos().subtract(cameraX, cameraY, cameraZ);
+            float px = (float) clip.normal().x,
+                    py = (float) clip.normal().y,
+                    pz = (float) clip.normal().z;
+            float pw = (float) -clip.normal().dot(relativeOrigin);
+            return (a, b, c, d, e, f) ->
+                    (inner != null && inner.test(a, b, c, d, e, f))
+                            || isFullyBehindPlane(a, b, c, d, e, f, px, py, pz, pw);
         }
         else {
             if (!IPCGlobal.useSuperAdvancedFrustumCulling) {
@@ -128,7 +157,7 @@ public class FrustumCuller {
             return null;
         }
         
-        Vec3 cameraPos = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+        Vec3 cameraPos = Minecraft.getInstance().gameRenderer.mainCamera().position();
         return CHelper.getClientNearbyPortals(16).filter(
             portal -> portal.isInFrontOfPortal(cameraPos)
         ).filter(

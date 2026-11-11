@@ -1,6 +1,7 @@
 # gradle
 
 .gradle/
+.cloud/
 build/
 out/
 classes/

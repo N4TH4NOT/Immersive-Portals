@@ -16,12 +16,14 @@ import java.util.List;
 public class MixinSplashManager_CVB {
     @Shadow
     @Final
+    @org.spongepowered.asm.mixin.Mutable
     private List<String> splashes;
     
     @Inject(method = "apply(Ljava/util/List;Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/util/profiling/ProfilerFiller;)V", at = @At("RETURN"))
     private void onApply(
         List<String> list, ResourceManager resourceManager, ProfilerFiller profiler, CallbackInfo ci
     ) {
+        splashes = new java.util.ArrayList<>(splashes);
         if (splashes.remove("Euclidian!")) {
             splashes.add("Non-Euclidian!");
         }

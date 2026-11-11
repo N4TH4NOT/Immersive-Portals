@@ -78,7 +78,7 @@ public class ImmPtlNetworkConfig {
         @Override
         public void start(Consumer<Packet<?>> consumer) {
             consumer.accept(
-                ServerConfigurationNetworking.createS2CPacket(new S2CConfigStartPacket(
+                ServerConfigurationNetworking.createClientboundPacket(new S2CConfigStartPacket(
                     immPtlVersion
                 ))
             );
@@ -95,7 +95,7 @@ public class ImmPtlNetworkConfig {
     ) implements CustomPacketPayload {
         public static final CustomPacketPayload.Type<S2CConfigStartPacket> TYPE =
             new CustomPacketPayload.Type<>(
-                McHelper.newResourceLocation("iportal:config_packet")
+                McHelper.newIdentifier("iportal:config_packet")
             );
         
         public static final StreamCodec<FriendlyByteBuf, S2CConfigStartPacket> CODEC = StreamCodec.of(
@@ -136,7 +136,7 @@ public class ImmPtlNetworkConfig {
     ) implements CustomPacketPayload {
         public static final CustomPacketPayload.Type<C2SConfigCompletePacket> TYPE =
             new CustomPacketPayload.Type<>(
-                McHelper.newResourceLocation("iportal:configure_complete")
+                McHelper.newIdentifier("iportal:configure_complete")
             );
         public static final StreamCodec<FriendlyByteBuf, C2SConfigCompletePacket> CODEC = StreamCodec.of(
             (b, p) -> p.write(b), C2SConfigCompletePacket::read
@@ -157,14 +157,14 @@ public class ImmPtlNetworkConfig {
         public void handle(
             ServerConfigurationNetworking.Context context
         ) {
-            ServerConfigurationPacketListenerImpl networkHandler = context.networkHandler();
+            ServerConfigurationPacketListenerImpl networkHandler = context.packetListener();
             
             GameProfile gameProfile =
                 ((IEServerConfigurationPacketListenerImpl) networkHandler).ip_getGameProfile();
             
             LOGGER.info(
                 "Server received ImmPtl config packet. Mod version: {} Player: {} {}",
-                versionFromClient, gameProfile.getName(), gameProfile.getId()
+                versionFromClient, gameProfile.name(), gameProfile.id()
             );
             
             if (versionFromClient.isNormalVersion() && immPtlVersion.isNormalVersion()) {
@@ -204,11 +204,11 @@ public class ImmPtlNetworkConfig {
         
         LOGGER.info("Immersive Portals Core version {}", immPtlVersion);
         
-        PayloadTypeRegistry.configurationS2C().register(
+        PayloadTypeRegistry.clientboundConfiguration().register(
             S2CConfigStartPacket.TYPE, S2CConfigStartPacket.CODEC
         );
         
-        PayloadTypeRegistry.configurationC2S().register(
+        PayloadTypeRegistry.serverboundConfiguration().register(
             C2SConfigCompletePacket.TYPE, C2SConfigCompletePacket.CODEC
         );
         
@@ -236,7 +236,7 @@ public class ImmPtlNetworkConfig {
                         
                         LOGGER.warn(
                             "Fabric API's sendable channel sync detected that client does not install ImmPtl. {} {}",
-                            gameProfile.getName(), gameProfile.getId()
+                            gameProfile.name(), gameProfile.id()
                         );
                     }
                 }
@@ -252,8 +252,12 @@ public class ImmPtlNetworkConfig {
         );
     }
     
+    private static int missingServerWarningTicks=-1;
     @Environment(EnvType.CLIENT)
     public static void initClient() {
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(client->{
+            if(missingServerWarningTicks>0 && --missingServerWarningTicks==0 && serverVersion==null && !qouteall.imm_ptl.core.network.bridge.BridgeClient.isActive())warnServerMissingImmPtl();
+        });
         // ClientConfigurationNetworking.ConfigurationPacketHandler does not provide
         // ClientConfigurationPacketListenerImpl argument
         ClientConfigurationNetworking.registerGlobalReceiver(
@@ -278,7 +282,7 @@ public class ImmPtlNetworkConfig {
     
     private static void onClientJoin() {
         if (serverVersion == null) {
-            warnServerMissingImmPtl();
+            missingServerWarningTicks=60;
         }
         else {
             if (serverVersion.isNormalVersion() &&

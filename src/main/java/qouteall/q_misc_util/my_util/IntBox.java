@@ -54,7 +54,7 @@ public class IntBox {
             Helper.scale(
                 Direction.get(
                     Direction.AxisDirection.POSITIVE, axis
-                ).getNormal(),
+                ).getUnitVec3i(),
                 n
             )
         );
@@ -64,12 +64,12 @@ public class IntBox {
         if (direction.getAxisDirection() == Direction.AxisDirection.POSITIVE) {
             return new IntBox(
                 l,
-                h.offset(Helper.scale(direction.getNormal(), n))
+                h.offset(Helper.scale(direction.getUnitVec3i(), n))
             );
         }
         else {
             return new IntBox(
-                l.offset(Helper.scale(direction.getNormal(), n)),
+                l.offset(Helper.scale(direction.getUnitVec3i(), n)),
                 h
             );
         }
@@ -503,14 +503,14 @@ public class IntBox {
     public static IntBox fromTag(CompoundTag tag) {
         return new IntBox(
             new BlockPos(
-                tag.getInt("lX"),
-                tag.getInt("lY"),
-                tag.getInt("lZ")
+                tag.getInt("lX").orElse(0),
+                tag.getInt("lY").orElse(0),
+                tag.getInt("lZ").orElse(0)
             ),
             new BlockPos(
-                tag.getInt("hX"),
-                tag.getInt("hY"),
-                tag.getInt("hZ")
+                tag.getInt("hX").orElse(0),
+                tag.getInt("hY").orElse(0),
+                tag.getInt("hZ").orElse(0)
             )
         );
     }

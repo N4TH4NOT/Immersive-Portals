@@ -14,7 +14,6 @@ import qouteall.imm_ptl.core.IPGlobal;
 import qouteall.imm_ptl.core.portal.Mirror;
 import qouteall.imm_ptl.core.portal.Portal;
 import qouteall.imm_ptl.core.portal.shape.BoxPortalShape;
-import qouteall.imm_ptl.core.render.VisibleSectionDiscovery;
 import qouteall.imm_ptl.core.render.renderer.PortalRenderer;
 import qouteall.q_misc_util.my_util.Plane;
 
@@ -57,6 +56,16 @@ public class PortalRendering {
     //2 for rendering world inside the portal inside portal
     public static int getPortalLayer() {
         return portalLayers.size();
+    }
+
+    public static boolean matchesPortalPath(List<java.util.UUID> path) {
+        var cameraPath = qouteall.imm_ptl.core.render.CrossPortalViewRendering.getCameraPortalPath();
+        if (path.isEmpty() || path.size() != cameraPath.size() + portalLayers.size()) return false;
+        for (int i = 0; i < cameraPath.size(); i++)
+            if (!cameraPath.get(i).equals(path.get(i))) return false;
+        for (int i = 0; i < portalLayers.size(); i++)
+            if (!portalLayers.get(i).getUUID().equals(path.get(cameraPath.size() + i))) return false;
+        return true;
     }
     
     public static boolean isRendering() {
@@ -103,7 +112,7 @@ public class PortalRendering {
     }
     
     public static Vec3 getRenderingCameraPos() {
-        Vec3 pos = RenderStates.originalCamera.getPosition();
+        Vec3 pos = RenderStates.originalCamera.position();
         for (Portal portal : portalLayers) {
             pos = portal.transformPoint(pos);
         }
@@ -121,7 +130,7 @@ public class PortalRendering {
     }
     
     /**
-     * This only has effects with Sodium. In vanilla it uses {@link VisibleSectionDiscovery}.
+     * This only has effects with Sodium. In vanilla it uses native extraction.
      * <br>
      * As I tested, cave culling can optimize 20% when you are very close to the portal.
      * But its optimization is negligible when you are 5 blocks from the portal.

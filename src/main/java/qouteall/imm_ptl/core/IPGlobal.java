@@ -67,17 +67,14 @@ public class IPGlobal {
     
     public static int portalRenderLimit = 200;
     
-    public static boolean cacheGlBuffer = true;
     
     public static boolean reducedPortalRendering = false;
     
-    public static boolean useSecondaryEntityVertexConsumer = true;
     
     public static boolean cullSectionsBehind = true;
     
     public static boolean offsetOcclusionQuery = true;
     
-    public static boolean cloudOptimization = true;
     
     public static boolean crossPortalCollision = true;
     
@@ -94,9 +91,7 @@ public class IPGlobal {
     
     public static boolean enableServerCollision = true;
     
-    public static boolean enableSharedBlockMeshBuffers = true;
     
-    public static boolean saveMemoryInBufferPack = true;
     
     public static boolean enableDatapackPortalGen = true;
     

@@ -4,6 +4,7 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
+
 import qouteall.imm_ptl.core.IPModMain;
 import qouteall.imm_ptl.core.compat.GravityChangerInterface;
 import qouteall.q_misc_util.Helper;
@@ -12,7 +13,9 @@ public class IPModEntry implements ModInitializer {
     
     @Override
     public void onInitialize() {
+        GravityChangerInterface.init();
         IPModMain.init();
+        qouteall.imm_ptl.core.network.bridge.BridgePayload.init();
         RequiemCompat.init();
         
         IPModMain.registerEntityTypes(
@@ -29,14 +32,5 @@ public class IPModEntry implements ModInitializer {
             Helper.log("Dimensional Threading is not present");
         }
         
-        if (FabricLoader.getInstance().isModLoaded("gravity_changer_q")) {
-            GravityChangerInterface.invoker = new GravityChangerInterface.OnGravityChangerPresent();
-            Helper.log("Gravity API is present");
-        }
-        else {
-            Helper.log("Gravity API is not present");
-        }
-        
     }
-    
 }

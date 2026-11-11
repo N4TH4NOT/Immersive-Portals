@@ -9,7 +9,7 @@ import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.MultiBufferSource;
+import qouteall.imm_ptl.core.render.NativeLineBuffer;
 import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -19,7 +19,7 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.InteractionResultHolder;
+
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
@@ -34,7 +34,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class PortalWandItem extends Item {
-    public static final PortalWandItem instance = new PortalWandItem(new Properties());
+    public static final PortalWandItem instance = new PortalWandItem(new Properties().setId(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.ITEM, net.minecraft.resources.Identifier.fromNamespaceAndPath("immersive_portals", "portal_wand"))));
     
     public static void init() {
         Registry.register(
@@ -98,7 +98,7 @@ public class PortalWandItem extends Item {
         public static final Mode FALLBACK = CREATE_PORTAL;
         
         public static Mode fromTag(CompoundTag tag) {
-            String mode = tag.getString("mode");
+            String mode = tag.getString("mode").orElse("");
             
             return fromStr(mode);
         }
@@ -179,7 +179,7 @@ public class PortalWandItem extends Item {
     }
     
     @Override
-    public InteractionResultHolder<ItemStack> use(Level world, Player player, InteractionHand hand) {
+    public InteractionResult use(Level world, Player player, InteractionHand hand) {
         ItemStack itemStack = player.getItemInHand(hand);
         Mode mode = itemStack.getOrDefault(COMPONENT_TYPE, Mode.FALLBACK);
         
@@ -188,7 +188,7 @@ public class PortalWandItem extends Item {
                 if (!PortalWandInteraction.isDragging(((ServerPlayer) player))) {
                     Mode nextMode = mode.next();
                     itemStack.set(COMPONENT_TYPE, nextMode);
-                    return new InteractionResultHolder<>(InteractionResult.SUCCESS, itemStack);
+                    return InteractionResult.SUCCESS.heldItemTransformedTo(itemStack);
                 }
             }
         }
@@ -221,16 +221,16 @@ public class PortalWandItem extends Item {
     @Override
     public void appendHoverText(
         ItemStack stack, Item.TooltipContext tooltipContext,
-        List<Component> tooltip, TooltipFlag tooltipFlag
+        net.minecraft.world.item.component.TooltipDisplay display, java.util.function.Consumer<Component> tooltip, TooltipFlag tooltipFlag
     ) {
-        super.appendHoverText(stack, tooltipContext, tooltip, tooltipFlag);
+        super.appendHoverText(stack, tooltipContext, display, tooltip, tooltipFlag);
         
-        tooltip.add(Component.translatable(
+        tooltip.accept(Component.translatable(
             "imm_ptl.wand.item_desc_1",
             Minecraft.getInstance().options.keyShift.getTranslatedKeyMessage(),
             Minecraft.getInstance().options.keyUse.getTranslatedKeyMessage()
         ));
-        tooltip.add(Component.translatable(
+        tooltip.accept(Component.translatable(
             "imm_ptl.wand.item_desc_2",
             Minecraft.getInstance().options.keyShift.getTranslatedKeyMessage(),
             Minecraft.getInstance().options.keyAttack.getTranslatedKeyMessage()
@@ -292,7 +292,7 @@ public class PortalWandItem extends Item {
     
     @Environment(EnvType.CLIENT)
     public static void clientRender(
-        LocalPlayer player, ItemStack itemStack, PoseStack poseStack, MultiBufferSource.BufferSource bufferSource,
+        LocalPlayer player, ItemStack itemStack, PoseStack poseStack, NativeLineBuffer bufferSource,
         double camX, double camY, double camZ
     ) {
         if (!instructionInformed) {

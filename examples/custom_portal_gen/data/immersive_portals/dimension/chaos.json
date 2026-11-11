@@ -1,0 +1,6 @@
+{
+  "type": "immersive_portals:surface_type",
+  "generator": {
+    "type": "immersive_portals:error_terrain_generator"
+  }
+}
