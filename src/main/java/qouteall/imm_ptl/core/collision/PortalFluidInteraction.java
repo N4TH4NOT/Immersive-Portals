@@ -9,6 +9,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
+import qouteall.imm_ptl.core.IPGlobal;
 import qouteall.imm_ptl.core.ducks.IEEntity;
 import qouteall.imm_ptl.core.mixin.common.collision.EntityFluidInteractionAccess;
 import qouteall.imm_ptl.core.mixin.common.collision.EntityFluidTrackerAccess;
@@ -20,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.lang.ref.WeakReference;
 
 /** Runs the native fluid sampler on the physical body parts on both sides of an opening. */
 public final class PortalFluidInteraction {
@@ -30,6 +32,8 @@ public final class PortalFluidInteraction {
 
     private static final ThreadLocal<Frame> FRAME = new ThreadLocal<>();
     private static final Map<Entity, EntityFluidInteraction> REMOTE =
+            java.util.Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<Entity, WeakReference<Portal>> CONTACT =
             java.util.Collections.synchronizedMap(new WeakHashMap<>());
 
     private PortalFluidInteraction() {}
@@ -45,32 +49,72 @@ public final class PortalFluidInteraction {
         return PortalFluidForces.lastForce(entity, fluid);
     }
 
-    private static @Nullable Portal contact(Entity entity) {
+    public static void clearContact(Entity entity) {
+        CONTACT.remove(entity);
+    }
+
+    private static boolean eligible(Entity entity, Portal portal) {
+        return !portal.isRemoved() && portal.level() == entity.level()
+                && portal.getHasCrossPortalCollision() && portal.canCollideWithEntity(entity)
+                && portal.getInnerClipping() != null;
+    }
+
+    private static boolean straddles(AABB body, Portal portal) {
+        return portal.getPortalShape().isBoxInPortalProjection(portal.getThisSideState(), body)
+                && hasVolume(CollisionHelper.clipBox(body, portal.getOriginPos(), portal.getNormal()))
+                && hasVolume(bodyParts(body, portal).projected());
+    }
+
+    private static @Nullable Portal rememberContact(Entity entity, AABB body, @Nullable Portal portal) {
+        if (portal != null && straddles(body, portal))
+            CONTACT.put(entity, new WeakReference<>(portal));
+        else clearContact(entity);
+        return portal;
+    }
+
+    private static @Nullable Portal contact(Entity entity, AABB body) {
+        if (!IPGlobal.crossPortalCollision
+                || !entity.level().isClientSide() && !IPGlobal.enableServerCollision
+                || entity.isSpectator()) {
+            clearContact(entity);
+            return null;
+        }
+        Vec3 previous = entity.getEyePosition(0), current = entity.getEyePosition(1);
+        var remembered = CONTACT.get(entity);
+        Portal pending = remembered == null ? null : remembered.get();
+        // Native ticks can overwrite both eye snapshots before the crossing packet
+        // transfers the physical entity. Keep its established front face while the
+        // finite body still straddles it, rather than sampling the opposite face.
+        if (pending != null && eligible(entity, pending)
+                && pending.getDistanceToPlane(current) < 0 && straddles(body, pending))
+            return pending;
+        clearContact(entity);
         var handler = ((IEEntity) entity).ip_getPortalCollisionHandler();
         if (handler == null) return null;
         Portal best = null;
         double bestDistance = Double.POSITIVE_INFINITY;
-        Vec3 previous = entity.getEyePosition(0), current = entity.getEyePosition(1);
         for (Portal portal : handler.getCollidingPortals()) {
-            if (portal.isRemoved() || portal.level() != entity.level()
-                    || !portal.getHasCrossPortalCollision() || portal.getInnerClipping() == null)
-                continue;
+            if (!eligible(entity, portal)) continue;
             double before = portal.getDistanceToPlane(previous);
             double now = portal.getDistanceToPlane(current);
             // Input and native fluid updates can precede the rendered crossing. Keep
             // that crossing's physical source half until the entity really transfers.
-            if (before >= 0 && now < 0) return portal;
+            if (before >= 0 && now < 0) return rememberContact(entity, body, portal);
             if (now >= 0 && now < bestDistance) {
                 best = portal;
                 bestDistance = now;
             }
         }
-        return best;
+        return rememberContact(entity, body, best);
+    }
+
+    private static boolean hasVolume(@Nullable AABB box) {
+        return box != null && box.getXsize() > 1.0E-10 && box.getYsize() > 1.0E-10
+                && box.getZsize() > 1.0E-10;
     }
 
     private static void keep(List<AABB> parts, @Nullable AABB box) {
-        if (box != null && box.getXsize() > 1.0E-10 && box.getYsize() > 1.0E-10
-                && box.getZsize() > 1.0E-10) parts.add(box);
+        if (hasVolume(box)) parts.add(box);
     }
 
     private static BodyParts bodyParts(AABB box, Portal portal) {
@@ -107,13 +151,14 @@ public final class PortalFluidInteraction {
             return;
         }
         PortalFluidForces.clear(entity);
-        Portal portal = contact(entity);
-        if (portal == null) {
+        AABB original = entity.getFluidInteractionBox();
+        if (original == null) {
+            clearContact(entity);
             nativeUpdate.run();
             return;
         }
-        AABB original = entity.getFluidInteractionBox();
-        if (original == null) {
+        Portal portal = contact(entity, original);
+        if (portal == null) {
             nativeUpdate.run();
             return;
         }

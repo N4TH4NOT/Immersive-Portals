@@ -361,6 +361,7 @@ public class PortalCollisionHandler {
     public static void updateCollidingPortalAfterTeleportation(
         Entity entity, Vec3 newEyePos, Vec3 newLastTickEyePos, float partialTicks
     ) {
+        PortalFluidInteraction.clearContact(entity);
         McHelper.setEyePos(entity, newEyePos, newLastTickEyePos);
         McHelper.updateBoundingBox(entity);
         ((IEEntity) entity).ip_clearCollidingPortal();
