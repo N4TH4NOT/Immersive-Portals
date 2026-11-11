@@ -3,6 +3,7 @@
 import base64
 import io
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -82,13 +83,72 @@ for mode in ("on", "off"):
 if images["on"].size != images["off"].size:
     raise AssertionError("The outline comparison changed framebuffer dimensions.")
 width, height = images["on"].size
+frames = {}
+for encoded_frame in re.findall(r"PORTAL_NATIVE_OUTLINE_FRAME (\{[^\n]+\})", client):
+    frame = json.loads(encoded_frame)
+    mode = frame["mode"]
+    if mode not in ("on", "off") or mode in frames:
+        raise AssertionError("The outline captures did not have unique matching frame metadata.")
+    frames[mode] = frame
+if set(frames) != {"on", "off"}:
+    raise AssertionError("The outline captures lack native scene metadata.")
+for frame in frames.values():
+    if (frame["stableFrames"] < 8 or frame["screen"] or frame["overlay"]
+            or not frame["hudSuppressed"]):
+        raise AssertionError("The outline capture included an unsettled scene or user interface.")
+for key in ("dimension", "targetDimension", "target", "portal"):
+    if frames["on"][key] != frames["off"][key]:
+        raise AssertionError(f"The outline comparison changed its native {key}.")
+for key in ("camera", "feet", "forward", "bounds", "projection"):
+    before, after = frames["on"][key], frames["off"][key]
+    if len(before) != len(after) or any(not math.isclose(a, b, abs_tol=1e-6, rel_tol=0)
+                                     for a, b in zip(before, after)):
+        raise AssertionError(f"The outline comparison changed its native {key}.")
+if frames["off"]["frame"] < frames["on"]["frame"] + 8:
+    raise AssertionError("The outline toggle did not produce eight completed frames before comparison.")
+for key in ("yaw", "pitch"):
+    if not math.isclose(frames["on"][key], frames["off"][key], abs_tol=1e-6, rel_tol=0):
+        raise AssertionError(f"The outline comparison changed its native {key}.")
+bounds = frames["on"]["bounds"]
+if not (0 < bounds[0] < bounds[2] < 1 and 0 < bounds[1] < bounds[3] < 1):
+    raise AssertionError("The selected block did not project fully into the framebuffer.")
+edges = frames["on"]["edges"]
+other_edges = frames["off"]["edges"]
+if (not edges or len(edges) != len(other_edges)
+        or any(len(edge) != 4 or len(other) != 4
+               or any(not math.isclose(a, b, abs_tol=1e-6, rel_tol=0)
+                      for a, b in zip(edge, other))
+               for edge, other in zip(edges, other_edges))):
+    raise AssertionError("The selected block's native outline geometry changed between captures.")
+pixel_edges = [(a * width, b * height, c * width, d * height) for a, b, c, d in edges]
+
+def near_edge(x, y):
+    for ax, ay, bx, by in pixel_edges:
+        dx, dy = bx - ax, by - ay
+        length_squared = dx * dx + dy * dy
+        fraction = 0 if length_squared == 0 else max(0, min(1,
+            ((x - ax) * dx + (y - ay) * dy) / length_squared))
+        if (x - ax - fraction * dx) ** 2 + (y - ay - fraction * dy) ** 2 <= 16:
+            return True
+    return False
+
 changed = 0
-for y in range(int(.25 * height), int(.80 * height)):
-    for x in range(int(.30 * width), int(.70 * width)):
+background_changed = 0
+left, top, right, bottom = (bounds[0] * width - 6, bounds[1] * height - 6,
+                            bounds[2] * width + 6, bounds[3] * height + 6)
+for y in range(height):
+    for x in range(width):
         before, after = images["on"].getpixel((x, y)), images["off"].getpixel((x, y))
-        changed += min(before) >= 210 and min(before) - min(after) >= 25
-metrics = {"white_outline_pixels": changed, "size": [width, height]}
+        if left <= x <= right and top <= y <= bottom:
+            changed += (min(before) >= 210 and min(before) - min(after) >= 25
+                        and near_edge(x + .5, y + .5))
+        elif max(abs(a - b) for a, b in zip(before, after)) > 12:
+            background_changed += 1
+metrics = {"white_outline_pixels": changed, "background_changed_pixels": background_changed,
+           "size": [width, height], "bounds": bounds, "frames": frames}
 (evidence / "native-interaction-pixels.json").write_text(json.dumps(metrics, indent=2) + "\n")
+if background_changed > width * height * .002:
+    raise AssertionError("The outline comparison changed its background scene: " + json.dumps(metrics))
 if changed < 30:
     raise AssertionError(f"The native remote outline was not visibly rendered: {metrics}")
 print("FABRIC_NATIVE_INTERACTION_VERIFIED " + json.dumps(metrics), flush=True)

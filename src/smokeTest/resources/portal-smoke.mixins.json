@@ -3,5 +3,6 @@
   "package": "validation.mixin",
   "compatibilityLevel": "JAVA_25",
   "mixins": ["PortalItemUseTraceMixin", "PortalClientTickObserverMixin"],
+  "client": ["PortalInteractionHudMixin"],
   "injectors": {"defaultRequire": 1}
 }

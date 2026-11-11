@@ -2,6 +2,7 @@ package validation;
 
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
@@ -22,10 +23,11 @@ import qouteall.imm_ptl.core.block_manipulation.BlockManipulationClient;
 import qouteall.imm_ptl.core.render.NativeEntityPass;
 import qouteall.imm_ptl.core.render.NativeWorldRenderer;
 import qouteall.imm_ptl.core.render.context_management.PortalRendering;
+import qouteall.imm_ptl.core.render.context_management.RenderStates;
 import qouteall.imm_ptl.core.render.context_management.WorldRenderInfo;
 
 /** Native input and visible targeting, followed by assertions against the real server world. */
-final class PortalNativeInteractionSmoke {
+public final class PortalNativeInteractionSmoke {
     private enum Stage { SETUP, SETTLE, OUTLINE_ON, OUTLINE_OFF, ACTION, VERIFY, FINISHED }
     private static final String[] PHASES = {
         "chest", "button", "place", "break", "entity_use", "entity_attack",
@@ -52,8 +54,28 @@ final class PortalNativeInteractionSmoke {
     private static int projectedBodyEntity = -1;
     private static int signEditorOpenedTick = -1;
     private static boolean signEditorSubmitted;
+    private static boolean outlineRenderingEnabled = true;
+    private static boolean originalHudHidden;
+    private static boolean originalBobbing;
+    private static int stableOutlineFrames;
+    private static int remoteOutlineCompiledFrame = -1;
+    private static OutlineFrame extractedOutlineFrame;
+    private static OutlineFrame renderedOutlineFrame;
+    private static OutlineFrame capturedOutlineView;
+    private static final com.google.gson.Gson OUTLINE_JSON = new com.google.gson.Gson();
+
+    private record OutlineFrame(int frame, Vec3 feet, Vec3 camera, Vec3 forward,
+            float yaw, float pitch, float[] projection, double[] bounds,
+            java.util.List<double[]> edges, String portal, boolean outline,
+            long gameTime, float partial) {}
 
     private PortalNativeInteractionSmoke() {}
+
+    /** Keep native outline permissions enabled while removing unrelated screenshot pixels. */
+    public static boolean suppressOutlineHud() {
+        return Boolean.getBoolean("portalSmoke.nativeInteractions") && phase == 0
+                && (stage == Stage.SETTLE || stage == Stage.OUTLINE_ON || stage == Stage.OUTLINE_OFF);
+    }
 
     private static void require(boolean condition, String message) {
         if (!condition) throw new AssertionError(message);
@@ -79,6 +101,9 @@ final class PortalNativeInteractionSmoke {
                 ACKNOWLEDGED.add(message.getString()));
         LevelExtractionEvents.END_EXTRACTION.register(context -> {
             if (phase >= PHASES.length || stage == Stage.SETUP || stage == Stage.FINISHED) return;
+            if (phase == 0 && !WorldRenderInfo.isRendering())
+                extractOutlineFrame(context.camera(), context.levelState().cameraRenderState.projectionMatrix,
+                        context.deltaTracker().getGameTimeDeltaPartialTick(true));
             if (phaseName().startsWith("projected_") && !WorldRenderInfo.isRendering()
                     && context.level().dimension() == Level.NETHER) {
                 var source = ClientWorldLoader.getOptionalWorld(Level.OVERWORLD);
@@ -110,14 +135,152 @@ final class PortalNativeInteractionSmoke {
                 primaryOutlineChecks++;
             }
         });
+        LevelRenderEvents.END_MAIN.register(context -> {
+            if (phase != 0) return;
+            if (WorldRenderInfo.isRendering()) {
+                if (Minecraft.getInstance().level.dimension() == Level.NETHER
+                        && PortalRendering.getPortalLayer() == 1
+                        && BlockManipulationClient.remotePortalPath.size() == 1
+                        && PortalRendering.getRenderingPortal().getUUID()
+                                .equals(BlockManipulationClient.remotePortalPath.getFirst()))
+                    remoteOutlineCompiledFrame = context.levelRenderer()
+                            .isSectionCompiledAndVisible(PortalNativeInteractionFixture.TARGET)
+                            ? RenderStates.frameIndex : -1;
+                return;
+            }
+            var client = Minecraft.getInstance();
+            var frame = extractedOutlineFrame;
+            if (frame == null || frame.frame() != RenderStates.frameIndex
+                    || !outlineCaptureReady(client)) {
+                renderedOutlineFrame = null;
+                stableOutlineFrames = 0;
+                return;
+            }
+            if (renderedOutlineFrame != null && renderedOutlineFrame.frame() == frame.frame()) return;
+            stableOutlineFrames = renderedOutlineFrame != null
+                    && renderedOutlineFrame.frame() + 1 == frame.frame()
+                    && renderedOutlineFrame.outline() == frame.outline()
+                    && sameOutlineView(renderedOutlineFrame, frame) ? stableOutlineFrames + 1 : 1;
+            renderedOutlineFrame = frame;
+        });
         IPGlobal.PRE_GAME_RENDER_EVENT.register(() -> {
             if (pendingCapture == null || WorldRenderInfo.isRendering()) return;
             var client = Minecraft.getInstance();
+            var frame = renderedOutlineFrame;
+            if (frame == null || frame.frame() != RenderStates.frameIndex
+                    || stableOutlineFrames < 8 || !outlineCaptureReady(client)
+                    || frame.outline() != pendingCapture.endsWith("-on")) return;
+            if (capturedOutlineView == null) capturedOutlineView = frame;
+            else require(sameOutlineView(capturedOutlineView, frame),
+                    "The native outline comparison changed its settled camera, target or optics");
+            logOutlineFrame(frame, pendingCapture.endsWith("-on") ? "on" : "off");
             Screenshot.grab(client.gameDirectory, pendingCapture + ".png",
                     client.gameRenderer.mainRenderTarget(), 1, message -> {});
             captured = pendingCapture;
             pendingCapture = null;
         });
+    }
+
+    private static boolean outlineCaptureReady(Minecraft client) {
+        return suppressOutlineHud() && client.gui.screen() == null && client.gui.overlay() == null
+                && !client.gui.hud.isHidden() && client.player != null
+                && fixtureDataReady(client)
+                && client.levelRenderer.isSectionCompiledAndVisible(new BlockPos(64, 71, 63))
+                && remoteOutlineCompiledFrame == RenderStates.frameIndex;
+    }
+
+    private static void extractOutlineFrame(net.minecraft.client.Camera camera,
+            org.joml.Matrix4f projection, float partial) {
+        var client = Minecraft.getInstance();
+        extractedOutlineFrame = null;
+        if (!suppressOutlineHud() || client.gui.screen() != null || client.gui.overlay() != null
+                || BlockManipulationClient.remotePointedDim != Level.NETHER
+                || !(BlockManipulationClient.remoteHitResult instanceof BlockHitResult hit)
+                || !hit.getBlockPos().equals(PortalNativeInteractionFixture.TARGET)
+                || BlockManipulationClient.remotePortalPath.size() != 1) return;
+        qouteall.imm_ptl.core.portal.Portal selected = null;
+        for (var entity : client.level.entitiesForRendering())
+            if (entity instanceof qouteall.imm_ptl.core.portal.Portal portal
+                    && portal.getUUID().equals(BlockManipulationClient.remotePortalPath.getFirst()))
+                selected = portal;
+        if (selected == null) return;
+        var portal = selected;
+        var world = ClientWorldLoader.getOptionalWorld(Level.NETHER);
+        if (world == null) return;
+        var target = PortalNativeInteractionFixture.TARGET;
+        var shape = world.getBlockState(target).getShape(world, target);
+        var matrix = camera.getViewRotationProjectionMatrix(new org.joml.Matrix4f());
+        var edges = new java.util.ArrayList<double[]>();
+        double[] bounds = {1, 1, 0, 0};
+        shape.forAllEdges((x1, y1, z1, x2, y2, z2) -> {
+            var first = projectOutlinePoint(camera.position(), matrix,
+                    portal.inverseTransformPoint(new Vec3(target.getX() + x1,
+                            target.getY() + y1, target.getZ() + z1)));
+            var second = projectOutlinePoint(camera.position(), matrix,
+                    portal.inverseTransformPoint(new Vec3(target.getX() + x2,
+                            target.getY() + y2, target.getZ() + z2)));
+            edges.add(new double[] {first[0], first[1], second[0], second[1]});
+            for (double[] point : new double[][] {first, second}) {
+                bounds[0] = Math.min(bounds[0], point[0]);
+                bounds[1] = Math.min(bounds[1], point[1]);
+                bounds[2] = Math.max(bounds[2], point[0]);
+                bounds[3] = Math.max(bounds[3], point[1]);
+            }
+        });
+        require(!edges.isEmpty(), "The native chest selection shape has no projectable edges");
+        var forward = camera.forwardVector();
+        extractedOutlineFrame = new OutlineFrame(RenderStates.frameIndex, client.player.position(),
+                camera.position(), new Vec3(forward.x(), forward.y(), forward.z()), camera.yRot(),
+                camera.xRot(), projection.get(new float[16]), bounds, java.util.List.copyOf(edges),
+                portal.getUUID().toString(), outlineRenderingEnabled, world.getGameTime(), partial);
+    }
+
+    private static double[] projectOutlinePoint(Vec3 camera, org.joml.Matrix4f matrix, Vec3 point) {
+        Vec3 relative = point.subtract(camera);
+        var clip = matrix.transform(new org.joml.Vector4f((float) relative.x, (float) relative.y,
+                (float) relative.z, 1));
+        require(clip.w > 0, "A native outline edge projected behind the camera");
+        return new double[] {.5 + .5 * clip.x / clip.w, .5 - .5 * clip.y / clip.w};
+    }
+
+    private static boolean sameOutlineView(OutlineFrame first, OutlineFrame second) {
+        if (first.feet().distanceTo(second.feet()) > 1e-6
+                || first.camera().distanceTo(second.camera()) > 1e-6
+                || first.forward().distanceTo(second.forward()) > 1e-6
+                || Math.abs(first.yaw() - second.yaw()) > 1e-5
+                || Math.abs(first.pitch() - second.pitch()) > 1e-5
+                || !first.portal().equals(second.portal())) return false;
+        for (int i = 0; i < 16; i++)
+            if (Math.abs(first.projection()[i] - second.projection()[i]) > 1e-6) return false;
+        for (int i = 0; i < 4; i++)
+            if (Math.abs(first.bounds()[i] - second.bounds()[i]) > 1e-6) return false;
+        return true;
+    }
+
+    private static void logOutlineFrame(OutlineFrame frame, String mode) {
+        var metadata = new java.util.LinkedHashMap<String, Object>();
+        metadata.put("mode", mode);
+        metadata.put("frame", frame.frame());
+        metadata.put("camera", new double[] {frame.camera().x, frame.camera().y, frame.camera().z});
+        metadata.put("feet", new double[] {frame.feet().x, frame.feet().y, frame.feet().z});
+        metadata.put("forward", new double[] {frame.forward().x, frame.forward().y, frame.forward().z});
+        metadata.put("yaw", frame.yaw());
+        metadata.put("pitch", frame.pitch());
+        metadata.put("projection", frame.projection());
+        metadata.put("dimension", "minecraft:overworld");
+        metadata.put("targetDimension", "minecraft:the_nether");
+        var target = PortalNativeInteractionFixture.TARGET;
+        metadata.put("target", new int[] {target.getX(), target.getY(), target.getZ()});
+        metadata.put("portal", frame.portal());
+        metadata.put("bounds", frame.bounds());
+        metadata.put("edges", frame.edges());
+        metadata.put("stableFrames", stableOutlineFrames);
+        metadata.put("screen", false);
+        metadata.put("overlay", false);
+        metadata.put("hudSuppressed", true);
+        metadata.put("gameTime", frame.gameTime());
+        metadata.put("partial", frame.partial());
+        System.out.println("PORTAL_NATIVE_OUTLINE_FRAME " + OUTLINE_JSON.toJson(metadata));
     }
 
     private static void releaseKeys(Minecraft client) {
@@ -307,6 +470,10 @@ final class PortalNativeInteractionSmoke {
     }
 
     private static void setOutlineRendering(Minecraft client, boolean enabled) {
+        outlineRenderingEnabled = enabled;
+        stableOutlineFrames = 0;
+        remoteOutlineCompiledFrame = -1;
+        extractedOutlineFrame = renderedOutlineFrame = null;
         client.gameRenderer.setRenderBlockOutline(enabled);
         try {
             var field = NativeWorldRenderer.class.getDeclaredField("SCENES");
@@ -493,6 +660,9 @@ final class PortalNativeInteractionSmoke {
                 .append(" position=").append(client.player.position())
                 .append(" velocity=").append(client.player.getDeltaMovement())
                 .append(" health=").append(client.player.getHealth())
+                .append(" screen=").append(client.gui.screen())
+                .append(" overlay=").append(client.gui.overlay())
+                .append(" stableOutlineFrames=").append(stableOutlineFrames)
                 .append(" hand=").append(client.player.getMainHandItem())
                 .append(" reach=").append(client.player.blockInteractionRange())
                 .append(" ready=").append(ClientWorldLoader.isPrimaryWorldReady())
@@ -506,6 +676,10 @@ final class PortalNativeInteractionSmoke {
                             + " fluid=" + destination.getFluidState(
                                     PortalNativeInteractionFixture.BUCKET_SOURCE));
             if (destination != null) {
+                if (phase == 0)
+                    state.append(" compiledSource=").append(client.levelRenderer
+                                    .isSectionCompiledAndVisible(new BlockPos(64, 71, 63)))
+                            .append(" compiledTargetFrame=").append(remoteOutlineCompiledFrame);
                 state.append(" targets=[");
                 for (var entity : destination.entitiesForRendering())
                     if (entity instanceof net.minecraft.world.entity.LivingEntity
@@ -534,6 +708,14 @@ final class PortalNativeInteractionSmoke {
                     + " stage=" + stage + " " + describeFixture(client));
         if (stage == Stage.SETUP) {
             releaseKeys(client);
+            if (phase == 0) {
+                originalHudHidden = client.gui.hud.isHidden();
+                originalBobbing = client.options.bobView().get();
+                if (originalHudHidden) client.gui.hud.toggle();
+                client.options.bobView().set(false);
+                client.getTutorial().setStep(net.minecraft.client.tutorial.TutorialSteps.NONE);
+                client.gui.toastManager().clear();
+            }
             phaseTick = ticks;
             stageTick = ticks;
             remoteOutlineFrames = primaryOutlineChecks = 0;
@@ -547,6 +729,7 @@ final class PortalNativeInteractionSmoke {
             stage = Stage.SETTLE;
             return;
         }
+        if (phase == 0) client.gui.toastManager().clear();
         aim(client);
         int elapsed = ticks - stageTick;
         switch (stage) {
@@ -577,13 +760,15 @@ final class PortalNativeInteractionSmoke {
                 stageTick = ticks;
             }
             case OUTLINE_OFF -> {
-                if (elapsed < 8 || qouteall.imm_ptl.core.render.context_management.RenderStates.frameIndex
+                if (elapsed < 1 || qouteall.imm_ptl.core.render.context_management.RenderStates.frameIndex
                         < outlineDisabledFrame + 2) return;
                 if (!"portal-native-outline-off".equals(captured)) {
                     pendingCapture = "portal-native-outline-off";
                     return;
                 }
                 setOutlineRendering(client, true);
+                client.options.bobView().set(originalBobbing);
+                if (client.gui.hud.isHidden() != originalHudHidden) client.gui.hud.toggle();
                 System.out.println("PORTAL_NATIVE_INTERACTION_OUTLINE_OK remoteFrames="
                         + remoteOutlineFrames + " primaryChecks=" + primaryOutlineChecks);
                 action(client);
