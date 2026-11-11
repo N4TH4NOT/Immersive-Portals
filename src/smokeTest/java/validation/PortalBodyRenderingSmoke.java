@@ -204,7 +204,7 @@ final class PortalBodyRenderingSmoke {
                         + " creative=" + client.player.isCreative()
                         + " invisible=" + client.player.isInvisible()
                         + " pose=" + client.player.getPose()
-                        + " screen=" + client.screen + " overlay=" + client.getOverlay()
+                        + " screen=" + client.gui.screen() + " overlay=" + client.gui.overlay()
                         + " readyTicks=" + fixtureReadyTicks + " lastRemote=" + lastRemoteView);
         int elapsed = ticks - phaseTick;
         boolean destination = client.player.getX() > 160;
@@ -342,7 +342,7 @@ final class PortalBodyRenderingSmoke {
 
     private static boolean fixtureReady(Minecraft client, boolean remote) {
         if (client.level.dimension() != Level.OVERWORLD
-                || client.screen != null || client.getOverlay() != null
+                || client.gui.screen() != null || client.gui.overlay() != null
                 || !client.player.isCreative()
                 || client.player.isInvisible() || client.player.isSpectator()
                 || Math.abs(client.player.getX() - PortalBodyRenderFixture.SOURCE_X) > .05
