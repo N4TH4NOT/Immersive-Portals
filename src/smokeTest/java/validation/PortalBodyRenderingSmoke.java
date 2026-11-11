@@ -7,6 +7,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -59,6 +60,10 @@ final class PortalBodyRenderingSmoke {
     private static int normalBodies;
     private static int projectedBodies;
     private static int independentlyClippedViews;
+    private static int fixtureReadyTicks;
+    private static int remoteViewExtractions;
+    private static int remotePlayerStates;
+    private static String lastRemoteView;
     private static Frame lastFrame;
     private static final java.util.concurrent.atomic.AtomicInteger PENDING =
             new java.util.concurrent.atomic.AtomicInteger();
@@ -114,7 +119,20 @@ final class PortalBodyRenderingSmoke {
             if (!started || complete) return;
             var client = Minecraft.getInstance();
             if (client.player == null) return;
-            if (WorldRenderInfo.isRendering()) return;
+            if (WorldRenderInfo.isRendering()) {
+                if (phase == Phase.REMOTE_OFF || phase == Phase.REMOTE_ON) {
+                    int selfStates = 0;
+                    for (var entity : context.levelState().entityRenderStates)
+                        if (entity instanceof AvatarRenderState avatar
+                                && avatar.id == client.player.getId()) selfStates++;
+                    remoteViewExtractions++;
+                    remotePlayerStates += selfStates;
+                    lastRemoteView = "camera=" + context.camera().position()
+                            + " detached=" + context.camera().isDetached()
+                            + " selfStates=" + selfStates;
+                }
+                return;
+            }
             if (phase == Phase.F5_FRONT && phaseFrames >= 4) {
                 require(context.camera().position().z > -2.2
                                 && context.camera().position().z < -1.5,
@@ -147,7 +165,9 @@ final class PortalBodyRenderingSmoke {
             if (frame.phase != phase && !moving) return;
             boolean capture = switch (frame.phase) {
                 case REMOTE_OFF, REMOTE_ON -> phaseFrames >= 12 && phaseCaptures < 1
-                        && ticks - phaseTick >= 10 && fixtureReady(Minecraft.getInstance(), true);
+                        && ticks - phaseTick >= 10
+                        && (frame.phase != Phase.REMOTE_OFF || fixtureReadyTicks >= 60)
+                        && fixtureReady(Minecraft.getInstance(), true);
                 case STRADDLE_DOWN, EXIT_DOWN, STAND -> phaseFrames >= 8 && phaseCaptures < 3;
                 case F5_BACK, F5_FRONT, F5_EXIT -> phaseFrames >= 8 && phaseCaptures < 2;
                 case CROSS, RETURN, FINAL_CROSS -> Math.abs(frame.feet.z) < .35
@@ -180,11 +200,20 @@ final class PortalBodyRenderingSmoke {
         for (Pixels pixels; (pixels = RESULTS.poll()) != null; ) validate(pixels);
         if (complete) return true;
         require(ticks - phaseTick < 400,
-                "The body rendering probe stalled: " + phase + " feet=" + client.player.position());
+                "The body rendering probe stalled: " + phase + " feet=" + client.player.position()
+                        + " creative=" + client.player.isCreative()
+                        + " invisible=" + client.player.isInvisible()
+                        + " pose=" + client.player.getPose()
+                        + " screen=" + client.screen + " overlay=" + client.getOverlay()
+                        + " readyTicks=" + fixtureReadyTicks + " lastRemote=" + lastRemoteView);
         int elapsed = ticks - phaseTick;
         boolean destination = client.player.getX() > 160;
         switch (phase) {
             case REMOTE_OFF -> {
+                // This scene follows the spectator-only wall probe. Wait for the
+                // complete native visibility/equipment state and its initial mesh
+                // publication, independently of whether the player model renders.
+                fixtureReadyTicks = fixtureReady(client, true) ? fixtureReadyTicks + 1 : 0;
                 if (elapsed < 30 || !fixtureReady(client, true) || remoteOffPixels < 0) return false;
                 IPGlobal.renderYourselfInPortal = true;
                 advance(client, Phase.REMOTE_ON, 0, CameraType.FIRST_PERSON);
@@ -288,10 +317,14 @@ final class PortalBodyRenderingSmoke {
     }
 
     private static void advance(Minecraft client, Phase next, float pitch, CameraType camera) {
-        keys(client, false, false, true);
+        // The visibility comparison changes only renderYourselfInPortal. Keep
+        // its standing pose and camera fixed between the off and on pictures.
+        keys(client, false, false, next != Phase.REMOTE_ON);
         phase = next;
         phaseTick = ticks;
         phaseFrames = phaseCaptures = 0;
+        remoteViewExtractions = remotePlayerStates = 0;
+        lastRemoteView = null;
         client.player.setXRot(pitch);
         client.player.xRotO = pitch;
         client.player.setYRot(180);
@@ -309,15 +342,22 @@ final class PortalBodyRenderingSmoke {
 
     private static boolean fixtureReady(Minecraft client, boolean remote) {
         if (client.level.dimension() != Level.OVERWORLD
+                || client.screen != null || client.getOverlay() != null
                 || !client.player.isCreative()
+                || client.player.isInvisible() || client.player.isSpectator()
                 || Math.abs(client.player.getX() - PortalBodyRenderFixture.SOURCE_X) > .05
                 || Math.abs(client.player.getY() - PortalBodyRenderFixture.FLOOR_Y - 1) > .05
                 || Math.abs(client.player.getZ() - (remote ? 5 : 1.5)) > .05
                 || client.gameRenderer.mainCamera().position()
                         .distanceTo(client.player.getEyePosition()) > .02)
             return false;
-        var color = client.player.getItemBySlot(EquipmentSlot.HEAD).get(DataComponents.DYED_COLOR);
-        if (color == null || color.rgb() != PortalBodyRenderFixture.MAGENTA) return false;
+        for (var slot : new EquipmentSlot[] {EquipmentSlot.HEAD, EquipmentSlot.CHEST,
+                EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
+            var color = client.player.getItemBySlot(slot).get(DataComponents.DYED_COLOR);
+            int expected = slot == EquipmentSlot.HEAD
+                    ? PortalBodyRenderFixture.MAGENTA : PortalBodyRenderFixture.CYAN;
+            if (color == null || color.rgb() != expected) return false;
+        }
         int faces = 0, destinationFaces = 0;
         for (var entity : client.level.entitiesForRendering())
             if (entity instanceof Portal portal) {
@@ -357,6 +397,14 @@ final class PortalBodyRenderingSmoke {
         captures++;
         PENDING.incrementAndGet();
         var client = Minecraft.getInstance();
+        if (frame.phase == Phase.REMOTE_OFF || frame.phase == Phase.REMOTE_ON)
+            System.out.println("PORTAL_RENDER_BODY_CAPTURE_READY phase=" + frame.phase
+                    + " readyTicks=" + fixtureReadyTicks + " phaseFrames=" + phaseFrames
+                    + " invisible=" + client.player.isInvisible()
+                    + " pose=" + client.player.getPose()
+                    + " remoteExtractions=" + remoteViewExtractions
+                    + " remotePlayerStates=" + remotePlayerStates
+                    + " lastRemote=" + lastRemoteView);
         Screenshot.takeScreenshot(client.gameRenderer.mainRenderTarget(), image -> {
             try (image) {
                 var directory = client.gameDirectory.toPath().resolve("screenshots");
