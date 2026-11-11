@@ -58,6 +58,7 @@ public class ServerTeleportationManager {
     private static final Logger LOGGER = LogUtils.getLogger();
     
     private final Set<Entity> teleportingEntities = new HashSet<>();
+    private final Set<Entity> pendingRegularTeleports = new HashSet<>();
     private final WeakHashMap<Entity, Long> lastTeleportGameTime = new WeakHashMap<>();
     public boolean isFiringMyChangeDimensionEvent = false;
     public final WeakHashMap<ServerPlayer, WithDim<Vec3>> lastPosition = new WeakHashMap<>();
@@ -92,7 +93,7 @@ public class ServerTeleportationManager {
     private void tick(MinecraftServer server) {
         teleportingEntities.clear();
         
-        manageGlobalPortalTeleportation();
+        managePortalTeleportation();
     }
     
     public static boolean shouldEntityTeleport(Portal portal, Entity entity) {
@@ -139,12 +140,18 @@ public class ServerTeleportationManager {
         if (motion > 20) {
             return;
         }
+        if (!pendingRegularTeleports.add(entity)) {
+            return;
+        }
         ServerTaskList.of(portal.level().getServer()).addTask(() -> {
             try {
                 teleportRegularEntity(entity, portal);
             }
             catch (Throwable e) {
                 LOGGER.error("", e);
+            }
+            finally {
+                pendingRegularTeleports.remove(entity);
             }
             return true;
         });
@@ -513,13 +520,16 @@ public class ServerTeleportationManager {
         ((IEServerPlayerEntity) player).portal_worldChanged(fromWorld, oldPos);
     }
     
-    private void manageGlobalPortalTeleportation() {
+    private void managePortalTeleportation() {
         for (ServerLevel world : MiscHelper.getServer().getAllLevels()) {
             for (Entity entity : world.getAllEntities()) {
                 if (!(entity instanceof ServerPlayer)) {
-                    Portal collidingPortal = ((IEEntity) entity).ip_getCollidingPortal();
-                    
-                    if (collidingPortal != null && collidingPortal.getIsGlobal()) {
+                    var handler = ((IEEntity) entity).ip_getPortalCollisionHandler();
+                    if (handler == null) continue;
+                    // Portal.tick can precede this entity's native movement. Check
+                    // its completed segment now so the queued transfer runs in this
+                    // same END_SERVER_TICK, before the next native tick resets xo.
+                    for (Portal collidingPortal : handler.getCollidingPortals()) {
                         if (shouldEntityTeleport(collidingPortal, entity)) {
                             startTeleportingRegularEntity(collidingPortal, entity);
                         }
