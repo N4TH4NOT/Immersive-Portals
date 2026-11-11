@@ -93,6 +93,7 @@ final class PortalFluidSmoke {
                         || !ready(client)) return false;
                 stage = Stage.SOURCE;
                 stageTick = ticks;
+                logStage(client);
             }
             case SOURCE -> {
                 stop(client);
@@ -161,6 +162,7 @@ final class PortalFluidSmoke {
                 if (PortalFluidFixture.destinationCase(name())) {
                     stage = Stage.CROSS;
                     stageTick = ticks;
+                    logStage(client);
                 } else verify(client);
             }
             case CROSS -> {
@@ -169,6 +171,7 @@ final class PortalFluidSmoke {
                     stop(client);
                     stage = Stage.DESTINATION;
                     stageTick = ticks;
+                    logStage(client);
                 }
             }
             case DESTINATION -> {
@@ -219,5 +222,10 @@ final class PortalFluidSmoke {
         client.player.connection.sendCommand("portal_fluid_verify " + name());
         stage = Stage.VERIFY;
         stageTick = ticks;
+    }
+
+    private static void logStage(Minecraft client) {
+        System.out.println("PORTAL_FLUID_STAGE case=" + name() + " stage=" + stage
+                + " helperTick=" + ticks + " " + PortalFluidFixture.nativeState(client.player));
     }
 }

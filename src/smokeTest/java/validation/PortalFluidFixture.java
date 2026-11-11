@@ -38,6 +38,7 @@ final class PortalFluidFixture {
         final String name;
         final java.util.UUID player;
         final int started;
+        final java.util.ArrayDeque<String> nativeHistory = new java.util.ArrayDeque<>();
         int sourceSamples, destinationSamples;
         boolean verified;
         boolean positiveForce, shallowForce, nonplayerReported;
@@ -80,6 +81,36 @@ final class PortalFluidFixture {
                 BlockPos.containing(box.maxX, box.maxY, box.maxZ)))
             if (!entity.level().getFluidState(pos).isEmpty()) return true;
         return false;
+    }
+
+    static String nativeState(net.minecraft.world.entity.Entity entity) {
+        return "playerTick=" + entity.tickCount + " dimension=" + entity.level().dimension().identifier()
+                + " feet=" + entity.position() + " eye=" + entity.getEyePosition()
+                + " velocity=" + entity.getDeltaMovement() + " pose=" + entity.getPose()
+                + " water=" + entity.isInWater() + " lava=" + entity.isInLava()
+                + " waterHeight=" + entity.getFluidHeight(FluidTags.WATER)
+                + " lavaHeight=" + entity.getFluidHeight(FluidTags.LAVA)
+                + " waterEye=" + entity.isEyeInFluid(FluidTags.WATER)
+                + " scale=" + ScaleUtils.getScale(entity);
+    }
+
+    static String contactState(net.minecraft.world.entity.Entity entity) {
+        var handler = ((qouteall.imm_ptl.core.ducks.IEEntity) entity).ip_getPortalCollisionHandler();
+        var contacts = handler == null ? java.util.List.<String>of()
+                : handler.getCollidingPortals().stream().map(portal -> {
+                    var world = portal.getDestinationWorld();
+                    var position = BlockPos.containing(portal.transformPoint(entity.position()
+                            .subtract(portal.getNormal().scale(.5)).add(0, .1, 0)));
+                    return "id=" + portal.getUUID() + " removed=" + portal.isRemoved()
+                            + " source=" + portal.getOriginPos() + " normal=" + portal.getNormal()
+                            + " eyeDistance=" + portal.getDistanceToPlane(entity.getEyePosition())
+                            + " destination=" + portal.getDestDim().identifier()
+                            + " remoteProbe=" + position + " remoteFluid="
+                            + (world == null ? "missing_world" : world.getFluidState(position));
+                }).toList();
+        return "body=" + entity.getBoundingBox() + " fluidBox=" + entity.getFluidInteractionBox()
+                + " rawFluid=" + physicalFluid(entity) + " contacts=" + contacts
+                + " waterForce=" + PortalFluidInteraction.lastForce(entity, FluidTags.WATER);
     }
 
     private static void require(boolean condition, String message) {
@@ -274,6 +305,10 @@ final class PortalFluidFixture {
     private static void observe(ServerPlayer player) {
         int elapsed = player.level().getServer().getTickCount() - probe.started;
         require(elapsed < 600, "The server native fluid fixture stalled: " + probe.name);
+        if (destinationCase(probe.name)) {
+            if (probe.nativeHistory.size() == 32) probe.nativeHistory.removeFirst();
+            probe.nativeHistory.addLast("elapsed=" + elapsed + " " + nativeState(player));
+        }
         if (elapsed < ((probe.name.equals("destination_lava") || probe.name.equals("nonplayer_lava"))
                 ? 220 : 25)) return;
         if (probe.name.equals("nonplayer_lava")) {
@@ -334,9 +369,10 @@ final class PortalFluidFixture {
             }
             return;
         }
-        require(player.isInWater() && !player.isInLava()
-                        && player.getFluidHeight(FluidTags.WATER) > 0,
-                "A physically visible water body lost its native interaction: " + probe.name);
+        if (!(player.isInWater() && !player.isInLava() && player.getFluidHeight(FluidTags.WATER) > 0))
+            throw new AssertionError("A physically visible water body lost its native interaction: "
+                    + probe.name + " " + nativeState(player) + " " + contactState(player)
+                    + " history=" + probe.nativeHistory);
         if (player.level().dimension() == Level.NETHER) {
             require(destinationCase(probe.name) && player.isEyeInFluid(FluidTags.WATER),
                     "The physical destination water did not submerge the actual eye");

@@ -79,11 +79,11 @@ jobs:
             scenario: quality
             modset: sodium
           - backend: opengl
-            scenario: optics
+            scenario: multiplayer
             modset: vanilla
           - backend: opengl
-            scenario: optics
-            modset: sodium
+            scenario: singleplayer
+            modset: vanilla
           - backend: opengl
             scenario: rendering
             modset: sodium
@@ -94,7 +94,7 @@ jobs:
             scenario: optics
             modset: vanilla
           - backend: opengl
-            scenario: multiplayer
+            scenario: optics
             modset: vanilla
           - backend: opengl
             scenario: multiplayer
@@ -115,8 +115,8 @@ jobs:
             scenario: scaled
             modset: vanilla
           - backend: opengl
-            scenario: singleplayer
-            modset: vanilla
+            scenario: optics
+            modset: sodium
           - backend: vulkan
             scenario: scaled
             modset: vanilla
