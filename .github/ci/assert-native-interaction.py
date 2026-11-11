@@ -56,6 +56,12 @@ for marker in ("TRADE_CLOSED_ON_OBSTRUCTION", "MOUNT_SAME_WORLD", "REFLECTION_SO
                "BUCKET_SOURCE_COLLECTED", "BUCKET_NORMAL_REACH range=4.5"):
     if f"PORTAL_NATIVE_INTERACTION_{marker}" not in server:
         raise AssertionError(f"Missing native entity action evidence: {marker}")
+drop_origins = re.findall(r"PORTAL_NATIVE_INTERACTION_REFLECTION_DROP_ORIGIN id=(\S+) "
+                          r"world=(\S+)[^\n]* count=(\d+)", server)
+if (not drop_origins or len({item[0] for item in drop_origins}) != len(drop_origins)
+        or any(item[1] != "minecraft:overworld" for item in drop_origins)
+        or sum(int(item[2]) for item in drop_origins) != 7):
+    raise AssertionError("Native reflected death did not retain seven unique source-world drop origins.")
 if "PORTAL_NATIVE_INTERACTION_MINING_SERVER_COMPLETE" not in server:
     raise AssertionError("Held mining did not finish on the authoritative server.")
 for phase in ("sign", "hanging_sign"):

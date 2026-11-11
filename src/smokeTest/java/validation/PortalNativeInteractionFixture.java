@@ -34,7 +34,7 @@ import qouteall.imm_ptl.peripheral.wand.ProtoPortal;
 import qouteall.imm_ptl.peripheral.wand.ProtoPortalSide;
 
 /** Server-side outcomes for real key input through a translated native Fabric portal. */
-final class PortalNativeInteractionFixture {
+public final class PortalNativeInteractionFixture {
     static final BlockPos TARGET = new BlockPos(128, 71, 62);
     static final BlockPos SOURCE_WITNESS = new BlockPos(64, 71, 62);
     static final BlockPos BUCKET_SOURCE = new BlockPos(128, 70, 62);
@@ -53,8 +53,30 @@ final class PortalNativeInteractionFixture {
     private static int signCompletionTicks;
     private static boolean buttonActivated;
     private static final java.util.Set<String> VERIFIED = new java.util.HashSet<>();
+    private record DropOrigin(java.util.UUID id, net.minecraft.resources.ResourceKey<Level> world,
+            Vec3 position, Vec3 velocity, int count) {}
+    private static final java.util.Map<java.util.UUID, DropOrigin> REFLECTION_DROPS =
+            new java.util.LinkedHashMap<>();
 
     private PortalNativeInteractionFixture() {}
+
+    /** Observe completed native spawning before random death launches can cross the portal. */
+    public static void observeNativeDrop(ServerPlayer player,
+            net.minecraft.world.entity.item.ItemEntity item) {
+        if (!"reflection".equals(phase) || item == null || !item.getItem().is(Items.EMERALD)
+                || !player.getGameProfile().name().equals("InteractionTest")) return;
+        require(player.isDeadOrDying(), "The reflected inventory witness was dropped outside native death");
+        require(item.level() instanceof ServerLevel world && !item.isRemoved()
+                        && world.getEntity(item.getUUID()) == item,
+                "Native death returned an emerald entity that was not actually spawned");
+        var origin = new DropOrigin(item.getUUID(), item.level().dimension(), item.position(),
+                item.getDeltaMovement(), item.getItem().getCount());
+        require(REFLECTION_DROPS.putIfAbsent(origin.id(), origin) == null,
+                "Native death counted the same real inventory drop twice");
+        System.out.println("PORTAL_NATIVE_INTERACTION_REFLECTION_DROP_ORIGIN id=" + origin.id()
+                + " world=" + origin.world().identifier() + " position=" + origin.position()
+                + " velocity=" + origin.velocity() + " count=" + origin.count());
+    }
 
     static String signMessage(String currentPhase) {
         return currentPhase.equals("hanging_sign") ? "Portal hang" : "Portal sign";
@@ -229,6 +251,7 @@ final class PortalNativeInteractionFixture {
         trader = null;
         boat = null;
         reflectedTarget = null;
+        REFLECTION_DROPS.clear();
         player.setHealth(player.getMaxHealth());
         destination.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
                         new net.minecraft.world.phys.AABB(123, 69, 54, 134, 78, 70))
@@ -494,15 +517,19 @@ final class PortalNativeInteractionFixture {
                 require(player.isDeadOrDying() && player.level() == source
                                 && reflectedTarget != null && reflectedTarget.getHealth() < 20,
                         "Lethal native Thorns did not preserve the attacking player's physical world");
-                var search = new net.minecraft.world.phys.AABB(60, 68, 60, 70, 75, 69);
-                int dropped = source.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
-                                search, item -> item.getItem().is(Items.EMERALD))
-                        .stream().mapToInt(item -> item.getItem().getCount()).sum();
-                require(dropped == 7, "Reflected damage dropped the real inventory outside the source world");
-                require(destination.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
-                                new net.minecraft.world.phys.AABB(124, 68, 58, 133, 75, 68),
-                                item -> item.getItem().is(Items.EMERALD)).isEmpty(),
-                        "The temporary remote attack geometry leaked inventory drops into its target world");
+                int dropped = REFLECTION_DROPS.values().stream().mapToInt(DropOrigin::count).sum();
+                require(dropped == 7, "Native reflected death did not spawn exactly seven real emeralds: "
+                        + REFLECTION_DROPS.values());
+                for (var origin : REFLECTION_DROPS.values()) {
+                    require(origin.world() == Level.OVERWORLD
+                                    && origin.position().distanceTo(new Vec3(64.5, 71.32, 65.4)) < .01,
+                            "Reflected death created a real inventory drop outside its physical origin: "
+                                    + origin);
+                    net.minecraft.world.entity.Entity current = source.getEntity(origin.id());
+                    if (current == null) current = destination.getEntity(origin.id());
+                    System.out.println("PORTAL_NATIVE_INTERACTION_REFLECTION_DROP_CURRENT id="
+                            + origin.id() + " entity=" + current);
+                }
                 System.out.println("PORTAL_NATIVE_INTERACTION_REFLECTION_SOURCE_WORLD drops=" + dropped);
             }
             default -> throw new AssertionError("Unknown native interaction verification " + expected);
