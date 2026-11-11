@@ -18,6 +18,7 @@
     "iris.IrisRenderTargetsAccess",
     "iris.IrisGlDeviceAccess",
     "sodium.MixinSodiumViewport",
-    "sodium.MixinSodiumOcclusionCuller"
+    "sodium.MixinSodiumOcclusionCuller",
+    "sodium.MixinSodiumWorldRenderer"
   ]
 }
