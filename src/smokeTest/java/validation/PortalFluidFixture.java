@@ -302,6 +302,26 @@ final class PortalFluidFixture {
                 }
     }
 
+    private static boolean projectedWaterEye(ServerPlayer player) {
+        Portal portal = faces.stream().filter(candidate -> candidate.level() == player.level()
+                        && candidate.getNormal().z > .99)
+                .findFirst().orElseThrow(() -> new AssertionError("The water-eye oracle lost its source face"));
+        Vec3 eye = player.getEyePosition();
+        var geometry = portal.getThisSideState();
+        Vec3 local = geometry.transformGlobalToLocal(eye);
+        // The physical eye can enter the destination half before the rendered
+        // crossing packet transfers its authoritative entity anchor.
+        boolean projected = local.z < 0 && Math.abs(local.x) < geometry.width() / 2
+                && Math.abs(local.y) < geometry.height() / 2;
+        var world = projected ? portal.getDestinationWorld() : player.level();
+        require(world != null, "The water-eye oracle lost its physical sample world");
+        Vec3 sample = projected ? portal.transformPoint(eye) : eye;
+        BlockPos position = BlockPos.containing(sample);
+        var fluid = world.getFluidState(position);
+        return fluid.is(FluidTags.WATER) && sample.y >= position.getY()
+                && sample.y <= position.getY() + fluid.getHeight(world, position);
+    }
+
     private static void observe(ServerPlayer player) {
         int elapsed = player.level().getServer().getTickCount() - probe.started;
         require(elapsed < 600, "The server native fluid fixture stalled: " + probe.name);
@@ -381,8 +401,13 @@ final class PortalFluidFixture {
             require(player.level().dimension() == Level.OVERWORLD, "The fluid player entered an unrelated world");
             if (probe.name.equals("visible_water"))
                 require(player.isEyeInFluid(FluidTags.WATER), "Visible source water did not submerge the native eye");
-            else require(!physicalFluid(player) && !player.isEyeInFluid(FluidTags.WATER),
-                    "The projected-water probe no longer has a dry physical source and eye");
+            else {
+                boolean expectedEye = projectedWaterEye(player);
+                if (physicalFluid(player) || player.isEyeInFluid(FluidTags.WATER) != expectedEye)
+                    throw new AssertionError("The projected-water probe lost its dry source body or geometric eye state: "
+                            + probe.name + " expectedEye=" + expectedEye + " " + nativeState(player)
+                            + " " + contactState(player) + " history=" + probe.nativeHistory);
+            }
             probe.sourceSamples++;
         }
     }
