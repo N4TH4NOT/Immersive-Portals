@@ -32,10 +32,12 @@ final class PortalBodyRenderingSmoke {
     }
 
     private record Frame(Phase phase, int index, Vec3 feet, Vec3 camera, CameraType cameraType,
-            float pitch, double headX, double headY) {}
+            float pitch, double headX, double headY, Vec3 forward, Vec3 left, Vec3 up,
+            float projectionX, float projectionY) {}
 
     private record Pixels(Frame frame, int width, int height, int headRegionPixels,
-            int helmetInHeadRegion, int helmet, int body, int helmetOutsideExpected) {}
+            int helmetInHeadRegion, int helmet, int body, int helmetOutsideExpected,
+            int sampled, int sky, int floor) {}
 
     private static Phase phase = Phase.REMOTE_OFF;
     private static boolean initialized;
@@ -148,10 +150,13 @@ final class PortalBodyRenderingSmoke {
             var clip = context.camera().getViewRotationProjectionMatrix(new org.joml.Matrix4f())
                     .transform(new Vector4f((float) relative.x, (float) relative.y,
                             (float) relative.z, 1));
+            var projection = context.levelState().cameraRenderState.projectionMatrix;
             lastFrame = new Frame(phase, RenderStates.frameIndex, client.player.position(),
                     context.camera().position(), client.options.getCameraType(),
                     context.camera().xRot(), .5 + .5 * clip.x / clip.w,
-                    .5 - .5 * clip.y / clip.w);
+                    .5 - .5 * clip.y / clip.w, vector(context.camera().forwardVector()),
+                    vector(context.camera().leftVector()), vector(context.camera().upVector()),
+                    Math.abs(projection.m00()), Math.abs(projection.m11()));
             phaseFrames++;
         });
         IPGlobal.PRE_GAME_RENDER_EVENT.register(() -> {
@@ -397,6 +402,9 @@ final class PortalBodyRenderingSmoke {
         captures++;
         PENDING.incrementAndGet();
         var client = Minecraft.getInstance();
+        System.out.println("PORTAL_RENDER_BODY_FRAME " + frame);
+        if (frame.phase == Phase.STRADDLE_DOWN || frame.phase == Phase.EXIT_DOWN)
+            requireDownwardFloor(client, frame);
         if (frame.phase == Phase.REMOTE_OFF || frame.phase == Phase.REMOTE_ON)
             System.out.println("PORTAL_RENDER_BODY_CAPTURE_READY phase=" + frame.phase
                     + " readyTicks=" + fixtureReadyTicks + " phaseFrames=" + phaseFrames
@@ -424,10 +432,17 @@ final class PortalBodyRenderingSmoke {
     private static Pixels pixels(Frame frame, NativeImage image) {
         int width = image.getWidth(), height = image.getHeight();
         int helmet = 0, body = 0, headRegion = 0, headPixels = 0, outside = 0;
+        int sampled = 0, sky = 0, floor = 0;
         for (int y = height / 20; y < height * 9 / 10; y++)
             for (int x = width / 10; x < width * 9 / 10; x++) {
                 int rgb = image.getPixel(x, y);
                 int red = rgb >> 16 & 255, green = rgb >> 8 & 255, blue = rgb & 255;
+                sampled++;
+                if (blue > 70 && blue > red * 1.2 && blue > green * 1.1
+                        && blue - green > 20) sky++;
+                int highest = Math.max(red, Math.max(green, blue));
+                int lowest = Math.min(red, Math.min(green, blue));
+                if (highest > 35 && highest - lowest <= Math.max(12, highest * .12)) floor++;
                 boolean magenta = red > 35 && blue > 35 && red > green * 1.45
                         && blue > green * 1.25;
                 boolean cyan = green > 35 && blue > 35 && green > red * 1.45
@@ -445,7 +460,39 @@ final class PortalBodyRenderingSmoke {
                 }
                 if (cyan) body++;
             }
-        return new Pixels(frame, width, height, headPixels, headRegion, helmet, body, outside);
+        return new Pixels(frame, width, height, headPixels, headRegion, helmet, body, outside,
+                sampled, sky, floor);
+    }
+
+    private static Vec3 vector(org.joml.Vector3fc vector) {
+        return new Vec3(vector.x(), vector.y(), vector.z());
+    }
+
+    private static void requireDownwardFloor(Minecraft client, Frame frame) {
+        require(Math.abs(frame.pitch - 89) < .05 && frame.forward.y < -.99,
+                "The downward body view did not use its actual near-vertical camera: " + frame);
+        for (double screenX : new double[] {-.8, 0, .8})
+            for (double screenY : new double[] {-.8, 0, .9}) {
+                Vec3 direction = frame.forward.add(frame.left.scale(-screenX / frame.projectionX))
+                        .add(frame.up.scale(screenY / frame.projectionY));
+                require(direction.y < 0, "A downward witness ray escaped its floor: " + frame);
+                Vec3 floor = frame.camera.add(direction.scale(
+                        (PortalBodyRenderFixture.FLOOR_Y + 1 - frame.camera.y) / direction.y));
+                // The two finite same-world openings translate X by 64. Their
+                // floors continue across Z=0, including every sampled image ray.
+                if (frame.camera.z * floor.z < 0) {
+                    Vec3 entry = frame.camera.add(direction.scale(-frame.camera.z / direction.z));
+                    require(Math.abs(entry.x - frame.feet.x) < 2
+                                    && entry.y >= PortalBodyRenderFixture.FLOOR_Y + 1
+                                    && entry.y <= PortalBodyRenderFixture.FLOOR_Y + 5,
+                            "A downward witness ray missed the finite opening: " + frame + " " + entry);
+                    floor = floor.add(frame.feet.x < 160 ? 64 : -64, 0, 0);
+                }
+                require(client.level.getBlockState(BlockPos.containing(
+                                floor.x, PortalBodyRenderFixture.FLOOR_Y, floor.z))
+                                .is(Blocks.CONCRETE.white()),
+                        "The downward witness did not retain its opaque floor: " + frame + " " + floor);
+            }
     }
 
     private static void validate(Pixels pixels) {
@@ -491,6 +538,15 @@ final class PortalBodyRenderingSmoke {
 
     private static void validatePixels(Pixels pixels) {
         Phase captured = pixels.frame.phase;
+        if (captured == Phase.STRADDLE_DOWN || captured == Phase.EXIT_DOWN) {
+            require(pixels.sky <= Math.max(3, pixels.sampled * .002)
+                            && pixels.floor >= pixels.sampled * .98,
+                    "The near-vertical portal view exposed a screen/sky instead of its opaque floor: "
+                            + pixels);
+            System.out.println("PORTAL_RENDER_BODY_FLOOR_OK phase=" + captured
+                    + " frame=" + pixels.frame.index + " sky=" + pixels.sky
+                    + " floor=" + pixels.floor + " sampled=" + pixels.sampled);
+        }
         if (captured == Phase.REMOTE_OFF) remoteOffPixels = pixels.helmet;
         else if (captured == Phase.REMOTE_ON) {
             remoteOnPixels = pixels.helmet;
