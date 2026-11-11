@@ -45,6 +45,7 @@ fi
 server_pid=''
 client_pids=()
 quality_workspace_root=''
+isolated_client_workspace=''
 
 collect_quality_evidence() {
     [[ "$scenario" == quality && -n "$quality_workspace_root" ]] || return 0
@@ -58,6 +59,15 @@ collect_quality_evidence() {
             cp -a "$source_directory/." "$destination_directory/" || return 1
         fi
     done
+}
+
+collect_isolated_client_evidence() {
+    [[ -n "$isolated_client_workspace" ]] || return 0
+    local source_directory="$isolated_client_workspace/run/smoke-client"
+    if [[ -d "$source_directory" ]]; then
+        mkdir -p "$repo/run/smoke-client" || return 1
+        cp -a "$source_directory/." "$repo/run/smoke-client/" || return 1
+    fi
 }
 
 cleanup() {
@@ -76,6 +86,10 @@ cleanup() {
     fi
     if ! collect_quality_evidence; then
         printf '%s\n' 'Could not collect the isolated quality clients game evidence.' >&2
+        if (( status == 0 )); then status=1; fi
+    fi
+    if ! collect_isolated_client_evidence; then
+        printf '%s\n' 'Could not collect the isolated fixture client game evidence.' >&2
         if (( status == 0 )); then status=1; fi
     fi
     if [[ "$modset" == sodium ]]; then
@@ -202,6 +216,23 @@ prepare_quality_workspaces() {
 
 if [[ "$scenario" == quality ]]; then
     prepare_quality_workspaces
+elif [[ "$scenario" != singleplayer ]]; then
+    isolated_client_workspace="$(mktemp -d "${RUNNER_TEMP:?}/portal-client-$backend-$scenario-$modset.XXXXXX")"
+    # A client's variant-dependent compile may replace build/classes while the
+    # dedicated server lazily loads another class. Separate execution histories
+    # alone do not isolate Loom's output tree, including the gravity composite.
+    tar -C "$repo" --exclude=.git --exclude=.gradle --exclude=build --exclude=run \
+        -cf - . | tar -C "$isolated_client_workspace" -xf -
+    chmod +x "$isolated_client_workspace/gradlew"
+    mkdir -p "$isolated_client_workspace/run/smoke-client"
+    cp "$repo/run/smoke-client/options.txt" "$isolated_client_workspace/run/smoke-client/options.txt"
+    (
+        cd "$isolated_client_workspace"
+        ./gradlew -PportalSmoke "-PportalSmokeBackend=$backend" \
+            "-PportalSmokeUsername=$username" "${scenario_args[@]}" \
+            compileSmokeTestJava downloadAssets --no-daemon --stacktrace --console=plain
+    ) 2>&1 | tee "$evidence/prepare-client.log"
+    printf '%s\n' 'PORTAL_CLIENT_WORKSPACE_READY'
 fi
 
 start_server() {
@@ -259,6 +290,9 @@ run_client() {
     shift
     local client_task=runClient
     local client_workspace="$repo"
+    if [[ -n "$isolated_client_workspace" ]]; then
+        client_workspace="$isolated_client_workspace"
+    fi
     if [[ "$scenario" == quality ]]; then
         # --project-cache-dir isolates launch.cfg, but Loom also writes a
         # classpath argfile under build/loom-cache/argFiles/<task name>.
@@ -271,11 +305,14 @@ run_client() {
     # Quality calls run in independent background shells. The timeout remains
     # their direct child so cleanup can terminate the complete game process group.
     cd "$client_workspace"
+    local client_status=0
     timeout --signal=TERM --kill-after=30s 600s \
         ./gradlew -PportalSmoke "-PportalSmokeBackend=$backend" \
             "-PportalSmokeUsername=$username" "${scenario_args[@]}" "$@" \
             "$client_task" --no-daemon --stacktrace --console=plain \
-        2>&1 | tee "$client_log"
+        2>&1 | tee "$client_log" || client_status=$?
+    cd "$repo"
+    return "$client_status"
 }
 
 run_quality_clients() {
@@ -311,6 +348,7 @@ if [[ "$scenario" == quality ]]; then
 fi
 
 run_client "$evidence/client-console.log"
+collect_isolated_client_evidence
 
 if [[ "$scenario" == optics ]]; then
     /usr/bin/python3 .github/ci/assert-optics.py "$backend" "$evidence"
@@ -336,6 +374,7 @@ PY
     grep -F 'PORTAL_SMOKE_DIMENSION_RELOAD_OK' "$evidence/reload-server-console.log"
     grep -F 'PORTAL_SMOKE_SKYLAND_WORLD_SEED_OK' "$evidence/reload-server-console.log"
     run_client "$evidence/reload-client-console.log" -PportalSmokeDimensionReload=true
+    collect_isolated_client_evidence
     /usr/bin/python3 .github/ci/assert-fabric-scenario.py "$backend" "$scenario" "$evidence" --reload
     stop_server
     printf '%s\n' 'FABRIC_DIMENSION_RESTART_VERIFIED' | tee "$evidence/dimension-restart.txt"
