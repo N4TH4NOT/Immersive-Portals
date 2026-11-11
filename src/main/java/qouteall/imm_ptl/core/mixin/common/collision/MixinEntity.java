@@ -27,6 +27,7 @@ import qouteall.imm_ptl.core.IPGlobal;
 import qouteall.imm_ptl.core.IPMcHelper;
 import qouteall.imm_ptl.core.api.ImmPtlEntityExtension;
 import qouteall.imm_ptl.core.collision.PortalCollisionHandler;
+import qouteall.imm_ptl.core.collision.PortalEntityMovement;
 import qouteall.imm_ptl.core.ducks.IEEntity;
 import qouteall.imm_ptl.core.miscellaneous.IPVanillaCopy;
 import qouteall.imm_ptl.core.portal.EndPortalEntity;
@@ -112,6 +113,10 @@ public abstract class MixinEntity implements IEEntity, ImmPtlEntityExtension {
             return Vec3.ZERO;
         }
         
+        // End-of-tick contact discovery is too late for a newly spawned entity
+        // or an impulse that starts moving through the opening during this tick.
+        PortalEntityMovement.prepare(entity, attemptedMove);
+
         if (!IPGlobal.crossPortalCollision
             || ip_portalCollisionHandler == null
             || !ip_portalCollisionHandler.hasCollisionEntry()

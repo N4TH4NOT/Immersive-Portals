@@ -417,6 +417,14 @@ final class PortalQualitySmoke {
                                 + entity.position() + " velocity=" + velocity);
             double step = horizontal(position.subtract(previous.position()));
             Vec3 expectedMovement = previous.velocity();
+            if (previous.age() == 0 && entity.tickCount > 0 && !(entity instanceof Projectile)) {
+                require(step > .1,
+                        "The first native entity move hit the portal backing wall before contact discovery: "
+                                + previous.name() + " previous=" + previous + " current=" + position
+                                + " velocity=" + velocity);
+                System.out.println("PORTAL_QUALITY_ENTITY_FIRST_MOVE_OK type=" + previous.name()
+                        + " position=" + entity.position() + " velocity=" + velocity);
+            }
             if (entity instanceof SmallFireball fireball) {
                 expectedMovement = previous.velocity().add(previous.velocity().normalize()
                         .scale(fireball.accelerationPower)).scale((double) .95f);
