@@ -407,6 +407,10 @@ final class PortalQualitySmoke {
                     "Portal traversal lost or replaced the quality " + previous.name());
             boolean crossWorld = previous.name().startsWith("cross_world_");
             boolean arrived = crossWorld ? entity.level().dimension() == Level.NETHER : destination(entity);
+            require(!crossedEntities.contains(previous.id()) || arrived,
+                    "The portal replayed a completed entity crossing without reverse movement: "
+                            + previous.name() + " previous=" + previous + " current=" + entity.position()
+                            + " velocity=" + entity.getDeltaMovement() + " age=" + entity.tickCount);
             Vec3 position = crossWorld && arrived
                     ? crossWorldEntityPortal.inverseTransformPoint(entity.position())
                     : crossWorld ? entity.position() : unfold(entity.position());

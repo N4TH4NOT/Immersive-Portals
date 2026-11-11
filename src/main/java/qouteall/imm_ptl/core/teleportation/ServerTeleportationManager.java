@@ -60,6 +60,7 @@ public class ServerTeleportationManager {
     private final Set<Entity> teleportingEntities = new HashSet<>();
     private final Set<Entity> pendingRegularTeleports = new HashSet<>();
     private final WeakHashMap<Entity, Long> lastTeleportGameTime = new WeakHashMap<>();
+    private final WeakHashMap<Entity, Integer> lastRegularTeleportTick = new WeakHashMap<>();
     public boolean isFiringMyChangeDimensionEvent = false;
     public final WeakHashMap<ServerPlayer, WithDim<Vec3>> lastPosition = new WeakHashMap<>();
     
@@ -128,6 +129,12 @@ public class ServerTeleportationManager {
             return;
         }
         if (isJustTeleported(entity, 1)) {
+            return;
+        }
+        // Portal.tick can run before this entity's next native tick resets its
+        // previous endpoint. Do not treat the preserved destination interpolation
+        // segment as a new crossing through the opposite wand face.
+        if (lastRegularTeleportTick.getOrDefault(entity, -1) == entity.tickCount) {
             return;
         }
         //a new born entity may have last tick pos 0 0 0
@@ -630,6 +637,7 @@ public class ServerTeleportationManager {
         
         // a new entity may be created
         this.lastTeleportGameTime.put(entity, currGameTime);
+        this.lastRegularTeleportTick.put(entity, entity.tickCount);
     }
 
     void finishProjectilePortalTraversal(Projectile projectile) {
