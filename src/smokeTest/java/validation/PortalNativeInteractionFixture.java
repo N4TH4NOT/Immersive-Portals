@@ -17,6 +17,7 @@ import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
@@ -176,6 +177,7 @@ final class PortalNativeInteractionFixture {
                 }
             room(world, world == source ? 64 : 128);
         }
+        source.setBlock(new BlockPos(64, 70, 67), Blocks.STONE.defaultBlockState(), 3);
         source.setChunkForced(TARGET.getX() >> 4, TARGET.getZ() >> 4, true);
         source.getChunkAt(TARGET);
         for (var world : new ServerLevel[] {source, destination})
@@ -318,8 +320,6 @@ final class PortalNativeInteractionFixture {
                 for (Direction side : Direction.Plane.HORIZONTAL)
                     destination.setBlock(BUCKET_SOURCE.relative(side), Blocks.STONE.defaultBlockState(), 3);
                 player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.BUCKET));
-                if (next.equals("bucket_far"))
-                    source.setBlock(new BlockPos(64, 70, 66), Blocks.STONE.defaultBlockState(), 3);
             }
             case "mount" -> {
                 boat = net.minecraft.world.entity.EntityTypes.OAK_BOAT.create(destination,
@@ -353,6 +353,7 @@ final class PortalNativeInteractionFixture {
                 reflectedTarget = new net.minecraft.world.entity.monster.zombie.Zombie(destination);
                 reflectedTarget.setPos(128.5, 70, 62.5);
                 reflectedTarget.setNoAi(true);
+                reflectedTarget.setOnGround(true);
                 var armor = new ItemStack(Items.DIAMOND_CHESTPLATE);
                 armor.enchant(destination.registryAccess().lookupOrThrow(
                         net.minecraft.core.registries.Registries.ENCHANTMENT).getOrThrow(
@@ -361,6 +362,9 @@ final class PortalNativeInteractionFixture {
                 destination.addFreshEntity(reflectedTarget);
                 source.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.KEEP_INVENTORY,
                         false, server);
+                // Keep the lethal damage witness stable while real client input settles.
+                player.getFoodData().setFoodLevel(16);
+                player.getFoodData().setSaturation(0);
                 player.setHealth(.5f);
                 player.invulnerableTime = 0;
                 player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WOODEN_SWORD));
@@ -375,10 +379,22 @@ final class PortalNativeInteractionFixture {
                 require(Math.abs(player.entityInteractionRange() - .32) < 1e-6,
                         "The projected use fixture did not limit reach before the portal plane");
         } else if (next.equals("bucket_far")) {
-            player.teleportTo(source, 64.5, 71, 66.8, java.util.Set.of(), 180, 0, false);
-            double distance = player.getEyePosition().distanceTo(new Vec3(64.5, 70.8888889, 62.5));
+            // Keep this support behind the next phase's body instead of teleporting
+            // into a just-removed block before its update reaches the client.
+            player.teleportTo(source, 64.5, 71, 67.05, java.util.Set.of(), 180, 0, false);
+            Vec3 eye = player.getEyePosition().add(64, 0, 0);
+            Vec3 direction = new Vec3(128.5, 70.8888889, 62.5).subtract(eye).normalize();
+            Vec3 entry = eye.add(direction.scale((64 - eye.z) / direction.z + 1e-4));
+            var hit = destination.clip(new ClipContext(entry, eye.add(direction.scale(5)),
+                    ClipContext.Block.OUTLINE, ClipContext.Fluid.SOURCE_ONLY, player));
+            require(hit.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK
+                            && hit.getBlockPos().equals(BUCKET_SOURCE),
+                    "The bucket reach witness did not clear the native fluid container");
+            double distance = eye.distanceTo(hit.getLocation());
             require(player.blockInteractionRange() < distance && distance < 5,
                     "The bucket reach witness did not distinguish the native range from the old fixed range");
+            System.out.println("PORTAL_NATIVE_INTERACTION_BUCKET_REACH_WITNESS range="
+                    + player.blockInteractionRange() + " distance=" + distance);
         } else player.teleportTo(source, 64.5, 70,
                 next.equals("mining_cross") || next.equals("bucket") ? 64.4
                 : next.equals("reflection") ? 65.4 : 66.5,

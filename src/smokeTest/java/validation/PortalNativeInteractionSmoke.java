@@ -287,7 +287,7 @@ final class PortalNativeInteractionSmoke {
                     && Math.abs(client.player.blockInteractionRange() - 4.5) < 1e-6
                     && (!phaseName().equals("bucket_far")
                             || Math.abs(client.player.getY() - 71) < .01
-                                    && Math.abs(client.player.getZ() - 66.8) < .01);
+                                    && Math.abs(client.player.getZ() - 67.05) < .01);
             case "trade", "mount", "reflection" -> {
                 boolean present = false;
                 for (var entity : world.entitiesForRendering())
@@ -491,6 +491,8 @@ final class PortalNativeInteractionSmoke {
     private static String describeFixture(Minecraft client) {
         var state = new StringBuilder("world=").append(client.level.dimension().identifier())
                 .append(" position=").append(client.player.position())
+                .append(" velocity=").append(client.player.getDeltaMovement())
+                .append(" health=").append(client.player.getHealth())
                 .append(" hand=").append(client.player.getMainHandItem())
                 .append(" reach=").append(client.player.blockInteractionRange())
                 .append(" ready=").append(ClientWorldLoader.isPrimaryWorldReady())
@@ -503,6 +505,15 @@ final class PortalNativeInteractionSmoke {
                     "wall=" + destination.getBlockState(new BlockPos(128, 71, 64))
                             + " fluid=" + destination.getFluidState(
                                     PortalNativeInteractionFixture.BUCKET_SOURCE));
+            if (destination != null) {
+                state.append(" targets=[");
+                for (var entity : destination.entitiesForRendering())
+                    if (entity instanceof net.minecraft.world.entity.LivingEntity
+                            || entity instanceof net.minecraft.world.entity.vehicle.boat.Boat)
+                        state.append(entity.getType()).append(':').append(entity.position())
+                                .append(" ground=").append(entity.onGround()).append(';');
+                state.append(']');
+            }
         }
         state.append(" sourcePortals=[");
         for (var entity : client.level.entitiesForRendering())
