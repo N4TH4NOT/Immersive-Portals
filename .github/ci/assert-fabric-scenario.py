@@ -196,6 +196,11 @@ if scenario == "rendering":
         data = base64.b64encode(encoded.getvalue()).decode("ascii")
         print(f"{prefix} name={name} data={data}", flush=True)
 
+    for phase in ("remote_on", "straddle_down", "exit_down", "f5_front"):
+        picture = sorted(screenshots.glob(f"portal-body-{phase}-*.png"))[0]
+        with Image.open(picture) as image:
+            fixture_thumbnail(image.convert("RGB"), "PORTAL_BODY_THUMBNAIL", phase)
+
     captures = sorted(screenshots.glob("portal-after-reload*.png"))
     if not captures:
         raise AssertionError("The rendering scenario did not capture the reloaded portal scene.")
