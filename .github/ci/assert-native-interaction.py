@@ -139,12 +139,16 @@ left, top, right, bottom = (bounds[0] * width - 6, bounds[1] * height - 6,
 for y in range(height):
     for x in range(width):
         before, after = images["on"].getpixel((x, y)), images["off"].getpixel((x, y))
-        if left <= x <= right and top <= y <= bottom:
-            changed += (min(before) >= 210 and min(before) - min(after) >= 25
-                        and near_edge(x + .5, y + .5))
-        elif max(abs(a - b) for a, b in zip(before, after)) > 12:
+        difference = max(abs(a - b) for a, b in zip(before, after))
+        at_outline = (left <= x <= right and top <= y <= bottom
+                      and near_edge(x + .5, y + .5))
+        if at_outline:
+            # Native high-contrast outlines can be cyan. Require the actual
+            # geometry's visible contrast without assuming a particular palette.
+            changed += difference >= 25
+        elif difference > 12:
             background_changed += 1
-metrics = {"white_outline_pixels": changed, "background_changed_pixels": background_changed,
+metrics = {"outline_contrast_pixels": changed, "background_changed_pixels": background_changed,
            "size": [width, height], "bounds": bounds, "frames": frames}
 (evidence / "native-interaction-pixels.json").write_text(json.dumps(metrics, indent=2) + "\n")
 if background_changed > width * height * .002:
