@@ -44,6 +44,8 @@ The Fabric crossing packet snapshots source feet and pose. The server reconstruc
 
 The quality scenario connects two distinct real clients to a dedicated server. They approach, stop, cross in opposite directions and return using normal input. Its seven entity witnesses are a mob, a dropped item, two arrows, a cross-dimension mob, a cross-dimension snowball and a cross-dimension small fireball. They check natural trajectories and destination impacts, entity UUID/NBT preservation, and the fireball's native acceleration/drag without integrating motion twice. The world is saved with both players straddling openings, then the server and both clients restart; saved portal identities, positions and inventories are checked before another natural crossing.
 
+Native `Entity.move` now prepares portal contacts from the swept body bounds before resolving collisions, using the same finite-opening rules as authoritative player movement packets. This addresses newly spawned mobs or items losing their first movement to a backing block before end-of-tick contact discovery. Dropped items also prepare contacts before vanilla's earlier collision/ejection query, so a clipped body behind the opening does not trigger random push-out or temporary no-physics movement. Backing blocks outside the opening retain their collisions. The seven quality witnesses exercise these paths; runtime acceptance remains pending for the exact commit.
+
 Client frame-time and server tick-time limits are measured on Mesa software runners. They are regression budgets, not a performance promise for a player's GPU. Destination readiness and preload behavior must not be inferred solely from the absence of a crash.
 
 ## Fluid contact and projectile segments
