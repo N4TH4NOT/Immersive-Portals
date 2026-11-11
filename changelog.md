@@ -2,7 +2,7 @@
 
 [English](changelog.md) · [Français](changelog.fr.md)
 
-## 7.0.0-alpha.6 — validation pending
+## 7.0.0-alpha.6 — acceptance tracked on GitHub
 
 - Update offscreen lightmaps on the client tick clock, publish pending remote light-engine sections with native world updates, and tick remote particles once.
 - Clip player bodies independently from portal views, preserve legitimate remote self views, and trace third-person camera corners through openings.
@@ -13,7 +13,7 @@
 - Preserve folded sound distance and native attenuation; isolate atmospheric rain-fog interpolation per renderer and world.
 - Expand GitHub-only scenarios with pitched optics, real dark-room comparisons, clipped bodies, 20 native-interaction phases, seven pose/held-use traversals, nine fluid-contact cases and three native-force comparison contracts, seven entity witnesses, environment observations, two real players and save/rejoin checks. The bow and food traversals keep use active across dimensions.
 
-The [seamless portal follow-up](docs/seamless-26.2.md) distinguishes implementation from pending acceptance evidence and records remaining coverage limits.
+The [seamless portal follow-up](docs/seamless-26.2.md) distinguishes implemented acceptance coverage from runtime evidence and records remaining limits. Consult [PR #1](https://github.com/N4TH4NOT/Immersive-Portals/pull/1) and the [GitHub Actions results](https://github.com/N4TH4NOT/Immersive-Portals/actions) for the exact revision's passing, failing or unexecuted checks. Configuring a scenario does not establish a pass.
 
 ## 7.0.0-alpha.4
 

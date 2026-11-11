@@ -2,7 +2,7 @@
 
 [English](changelog.md) · [Français](changelog.fr.md)
 
-## 7.0.0-alpha.6 — validation en attente
+## 7.0.0-alpha.6 — acceptation suivie sur GitHub
 
 - Met à jour les lightmaps hors écran au rythme des ticks client, publie les sections en attente du moteur d’éclairage distant par les mises à jour natives du monde et fait avancer les particules distantes une seule fois.
 - Découpe les corps des joueurs indépendamment des vues de portail, préserve les vues légitimes du joueur au loin et suit les coins de caméra à la troisième personne à travers les ouvertures.
@@ -13,7 +13,7 @@
 - Conserve la distance sonore dépliée et l’atténuation native ; isole l’interpolation de pluie du brouillard atmosphérique par moteur de rendu et monde.
 - Étend les scénarios exclusivement sur GitHub avec l’optique inclinée, les comparaisons de pièces réellement sombres, les corps découpés, 20 phases d’interaction native, sept traversées de posture/utilisation maintenue, neuf cas de contact de fluide et trois contrats de comparaison de la force native, sept témoins d’entités, l’observation de l’environnement, deux véritables joueurs et les contrôles de sauvegarde/reconnexion. Les traversées avec arc et alimentation maintiennent l’utilisation entre dimensions.
 
-Le [suivi de la continuité des portails](docs/seamless-26.2.fr.md) distingue l’implémentation des preuves d’acceptation en attente et indique les limites de couverture restantes.
+Le [suivi de la continuité des portails](docs/seamless-26.2.fr.md) distingue la couverture d’acceptation implémentée des preuves en jeu et indique les limites restantes. Consulter la [PR nº 1](https://github.com/N4TH4NOT/Immersive-Portals/pull/1) et les [résultats GitHub Actions](https://github.com/N4TH4NOT/Immersive-Portals/actions) pour les contrôles réussis, échoués ou non exécutés de la révision exacte. Configurer un scénario ne démontre pas sa réussite.
 
 ## 7.0.0-alpha.4
 
