@@ -188,7 +188,7 @@ final class PortalPoseUseSmoke {
         if (name().equals("bow") && !client.player.getMainHandItem().is(Items.BOW)) return false;
         if (name().equals("food") && (!client.player.getMainHandItem().is(Items.APPLE)
                 || client.player.getMainHandItem().getCount() != 2
-                || client.player.getFoodData().getFoodLevel() > 5)) return false;
+                || client.player.getFoodData().getFoodLevel() != 17)) return false;
         if (name().equals("fly") && !client.player.getAbilities().flying) return false;
         for (var entity : client.level.entitiesForRendering())
             if (entity instanceof Portal portal
@@ -202,6 +202,16 @@ final class PortalPoseUseSmoke {
 
     private static void heldUse(Minecraft client) {
         if (!PortalPoseUseFixture.heldUse(name()) || released) return;
+        // Completion can arrive before this END_CLIENT_TICK callback. Release
+        // the actual key before interpreting a new vanilla use as a seam reset.
+        if (name().equals("food") && client.player.getMainHandItem().is(Items.APPLE)
+                && client.player.getMainHandItem().getCount() == 1) {
+            require(useStarted && crossed && heldBefore >= 3 && heldAfter >= 3,
+                    "Native food consumption did not span both sides of its portal");
+            released = true;
+            client.options.keyUse.setDown(false);
+            return;
+        }
         if (!pressedUse) {
             pressedUse = true;
             KeyMapping.click(client.options.keyUse.getDefaultKey());

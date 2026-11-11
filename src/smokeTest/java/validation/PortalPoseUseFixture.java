@@ -28,7 +28,7 @@ import qouteall.imm_ptl.peripheral.wand.ProtoPortal;
 import qouteall.imm_ptl.peripheral.wand.ProtoPortalSide;
 
 /** Authoritative native movement, held-use and projectile outcomes in isolated wand rooms. */
-final class PortalPoseUseFixture {
+public final class PortalPoseUseFixture {
     static final String[] CASES = {"sprint", "crouch", "fly", "fall", "swim", "bow", "food"};
     static final double SOURCE_X = 320, DESTINATION_X = 384, PLANE_Z = 64;
     private static final java.util.List<Portal> faces = new java.util.ArrayList<>();
@@ -40,9 +40,10 @@ final class PortalPoseUseFixture {
         final ServerLevel destination;
         final int started;
         final java.util.ArrayDeque<String> useHistory = new java.util.ArrayDeque<>();
+        final java.util.ArrayDeque<String> movementHistory = new java.util.ArrayDeque<>();
         Vec3 previous;
         int sourcePoseTicks, destinationPoseTicks, sourceUseTicks, destinationUseTicks;
-        int lastUseTicks = -1, maximumUseTicks, crossingTick = -1;
+        int lastUseTicks = -1, maximumUseTicks, clientTicks;
         boolean crossed, verified, useStarted, projectileHit, destinationUseAcknowledged;
 
         Probe(String name, ServerPlayer player, ServerLevel destination) {
@@ -156,7 +157,9 @@ final class PortalPoseUseFixture {
         player.setGameMode(name.equals("fly") ? GameType.CREATIVE : GameType.SURVIVAL);
         player.removeAllEffects();
         player.setHealth(player.getMaxHealth());
-        player.getFoodData().setFoodLevel(name.equals("food") ? 5 : 20);
+        // One apple must fill hunger, so holding the real key cannot immediately
+        // start eating the remaining apple after the observed native completion.
+        player.getFoodData().setFoodLevel(name.equals("food") ? 17 : 20);
         player.getFoodData().setSaturation(0);
         player.getInventory().clearContent();
         player.getInventory().setSelectedSlot(0);
@@ -214,12 +217,48 @@ final class PortalPoseUseFixture {
         };
     }
 
+    /** Checks every native client simulation boundary after its movement packets. */
+    public static void observeClientTick(ServerPlayer player) {
+        if (probe == null || probe.verified || !probe.player.equals(player.getUUID())) return;
+        int tick = player.level().getServer().getTickCount();
+        probe.clientTicks++;
+        boolean destination = destination(player);
+        Vec3 position = destination ? player.position().add(-64, 0, 0) : player.position();
+        double vertical = probe.previous == null ? 0 : position.y - probe.previous.y;
+        if (probe.movementHistory.size() == 16) probe.movementHistory.removeFirst();
+        probe.movementHistory.addLast("clientTick=" + probe.clientTicks + " serverTick=" + tick
+                + " feet=" + position + " destination=" + destination
+                + " pose=" + player.getPose() + " grounded=" + player.onGround()
+                + " sprinting=" + player.isSprinting() + " swimming=" + player.isSwimming()
+                + " flying=" + player.getAbilities().flying + " using=" + player.isUsingItem());
+        // One server tick can process several ordinary client movement ticks.
+        // Sampling ClientTickEnd retains the strict per-tick bounds in both
+        // dedicated and integrated servers without treating packet batches as jumps.
+        if (probe.previous != null) {
+            var step = position.subtract(probe.previous);
+            require(Math.hypot(step.x, step.z) < .9 && Math.abs(step.y) < 2.5,
+                    "Portal traversal added authoritative movement: " + probe.name + " " + step
+                            + " history=" + probe.movementHistory);
+        }
+        boolean pose = correctPose(player, vertical);
+        if (pose) {
+            if (destination) probe.destinationPoseTicks++; else probe.sourcePoseTicks++;
+        }
+        if (destination && !probe.crossed) {
+            require(pose && probe.sourcePoseTicks >= 2,
+                    "The server crossing did not preserve its active pose/use: " + probe.name
+                            + " movementHistory=" + probe.movementHistory
+                            + " useHistory=" + probe.useHistory);
+            probe.crossed = true;
+        }
+        require(!probe.crossed || destination, "A pose/use crossing was pushed back into its source room");
+        probe.previous = position;
+    }
+
     private static void observe(ServerPlayer player) {
         int tick = player.level().getServer().getTickCount();
         require(tick - probe.started < 500, "The server pose/use fixture stalled: " + probe.name);
         boolean destination = destination(player);
-        Vec3 position = destination ? player.position().add(-64, 0, 0) : player.position();
-        double vertical = probe.previous == null ? 0 : position.y - probe.previous.y;
         if (heldUse(probe.name)) {
             if (probe.useHistory.size() == 16) probe.useHistory.removeFirst();
             probe.useHistory.addLast("tick=" + tick + " playerTick=" + player.tickCount
@@ -231,23 +270,6 @@ final class PortalPoseUseFixture {
                     + " held=" + player.getItemInHand(player.getUsedItemHand())
                     + " crossed=" + probe.crossed + " destinationUse=" + probe.destinationUseTicks);
         }
-        if (probe.previous != null) {
-            var step = position.subtract(probe.previous);
-            require(Math.hypot(step.x, step.z) < .9 && Math.abs(step.y) < 2.5,
-                    "Portal traversal added authoritative movement: " + probe.name + " " + step);
-        }
-        boolean pose = correctPose(player, vertical);
-        if (pose) {
-            if (destination) probe.destinationPoseTicks++; else probe.sourcePoseTicks++;
-        }
-        if (destination && !probe.crossed) {
-            require(pose && probe.sourcePoseTicks >= 2,
-                    "The server crossing did not preserve its active pose/use: " + probe.name
-                            + " history=" + probe.useHistory);
-            probe.crossed = true;
-            probe.crossingTick = tick;
-        }
-        require(!probe.crossed || destination, "A pose/use crossing was pushed back into its source room");
         if (heldUse(probe.name)) {
             if (player.isUsingItem()) {
                 int used = player.getTicksUsingItem();
@@ -283,7 +305,6 @@ final class PortalPoseUseFixture {
                         probe.projectileHit = true;
                     }
         }
-        probe.previous = position;
     }
 
     private static void verify(ServerPlayer player, String name) {
@@ -301,7 +322,7 @@ final class PortalPoseUseFixture {
                         "Native bow release did not consume one arrow and hit the destination target");
             else require(player.getMainHandItem().is(Items.APPLE)
                             && player.getMainHandItem().getCount() == 1
-                            && player.getFoodData().getFoodLevel() > 5,
+                            && player.getFoodData().getFoodLevel() == 20,
                     "The held food did not complete native consumption after crossing");
         }
         var source = player.level().getServer().overworld();
@@ -313,7 +334,8 @@ final class PortalPoseUseFixture {
         probe.verified = true;
         System.out.println("PORTAL_POSE_USE_SERVER_OK case=" + name + " source=" + probe.sourcePoseTicks
                 + " destination=" + probe.destinationPoseTicks + " heldTicks=" + probe.maximumUseTicks
-                + " projectileHit=" + probe.projectileHit);
+                + " projectileHit=" + probe.projectileHit + " movementClock=client_tick_end"
+                + " clientTicks=" + probe.clientTicks);
     }
 
     private static java.util.List<Portal> portals(ServerLevel world) {
