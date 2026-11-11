@@ -1,5 +1,6 @@
 package qouteall.imm_ptl.core.collision;
 
+import com.google.common.collect.MapMaker;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityFluidInteraction;
 import net.minecraft.world.level.Level;
@@ -20,7 +21,6 @@ import java.util.HashSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.WeakHashMap;
 import java.lang.ref.WeakReference;
 
 /** Runs the native fluid sampler on the physical body parts on both sides of an opening. */
@@ -31,10 +31,10 @@ public final class PortalFluidInteraction {
     private record BodyParts(List<AABB> physical, @Nullable AABB projected) {}
 
     private static final ThreadLocal<Frame> FRAME = new ThreadLocal<>();
-    private static final Map<Entity, EntityFluidInteraction> REMOTE =
-            java.util.Collections.synchronizedMap(new WeakHashMap<>());
-    private static final Map<Entity, WeakReference<Portal>> CONTACT =
-            java.util.Collections.synchronizedMap(new WeakHashMap<>());
+    // Entity equality compares numeric IDs, which client and integrated-server
+    // replicas share. Weak-key identity keeps their samplers and contacts separate.
+    private static final Map<Entity, EntityFluidInteraction> REMOTE = new MapMaker().weakKeys().makeMap();
+    private static final Map<Entity, WeakReference<Portal>> CONTACT = new MapMaker().weakKeys().makeMap();
 
     private PortalFluidInteraction() {}
 

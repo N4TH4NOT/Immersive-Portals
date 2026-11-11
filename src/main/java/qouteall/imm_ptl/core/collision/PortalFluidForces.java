@@ -1,5 +1,6 @@
 package qouteall.imm_ptl.core.collision;
 
+import com.google.common.collect.MapMaker;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.attribute.EnvironmentAttributes;
@@ -14,7 +15,7 @@ import qouteall.imm_ptl.core.portal.Portal;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.WeakHashMap;
+import java.lang.ref.WeakReference;
 
 /** Captures native per-world forces after eligibility, normalization and minimum-current rules. */
 public final class PortalFluidForces {
@@ -49,10 +50,9 @@ public final class PortalFluidForces {
     }
 
     private record Samples(EntityFluidInteraction physical, EntityFluidInteraction remote,
-            Portal portal, Map<TagKey<Fluid>, Result> forces) {}
+            WeakReference<Portal> portal, Map<TagKey<Fluid>, Result> forces) {}
 
-    private static final Map<Entity, Samples> SAMPLES =
-            java.util.Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<Entity, Samples> SAMPLES = new MapMaker().weakKeys().makeMap();
     private static final ThreadLocal<Capture> CAPTURE = new ThreadLocal<>();
 
     private PortalFluidForces() {}
@@ -68,7 +68,8 @@ public final class PortalFluidForces {
 
     public static void prepare(Entity entity, EntityFluidInteraction physical,
             EntityFluidInteraction remote, Portal portal) {
-        SAMPLES.put(entity, new Samples(physical, remote, portal, new HashMap<>()));
+        // A strong portal value would retain its level and the weak entity key.
+        SAMPLES.put(entity, new Samples(physical, remote, new WeakReference<>(portal), new HashMap<>()));
     }
 
     public static @Nullable Result lastForce(Entity entity, TagKey<Fluid> fluid) {
@@ -89,6 +90,11 @@ public final class PortalFluidForces {
             nativeApply.run();
             return;
         }
+        Portal portal = sample.portal().get();
+        if (portal == null) {
+            nativeApply.run();
+            return;
+        }
         var source = tracker(interaction, fluid);
         var destination = tracker(sample.remote(), fluid);
         if (source == null || destination == null) {
@@ -101,18 +107,18 @@ public final class PortalFluidForces {
         // Both native pipelines receive the same sum/count in their rotational basis,
         // before cutoff, averaging, normalization and minimum-force rules. Strength
         // and scale never alter raw eligibility or normalize each half separately.
-        Vec3 eligible = source.ip_current().add(sample.portal()
+        Vec3 eligible = source.ip_current().add(portal
                 .inverseTransformLocalVecNonScale(destination.ip_current()));
         Capture physical = new Capture(entity, null, eligible, sourceCells, cells);
-        Capture remote = new Capture(entity, sample.portal(), eligible, destinationCells, cells);
+        Capture remote = new Capture(entity, portal, eligible, destinationCells, cells);
         try {
             CAPTURE.set(physical);
             nativeApply.run();
             double remoteStrength = strength;
             if (fluid.equals(FluidTags.LAVA)) {
-                double sourceStrength = sample.portal().level().environmentAttributes()
+                double sourceStrength = portal.level().environmentAttributes()
                         .getDimensionValue(EnvironmentAttributes.FAST_LAVA) ? .007 : .007 / 3;
-                double destinationStrength = sample.portal().getDestinationWorld().environmentAttributes()
+                double destinationStrength = portal.getDestinationWorld().environmentAttributes()
                         .getDimensionValue(EnvironmentAttributes.FAST_LAVA) ? .007 : .007 / 3;
                 remoteStrength *= destinationStrength / sourceStrength;
             }
